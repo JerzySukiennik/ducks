@@ -1,0 +1,79 @@
+// Upgrades tab: no model, no collider, no placement. An upgrade is a price and
+// a list of effects, each naming a stat from src/data/stats.js. A stat that is
+// not on that closed list is a boot error.
+//
+// netId block: 120-159.
+//
+// repeat.times  -- how many levels can be bought (1 means one-shot).
+// repeat.curve  -- price multiplier per level already owned.
+// Effects are applied once per owned level, so a x1.15 upgrade at level 3 is
+// x1.15^3. That is a runtime rule, not per-row data.
+
+export const UPGRADES = [
+  {
+    id: 'long_arms', netId: 120, tab: 'upgrades', name: 'Long Arms',
+    desc: 'Grab ducks from half a metre further away.',
+    cost: 180, kind: 'upgrade',
+    repeat: { times: 3, curve: 1.5 },
+    effects: [{ stat: 'grabRangeAdd', op: 'add', value: 0.5 }],
+    tags: ['cheap'],
+  },
+  {
+    id: 'swift_hands', netId: 121, tab: 'upgrades', name: 'Swift Hands',
+    desc: 'Each level cuts crank clicks per duck by 15%.',
+    cost: 250, kind: 'upgrade',
+    repeat: { times: 4, curve: 1.7 },
+    effects: [{ stat: 'clicksPerDuckMul', op: 'mul', value: 0.85 }],
+    tags: [],
+  },
+  {
+    id: 'sturdy_boots', netId: 122, tab: 'upgrades', name: 'Sturdy Boots',
+    desc: 'Walk 10% faster per level.',
+    cost: 300, kind: 'upgrade',
+    repeat: { times: 4, curve: 1.55 },
+    effects: [{ stat: 'moveSpeedMul', op: 'mul', value: 1.1 }],
+    tags: [],
+  },
+  {
+    id: 'salvage_permit', netId: 123, tab: 'upgrades', name: 'Salvage Permit',
+    desc: 'Demolishing returns 5 more percentage points per level.',
+    cost: 400, kind: 'upgrade',
+    repeat: { times: 2, curve: 2.0 },
+    effects: [{ stat: 'refundFractionAdd', op: 'add', value: 0.05 }],
+    tags: [],
+  },
+  {
+    id: 'market_valuation', netId: 124, tab: 'upgrades', name: 'Market Valuation',
+    desc: 'Every duck is worth 15% more per level.',
+    cost: 500, kind: 'upgrade',
+    repeat: { times: 8, curve: 1.55 },
+    effects: [{ stat: 'duckValueMul', op: 'mul', value: 1.15 }],
+    tags: [],
+  },
+  {
+    id: 'lucky_rubber', netId: 125, tab: 'upgrades', name: 'Lucky Rubber',
+    desc: 'Rare tiers become 20% more likely per level.',
+    cost: 800, kind: 'upgrade',
+    repeat: { times: 5, curve: 1.7 },
+    effects: [{ stat: 'rarityLuckMul', op: 'mul', value: 1.2 }],
+    tags: ['bigticket'],
+  },
+  {
+    id: 'strong_arm', netId: 126, tab: 'upgrades', name: 'Strong Arm',
+    desc: 'Throw ducks 25% harder. One-off.',
+    cost: 220, kind: 'upgrade',
+    repeat: { times: 1, curve: 1 },
+    effects: [{ stat: 'throwImpulseMul', op: 'mul', value: 1.25 }],
+    tags: [],
+  },
+  {
+    id: 'reinforced_crates', netId: 127, tab: 'upgrades', name: 'Reinforced Crates',
+    desc: 'Every crate, bucket and container holds 30% more per level.',
+    cost: 650, kind: 'upgrade',
+    repeat: { times: 3, curve: 1.8 },
+    effects: [{ stat: 'storageCapacityMul', op: 'mul', value: 1.3 }],
+    tags: [],
+  },
+];
+
+export default UPGRADES;

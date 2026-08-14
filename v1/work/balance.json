@@ -1,0 +1,168 @@
+{
+  "_comment": "Phase E working numbers. tools/economy-sim.py reads this; once the curve is accepted the values are copied into src/config.js and src/data/*.js. This file is the scratchpad, those files are the truth.",
+  "duckBaseValue": 1,
+  "rarityMultipliers": [
+    1,
+    3,
+    10,
+    35,
+    100,
+    350,
+    1000
+  ],
+  "rarityWeights": [
+    6800,
+    900,
+    220,
+    60,
+    15,
+    4,
+    1
+  ],
+  "clicksPerDuck": 10,
+  "pressSeconds": 4.5,
+  "machineSeconds": 2.0,
+  "conveyorRate": 5.0,
+  "fanRate": 2.2,
+  "noCollectorPenalty": 0.35,
+  "marketValuationMul": 1.15,
+  "luckyRubberMul": 1.2,
+  "swiftHandsMul": 0.85,
+  "sturdyBootsMul": 1.1,
+  "reinforcedCratesMul": 1.3,
+  "paybackHorizon": 1800,
+  "prestigeThreshold": 10000,
+  "prestigeExponent": 0.5,
+  "prestigeTargetMul": 2.5,
+  "prestigeMinSecondsLeft": 1500,
+  "keepOnPrestige": [
+    "bucket",
+    "box",
+    "box_big",
+    "cart"
+  ],
+  "bundles": [
+    {
+      "id": "fan_chain",
+      "items": {
+        "fan": 6
+      }
+    },
+    {
+      "id": "fan_chain_fed",
+      "items": {
+        "fan": 6,
+        "vacuum_station": 1
+      }
+    },
+    {
+      "id": "belt_chain",
+      "items": {
+        "conveyor": 18,
+        "vacuum_station": 1
+      }
+    },
+    {
+      "id": "belt_line_2",
+      "items": {
+        "conveyor": 36,
+        "vacuum_station": 2
+      }
+    }
+  ],
+  "catalog": [
+    {
+      "id": "bucket",
+      "cost": 25
+    },
+    {
+      "id": "box",
+      "cost": 45
+    },
+    {
+      "id": "box_big",
+      "cost": 120
+    },
+    {
+      "id": "cart",
+      "cost": 180
+    },
+    {
+      "id": "press",
+      "cost": 200,
+      "times": 16,
+      "curve": 1.28
+    },
+    {
+      "id": "machine",
+      "cost": 650,
+      "times": 16,
+      "curve": 1.32
+    },
+    {
+      "id": "vacuum_station",
+      "cost": 450,
+      "times": 4,
+      "curve": 1.55
+    },
+    {
+      "id": "conveyor",
+      "cost": 110,
+      "times": 60,
+      "curve": 1.035
+    },
+    {
+      "id": "conveyor_corner",
+      "cost": 130,
+      "times": 12,
+      "curve": 1.05
+    },
+    {
+      "id": "conveyor_slope",
+      "cost": 150,
+      "times": 8,
+      "curve": 1.05
+    },
+    {
+      "id": "fan",
+      "cost": 60,
+      "times": 24,
+      "curve": 1.08
+    },
+    {
+      "id": "market_valuation",
+      "cost": 500,
+      "times": 8,
+      "curve": 1.55
+    },
+    {
+      "id": "lucky_rubber",
+      "cost": 800,
+      "times": 5,
+      "curve": 1.7
+    },
+    {
+      "id": "swift_hands",
+      "cost": 250,
+      "times": 4,
+      "curve": 1.7
+    },
+    {
+      "id": "sturdy_boots",
+      "cost": 300,
+      "times": 4,
+      "curve": 1.55
+    },
+    {
+      "id": "reinforced_crates",
+      "cost": 650,
+      "times": 3,
+      "curve": 1.8
+    }
+  ],
+  "conveyorSpan": 2.0,
+  "fanSpan": 6.0,
+  "collectorFeed": 0.6,
+  "attentionAfterAutomation": 0.4,
+  "saveIfBetterBy": 1.0
+}

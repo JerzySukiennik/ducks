@@ -1,0 +1,1082 @@
+// The seam between the game and the network. main.js talks to this and to
+// nothing else in src/net; host.js and client.js talk to the game through the
+// adapter this file builds and never import a renderer.
+//
+// THE ONE RULE THIS FILE EXISTS TO MAKE STRUCTURAL
+// Frozen contract rule 6: a client asks, the host does it, the host broadcasts
+// to everyone INCLUDING the asker, and no client applies its own request
+// locally first. That is enforced here by having exactly ONE implementation of
+// every action -- perform(slot, req) -- and exactly one way in: act(req).
+//
+//   single player   act -> perform(0, req)         (identical to before G4)
+//   host            act -> perform(0, req)         and the reconciler broadcasts
+//   client          act -> client.request(req)     and NOTHING else happens
+//
+// The client branch has no call to perform at all. That is the point: the rule
+// cannot be broken by forgetting it, only by adding a second code path, which
+// is visible in a diff.
+//
+// The agreed exception is the build hologram. It never reaches this file: it is
+// a preview of where an object WOULD go, not a claim that it went there, and a
+// preview that waits for a round trip is unusable.
+//
+// INVENTORY IS THE HOST'S
+// "Item X is in player P's hotbar" is a fact about the world, so the host owns
+// it and it travels in the roster -- which is what lets a player who joins
+// twenty minutes late be told that slot 2 is holding the broom rather than that
+// the broom has vanished. The host's own inventory IS its local hotbar (there
+// is no second copy to drift); every other player's is a map here, and a
+// client's local hotbar is display only, written from the roster.
+//
+// No three.js in this file.
+
+import config from '../config.js';
+import { createHost } from './host.js';
+import { createClient } from './client.js';
+import { REQ, WIRE_KIND, decodeInput } from './protocol.js';
+import { tryHostRoom, tryJoinRoom } from './signaling.js';
+
+function now() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+
+const ZERO = { x: 0, y: 0, z: 0 };
+
+export function createNetGame(deps) {
+  const {
+    world, state, placed, shop, hotbar, containers, machine, props, view, input, loop,
+    player, byId, byNetId, resolvePlacement, worldQuery, isBuildable, isHandCarryable,
+    onEvent, onRoster, onReject, hud,
+  } = deps;
+
+  const N = config.net;
+  const emit = typeof onEvent === 'function' ? onEvent : () => {};
+  let session = null;
+  let host = null;
+  let client = null;
+  let localSlot = 0;
+  let lastFrameAt = now();
+  let actingSlot = 0;
+
+  // Remote players. Capsules on the host (real bodies, so a remote player can
+  // shove a crate), interpolated poses on a client (an avatar is a body like
+  // any other and must never be simulated locally).
+  const remote = new Map();   // slot -> { nick, capsule, input, pose, hotbar, selected, pitch }
+  let roster = [];
+
+  const counters = { acted: 0, requested: 0, performed: 0, refused: 0 };
+
+  function isClient() { return !!client; }
+  function isHost() { return !!host; }
+
+  // --- inventory ---------------------------------------------------------------
+  // Slot 0 on a host is the local hotbar; there is deliberately no second copy
+  // of it, because two copies of an inventory is how an item ends up in two
+  // hands at once.
+
+  function invOf(slot) {
+    if (slot === 0) return null;
+    let r = remote.get(slot);
+    if (!r) { r = newRemote(slot); remote.set(slot, r); }
+    return r.hotbar;
+  }
+
+  function invCount(slot, id) {
+    if (slot === 0) return hotbar.countOf(id);
+    const m = invOf(slot);
+    return m.get(id) || 0;
+  }
+
+  function invAdd(slot, item, n) {
+    if (slot === 0) { hotbar.add(item, n); return true; }
+    const m = invOf(slot);
+    m.set(item.id, (m.get(item.id) || 0) + n);
+    return true;
+  }
+
+  function invTake(slot, id, n) {
+    if (slot === 0) return hotbar.take(id, n);
+    const m = invOf(slot);
+    const have = m.get(id) || 0;
+    if (have < n) return false;
+    if (have === n) m.delete(id); else m.set(id, have - n);
+    return true;
+  }
+
+  // Take everything matching `pred` out of every inventory in the room -- the
+  // local hotbar and every remote player's map. Used by prestige, which destroys
+  // rows wholesale rather than one item at a time: an unplaced press sitting in
+  // a hotbar slot would otherwise survive a wipe that took every placed one.
+  function clearInventories(pred) {
+    if (typeof pred !== 'function') return 0;
+    let n = 0;
+    const mine = hotbar.state().slots;
+    for (let i = 0; i < mine.length; i++) {
+      const s = mine[i];
+      if (!s || !s.id || !pred(s.id)) continue;
+      if (hotbar.take(s.id, s.count)) n += s.count;
+    }
+    remote.forEach((r) => {
+      Array.from(r.hotbar.keys()).forEach((id) => {
+        if (!pred(id)) return;
+        n += r.hotbar.get(id) || 0;
+        r.hotbar.delete(id);
+      });
+    });
+    return n;
+  }
+
+  function newRemote(slot) {
+    return {
+      slot,
+      nick: 'player ' + slot,
+      capsule: null,
+      input: { fwd: 0, right: 0, jump: false, sprint: false, yaw: 0, pitch: 0 },
+      pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
+      hotbar: new Map(),
+      selected: -1,
+      lastInputAt: 0,
+    };
+  }
+
+  // --- the actions -------------------------------------------------------------
+  // ONE implementation each. The host runs them for itself and for every
+  // client; a client runs none of them.
+
+  function rowFor(id) {
+    const row = byId(id);
+    return row && row.collider ? row : null;
+  }
+
+  function aimOf(slot, req) {
+    if (req && req.o && req.d) {
+      return { origin: { x: req.o[0], y: req.o[1], z: req.o[2] },
+        dir: { x: req.d[0], y: req.d[1], z: req.d[2] } };
+    }
+    if (slot === 0) return view.aim();
+    const r = remote.get(slot);
+    if (!r) return null;
+    const p = r.pose;
+    const cp = Math.cos(p.pitch);
+    return {
+      origin: { x: p.x, y: p.y + config.player.eyeHeight - config.player.height / 2, z: p.z },
+      dir: { x: -Math.sin(p.yaw) * cp, y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * cp },
+    };
+  }
+
+  // Where the acting player is standing. Every request is range checked against
+  // it, so a malformed or stale aim cannot place a wall on the other side of the
+  // plate.
+  function bodyOf(slot) {
+    if (slot === 0) return player.position();
+    const r = remote.get(slot);
+    return r ? { x: r.pose.x, y: r.pose.y, z: r.pose.z } : null;
+  }
+
+  // The range check exists because a REMOTE aim arrives in a message and a
+  // message can be stale by a round trip or simply wrong. The local player's
+  // aim is not a message: it came out of view.aim() one line earlier and has
+  // already been through the hologram, the pick-up raycast or the wheel test,
+  // every one of which is a stricter check than a distance. Applying a second,
+  // looser one to slot 0 changed nothing about what a player could do and did
+  // break head-down tests that drive an action without walking there first.
+  function inReach(slot, point, range) {
+    if (slot === 0) return true;
+    const p = bodyOf(slot);
+    if (!p || !point) return false;
+    return Math.hypot(p.x - point.x, p.y - point.y, p.z - point.z) <= range;
+  }
+
+  // --- the hold, per player ------------------------------------------------------
+  // The controller for slot 0 is the one that has always existed. Every other
+  // slot gets its own, created on first grab and destroyed when that player
+  // leaves, and all of them share one claim registry inside the world so two
+  // players can never spring the same body.
+
+  // The aim a remote player's hold FOLLOWS. It is re-read every substep from
+  // that player's live pose -- the same pose their 16 B input frame updates 20
+  // times a second -- so a teammate who looks around while carrying a duck
+  // carries it around with them. Their own capsule is excluded from the grab
+  // ray, or the first thing anybody would grab is themselves.
+  function holdAim(slot) {
+    return () => {
+      const a = aimOf(slot, null);
+      if (!a) return null;
+      const r = remote.get(slot);
+      let body = null;
+      const raw = world._raw;
+      if (raw && r && r.capsule && r.capsule.handle !== undefined) {
+        body = raw.getRigidBody(r.capsule.handle) || null;
+      }
+      return { origin: a.origin, dir: a.dir, body };
+    };
+  }
+
+  function holdOf(slot) {
+    if (slot === 0) return world.hold;
+    if (typeof world.holdFor !== 'function') return null;
+    return world.holdFor(slot, holdAim(slot));
+  }
+
+  // Read-only: never creates a controller, so asking "is slot 2 holding
+  // something" for a player who has never grabbed anything does not quietly
+  // allocate one per roster build.
+  function heldDuckOf(slot) {
+    const h = slot === 0
+      ? world.hold
+      : (typeof world.holdIfAny === 'function' ? world.holdIfAny(slot) : null);
+    if (!h || !h.isHolding()) return null;
+    const d = h.heldDuck();
+    return typeof d === 'number' ? d : null;
+  }
+
+  // What the roster carries. A client's own hold is whatever the host last said
+  // it was: there is no second copy of this fact anywhere.
+  function holdRecordOf(slot) {
+    if (client) {
+      const row = roster.find((r) => r && r.slot === slot);
+      return (row && row.hold) || null;
+    }
+    const d = heldDuckOf(slot);
+    return d === null ? null : { d };
+  }
+
+  // The host's own belief about where that player's eye is, which is what the
+  // ray is cast from. A client's supplied origin is evidence, never input.
+  function eyeOf(slot) {
+    const a = aimOf(slot, null);
+    return a ? a.origin : null;
+  }
+
+  const ACTIONS = {
+    // Ask to pick something up. The client sends where it is looking FROM and
+    // ALONG; the host casts the ray, decides what was hit, and arbitrates the
+    // claim. Nothing about the target comes from the message.
+    [REQ.GRAB](slot, req) {
+      const h = holdOf(slot);
+      if (!h) return { ok: false, reason: 'no hold controller' };
+      if (h.isHolding()) return { ok: false, reason: 'already holding something' };
+      const eye = eyeOf(slot);
+      if (!eye) return { ok: false, reason: 'no aim' };
+      const a = aimOf(slot, req);
+      if (!a) return { ok: false, reason: 'no aim' };
+      // The one thing checked about the supplied origin: that it is roughly
+      // where the host thinks this player's head is. Past that the request is
+      // either a lie or a message old enough to be one.
+      if (slot !== 0 && req && req.o) {
+        const d = Math.hypot(a.origin.x - eye.x, a.origin.y - eye.y, a.origin.z - eye.z);
+        if (d > config.net.aimOriginSlack) return { ok: false, reason: 'out of reach' };
+      }
+      // Cast from the HOST's eye, along the client's direction.
+      if (!h.tryGrab(eye, a.dir)) {
+        return { ok: false, reason: h.lastRefusal ? h.lastRefusal() : 'nothing to grab' };
+      }
+      return { ok: true, held: h.heldDuck(), slot };
+    },
+
+    [REQ.DROP](slot) {
+      const h = holdOf(slot);
+      if (!h || !h.isHolding()) return { ok: false, reason: 'not holding anything' };
+      const d = h.heldDuck();
+      h.release();
+      return { ok: true, held: d, slot };
+    },
+
+    // The pit shot. The direction is the host's own copy of where that player is
+    // looking, so there is no vector in the message to be stale or forged: the
+    // controller throws along the same aim it has been springing towards.
+    [REQ.HURL](slot) {
+      const h = holdOf(slot);
+      if (!h || !h.isHolding()) return { ok: false, reason: 'not holding anything' };
+      const d = h.heldDuck();
+      if (!h.throw()) return { ok: false, reason: 'could not throw it' };
+      return { ok: true, held: d, slot };
+    },
+
+    [REQ.HOLD_DIST](slot, req) {
+      const h = holdOf(slot);
+      if (!h) return { ok: false, reason: 'no hold controller' };
+      const n = Number(req && req.n);
+      if (!isFinite(n) || n === 0) return { ok: false, reason: 'no scroll' };
+      return { ok: true, distance: h.scrollDistance(n) };
+    },
+
+    [REQ.BUY](slot, req) {
+      const row = byId(req.item);
+      if (!row) return { ok: false, reason: 'no such item' };
+      const res = shop.buy(row.id);
+      if (!res || res.ok === false) {
+        return { ok: false, reason: (res && res.reason) || 'refused' };
+      }
+      return { ok: true };
+    },
+
+    // Buy a fresh shelf. The money and the dice both live behind
+    // shop.rerollStock(), so this is the same two lines as BUY and for the same
+    // reason: the host rolls, everyone is told, and the asker learns the result
+    // from the broadcast like everybody else.
+    [REQ.REROLL]() {
+      const res = shop.rerollStock ? shop.rerollStock() : null;
+      if (!res || res.ok === false) {
+        return { ok: false, reason: (res && res.reason) || 'refused' };
+      }
+      return { ok: true, price: res.price, period: res.period };
+    },
+
+    // Prestige. The team shares one economy, so this is a TEAM action: it wipes
+    // every machine on the plate and every player's money at once and hands the
+    // whole room the new multiplier. Who may pull it: THE HOST, and only the
+    // host. A shared economy means one player's click costs everybody else their
+    // factory, and there is no vote in this protocol to hold; the host is the
+    // one authority every player already accepted by joining their room. Clients
+    // see the same quote in the same panel, with the reason their button is off.
+    // Single player IS slot 0 on a host that has no clients, so this reads
+    // exactly as it always did with nobody else in the room.
+    [REQ.PRESTIGE](slot) {
+      if (slot !== 0) return { ok: false, reason: 'Only the host can call a prestige' };
+      if (!deps.prestige) return { ok: false, reason: 'prestige is not wired up' };
+      const res = deps.prestige.take();
+      if (!res || res.ok === false) return { ok: false, reason: (res && res.reason) || 'refused' };
+      return { ok: true, ...res };
+    },
+
+    [REQ.PLACE](slot, req) {
+      const item = rowFor(req.item);
+      if (!item || !isBuildable(item)) return { ok: false, reason: 'not placeable' };
+      if (invCount(slot, item.id) <= 0) return { ok: false, reason: 'you do not have one' };
+      const a = aimOf(slot, req);
+      if (!a) return { ok: false, reason: 'no aim' };
+      const rot = { yaw: Number(req.yaw) || 0, free: !!req.free };
+      const res = resolvePlacement(item, a.origin, a.dir, rot, worldQuery);
+      if (!res.valid) return { ok: false, reason: res.reason || 'invalid spot' };
+      if (!inReach(slot, res.position, config.build.maxDistance + config.net.reachSlack)) {
+        return { ok: false, reason: 'out of reach' };
+      }
+      const rec = placed.place(item, res);
+      if (!rec) return { ok: false, reason: 'no room for another one' };
+      invTake(slot, item.id, 1);
+      // No consumeProp here. It used to exist because a purchase both dropped a
+      // prop AND handed a copy to the hotbar, so placing the hotbar copy had to
+      // delete the delivery nobody had collected. Purchases are now delivered
+      // ONLY through the chute, so the hotbar copy IS the collected prop --
+      // deleting another one would destroy a second wall lying on the floor,
+      // possibly somebody else's.
+      return { ok: true, record: rec, placement: res };
+    },
+
+    [REQ.DEMOLISH](slot, req) {
+      const rec = placed.objects.find((o) => o.key === req.key);
+      if (!rec) return { ok: false, reason: 'nothing there' };
+      if (!inReach(slot, rec.position, config.build.demolishRange + config.net.reachSlack)) {
+        return { ok: false, reason: 'out of reach' };
+      }
+      const amount = shop.refund(rec.id);
+      placed.remove(rec);
+      return { ok: true, id: rec.id, name: rec.name, refund: amount };
+    },
+
+    [REQ.PICKUP](slot, req) {
+      const prop = placed.propByKey(req.key);
+      if (!prop) return { ok: false, reason: 'nothing there' };
+      const row = byId(prop.id);
+      // Two kinds of thing can be collected off the floor and they end up in
+      // different places: a carryable goes into your HANDS, a building goes into
+      // the hotbar as something to place. Both are the same verb to the player
+      // ("press E to take the thing the chute just dropped"), and since every
+      // purchase now arrives through the chute, refusing buildings here would
+      // make a bought wall permanently unreachable.
+      if (!isHandCarryable(row) && !isBuildable(row)) {
+        return { ok: false, reason: 'you cannot carry that' };
+      }
+      const t = prop.body.translation();
+      if (!inReach(slot, t, config.hand.pickupRange + config.net.reachSlack)) {
+        return { ok: false, reason: 'out of reach' };
+      }
+      // A crate's virtual contents live on its prop key; putting that key in a
+      // hotbar slot would take the ducks inside it with no message.
+      const c = containers.info(prop.key);
+      if (c && c.total > 0) {
+        return { ok: false, reason: 'Empty the ' + row.name + ' first (' + c.total + ' inside)' };
+      }
+      invAdd(slot, row, 1);
+      placed.despawnProp(prop);
+      return { ok: true, id: row.id, name: row.name, key: prop.key };
+    },
+
+    [REQ.THROW](slot, req) {
+      const item = rowFor(req.item);
+      if (!item || !isHandCarryable(item)) return { ok: false, reason: 'not carryable' };
+      if (invCount(slot, item.id) <= 0) return { ok: false, reason: 'you do not have one' };
+      const a = aimOf(slot, req);
+      if (!a) return { ok: false, reason: 'no aim' };
+      const h = config.hand;
+      const half = item.collider.half;
+      const pos = {
+        x: a.origin.x + a.dir.x * h.throwDistance,
+        y: Math.max(half[1] + h.minSpawnY, a.origin.y + a.dir.y * h.throwDistance),
+        z: a.origin.z + a.dir.z * h.throwDistance,
+      };
+      const pv = (slot === 0 && player.velocity) ? player.velocity() : ZERO;
+      // Past the prop cap a throw is REFUSED and the item stays in your hand.
+      // The alternative -- dropping it and deleting the oldest prop on the floor
+      // to make room -- destroys something somebody else may be about to pick up.
+      if (typeof placed.atCap === 'function' && placed.atCap()) {
+        return { ok: false, reason: 'Too much on the floor already - clear some of it first' };
+      }
+      const rec = placed.dropProp(item, pos, {
+        x: pv.x + a.dir.x * h.throwSpeed,
+        y: pv.y + a.dir.y * h.throwSpeed + h.throwSpeed * h.throwLift,
+        z: pv.z + a.dir.z * h.throwSpeed,
+      });
+      if (!rec) return { ok: false, reason: 'cannot drop that here' };
+      invTake(slot, item.id, 1);
+      return { ok: true, id: item.id, name: item.name, key: rec.key, position: pos };
+    },
+
+    // `key` names which workbench: 0 or absent is the starter one standing on
+    // the plate, anything else is a purchased bench identified by its placement
+    // key. The reach test is against THAT bench's wheel, so a client cannot
+    // crank a machine on the far side of the plate by naming it.
+    [REQ.CRANK](slot, req) {
+      const key = Math.round(Number(req && req.key)) || 0;
+      const rec = key ? placed.objects.find((o) => o.key === key) || null : null;
+      if (key && !rec) return { ok: false, reason: 'no such workbench' };
+      const wheel = rec ? placed.wheelCenter(rec) : props.wheelCenter();
+      if (!inReach(slot, wheel, config.machine.useRange + config.net.reachSlack)) {
+        return { ok: false, reason: 'too far from the workbench' };
+      }
+      const r = deps.crankOnce(rec);
+      return { ok: true, key, ...r };
+    },
+
+    [REQ.SELECT](slot, req) {
+      const i = Math.round(Number(req.i));
+      if (slot === 0) { hotbar.select(i); return { ok: true, slot: i }; }
+      const r = remote.get(slot);
+      if (r) r.selected = i;
+      return { ok: true, slot: i };
+    },
+  };
+
+  // The single entry point. Nothing in main.js calls an ACTION directly.
+  function perform(slot, req) {
+    const fn = ACTIONS[req && req.a];
+    if (!fn) return { ok: false, reason: 'unknown request' };
+    const before = actingSlot;
+    actingSlot = slot;
+    try {
+      const res = fn(slot, req);
+      if (res && res.ok) counters.performed++; else counters.refused++;
+      return res;
+    } finally {
+      actingSlot = before;
+    }
+  }
+
+  // What main.js calls when the player does something.
+  function act(req) {
+    counters.acted++;
+    if (client) {
+      counters.requested++;
+      const id = client.request(req.a, req);
+      // Nothing local happens. Deliberately. The world arrives in the host's
+      // next broadcast, at the same instant it arrives for everyone else.
+      return { pending: true, id };
+    }
+    return perform(localSlot, req);
+  }
+
+  // --- the roster ---------------------------------------------------------------
+  // Small, diffed as a whole, and the answer to "who is holding what". The host
+  // builds it; a client only reads the one the host sent.
+
+  function hotbarList(slot) {
+    if (slot === 0) {
+      const s = hotbar.state();
+      return s.slots.map((x) => (x && x.count > 0 ? { id: x.id, n: x.count } : null));
+    }
+    const out = [];
+    invOf(slot).forEach((n, id) => { if (n > 0) out.push({ id, n }); });
+    return out;
+  }
+
+  function buildRoster() {
+    const list = [];
+    const p = player.position();
+    const look = player.look ? player.look() : { yaw: 0, pitch: 0 };
+    list.push({
+      slot: 0,
+      nick: session ? session.nick : 'host',
+      host: true,
+      p: [p.x, p.y, p.z],
+      yaw: look.yaw,
+      pitch: look.pitch,
+      hotbar: hotbarList(0),
+      sel: hotbar.selectedIndex(),
+      // What is actually IN THIS PLAYER'S HANDS, which is not the same claim as
+      // "somewhere in their hotbar" and is the thing an avatar has to draw.
+      hand: currentHandId(0),
+      // And what they have picked UP off the floor, which is a different fact
+      // again: a duck in somebody's grip is a world body whose pose already
+      // flows down the state stream, but nothing in that stream says WHOSE grip
+      // it is in. Without this a player joining mid-carry sees a duck floating
+      // in front of nobody.
+      hold: holdRecordOf(0),
+    });
+    remote.forEach((r, slot) => {
+      list.push({
+        slot,
+        nick: r.nick,
+        host: false,
+        p: [r.pose.x, r.pose.y, r.pose.z],
+        yaw: r.pose.yaw,
+        pitch: r.pose.pitch,
+        hotbar: hotbarList(slot),
+        sel: r.selected,
+        hand: currentHandId(slot),
+        hold: holdRecordOf(slot),
+      });
+    });
+    return list;
+  }
+
+  function currentHandId(slot) {
+    if (slot === 0) {
+      const c = hotbar.current();
+      return c && isHandCarryable(c) ? c.id : null;
+    }
+    const r = remote.get(slot);
+    if (!r || r.selected < 0) return null;
+    const list = hotbarList(slot);
+    const item = list[r.selected];
+    if (!item) return null;
+    const row = byId(item.id);
+    return row && isHandCarryable(row) ? row.id : null;
+  }
+
+  function setRoster(list) {
+    roster = list || [];
+    for (let i = 0; i < roster.length; i++) {
+      const r = roster[i];
+      if (r.slot === localSlot) {
+        // A client's own hotbar is display only: the host owns the inventory
+        // and this is what it says is in it.
+        if (hotbar.setFromNet) hotbar.setFromNet(r.hotbar, r.sel, byId);
+        continue;
+      }
+      let e = remote.get(r.slot);
+      if (!e) { e = newRemote(r.slot); remote.set(r.slot, e); }
+      e.nick = r.nick;
+      e.selected = r.sel;
+      e.handId = r.hand;
+      // Who is carrying which duck. On a client this is the ONLY source of that
+      // fact -- the duck's pose arrives in the state stream like any other body
+      // and says nothing about whose hands it is in -- and it arrives in the
+      // join snapshot too, so a player who connects mid-carry is told on frame
+      // one rather than watching a duck hover in front of nobody.
+      e.hold = r.hold || null;
+      e.pose.pitch = r.pitch;
+      e.hotbarList = r.hotbar;
+      if (!isHost()) {
+        // Poses come from the 20 Hz stream; the roster's copy is only a
+        // fallback for a player who has not moved since it was sent.
+        if (!e.streamed) { e.pose.x = r.p[0]; e.pose.y = r.p[1]; e.pose.z = r.p[2]; }
+      }
+    }
+    // Anyone the roster no longer names has left.
+    const live = new Set(roster.map((r) => r.slot));
+    remote.forEach((e, slot) => { if (!live.has(slot)) remote.delete(slot); });
+    if (typeof onRoster === 'function') onRoster(roster);
+  }
+
+  // --- the adapter handed to host.js / client.js ---------------------------------
+
+  const adapter = {
+    ducks: world.ducks,
+    placedObjects: () => placed.objects,
+    placedProps: () => placed.props,
+    money: () => world.economy.money(),
+    // The lifetime counter, which prestige is a function of. It rides beside the
+    // balance in the same reconciled message.
+    earned: () => world.economy.totalEarned(),
+    clock: () => state.clock(),
+    serialize: () => state.serialize(),
+    load: (snap) => state.load(snap),
+    roster: buildRoster,
+    setRoster,
+    perform,
+    pump: (dt) => loop.step(dt),
+    lastFrameAt: () => lastFrameAt,
+
+    // Relevance culling is defined against the RECEIVING client's own camera,
+    // so this is that client's capsule, not the host's.
+    cameraOf(slot) {
+      if (slot === 0) {
+        const c = view.camera.position;
+        return { x: c.x, y: c.y, z: c.z };
+      }
+      const r = remote.get(slot);
+      return r ? { x: r.pose.x, y: r.pose.y, z: r.pose.z } : null;
+    },
+
+    // Every player capsule, for the players frame. The host's own included:
+    // a client has to draw the host.
+    capsules() {
+      const out = [];
+      const p = player.position();
+      const look = player.look ? player.look() : { yaw: 0, pitch: 0 };
+      out.push({ slot: 0, x: p.x, y: p.y, z: p.z, yaw: look.yaw, pitch: look.pitch });
+      remote.forEach((r, slot) => {
+        const c = r.capsule;
+        const t = c ? c.position() : r.pose;
+        out.push({ slot, x: t.x, y: t.y, z: t.z, yaw: r.input.yaw, pitch: r.input.pitch });
+      });
+      return out;
+    },
+
+    // The HOST's own avatar feed, called by host.js once per tick with the same
+    // capsule list the players frame is built from.
+    //
+    // A client is pushed poses by playerSample() below, off the stream it
+    // receives. The host receives no stream -- it owns these bodies -- so
+    // without this its avatar layer has no source whatsoever and every remote
+    // player stays hidden as stale. What goes out is the authoritative capsule
+    // as of this tick, read out of the host's own world; it is not a poll of a
+    // received stream and there is nothing here to re-sample.
+    playersSampled(list, t) {
+      if (typeof deps.onPlayerPose !== 'function' || !Array.isArray(list)) return 0;
+      const at = typeof t === 'number' ? t : now();
+      let n = 0;
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (!p || p.slot === localSlot) continue;
+        const r = remote.get(p.slot);
+        deps.onPlayerPose(p.slot, {
+          x: p.x, y: p.y, z: p.z, yaw: p.yaw, nick: r ? r.nick : undefined,
+        }, at);
+        n++;
+      }
+      return n;
+    },
+
+    // A client's 16 B input frame. It is fed to that client's REAL capsule in
+    // the host's world, so a remote player walking into a crate is the host's
+    // solver moving the crate -- not a message asserting that it moved.
+    applyClientInput(slot, bytes) {
+      const inp = decodeInput(bytes);
+      if (!inp) return false;
+      let r = remote.get(slot);
+      if (!r) { r = newRemote(slot); remote.set(slot, r); }
+      r.input = inp;
+      r.lastInputAt = now();
+      if (!r.capsule) r.capsule = world.addPlayer(config.player.spawn);
+      r.capsule.update(config.loop.fixedDt, inp);
+      const t = r.capsule.position();
+      r.pose.x = t.x; r.pose.y = t.y; r.pose.z = t.z;
+      r.pose.yaw = inp.yaw; r.pose.pitch = inp.pitch;
+      return true;
+    },
+
+    // --- client side ---------------------------------------------------------
+
+    ownInput() {
+      const i = input.read();
+      return {
+        fwd: i.fwd, right: i.right, jump: i.jump, sprint: i.sprint, yaw: i.yaw, pitch: i.pitch,
+      };
+    },
+    ownPosition: () => player.position(),
+    setOwnPosition(x, y, z, hard) {
+      const raw = world._raw;
+      if (!raw || player.handle === undefined) return false;
+      const body = raw.getRigidBody(player.handle);
+      if (!body) return false;
+      body.setTranslation({ x, y, z }, true);
+      if (body.setNextKinematicTranslation) body.setNextKinematicTranslation({ x, y, z });
+      return true;
+    },
+
+    // The host is the authority, so this overwrites whatever the local solver
+    // did. `settled` also puts the body to sleep, which is what stops the local
+    // solver from nudging a duck the host considers finished.
+    applyPose(kind, id, x, y, z, qx, qy, qz, qw, settled) {
+      if (kind === WIRE_KIND.DUCK) {
+        const b = world.ducks.body(id);
+        if (!b || !world.ducks.isActive(id)) return false;
+        b.setTranslation({ x, y, z }, false);
+        b.setRotation({ x: qx, y: qy, z: qz, w: qw }, false);
+        b.setLinvel(ZERO, false);
+        b.setAngvel(ZERO, false);
+        if (settled) b.sleep(); else b.wakeUp();
+        return true;
+      }
+      if (kind === WIRE_KIND.PROP) {
+        const rec = placed.propByKey(id);
+        if (!rec || !rec.body) return false;
+        rec.body.setTranslation({ x, y, z }, false);
+        rec.body.setRotation({ x: qx, y: qy, z: qz, w: qw }, false);
+        rec.body.setLinvel(ZERO, false);
+        rec.body.setAngvel(ZERO, false);
+        if (settled) rec.body.sleep(); else rec.body.wakeUp();
+        return true;
+      }
+      if (kind === WIRE_KIND.PLAYER) {
+        if (id === localSlot) return false;
+        let r = remote.get(id);
+        if (!r) { r = newRemote(id); remote.set(id, r); }
+        r.streamed = true;
+        r.pose.x = x; r.pose.y = y; r.pose.z = z;
+        // The record carries a yaw-only quaternion; pitch rides in the roster.
+        r.pose.yaw = Math.atan2(2 * qy * qw, 1 - 2 * qy * qy);
+        return true;
+      }
+      return false;
+    },
+
+    setPeerNick(slot, nick) {
+      let r = remote.get(slot);
+      if (!r) { r = newRemote(slot); remote.set(slot, r); }
+      r.nick = nick;
+      return true;
+    },
+
+    // A departed player's capsule is a real rigid body in the host's world, so
+    // leaving it behind leaves a body everybody keeps walking into. Rapier has
+    // no removePlayer, so the capsule is parked far under the plate and taken
+    // out of the substep list; its inventory goes with it, because an item held
+    // by somebody who is gone is an item nobody can ever get back.
+    dropPlayer(slot) {
+      const r = remote.get(slot);
+      if (!r) return false;
+      // Their hold goes first. A controller whose owner has gone would keep
+      // springing a duck towards an aim nobody is producing any more, and its
+      // claim on that body would never be dropped -- one duck of the fixed 300
+      // permanently held by a ghost and ungrabbable by everyone left in the
+      // room. Releasing is not cleanup here, it is the difference between a
+      // player leaving and a duck leaking.
+      if (typeof world.dropHold === 'function') world.dropHold(slot);
+      if (r.capsule) {
+        const i = world.players.indexOf(r.capsule);
+        if (i >= 0) world.players.splice(i, 1);
+        const raw = world._raw;
+        if (raw && r.capsule.handle !== undefined) {
+          const b = raw.getRigidBody(r.capsule.handle);
+          if (b) b.setTranslation({ x: 0, y: config.ducks.parkY, z: 0 }, false);
+        }
+      }
+      remote.delete(slot);
+      return true;
+    },
+
+    // A raw host sample of somebody else's capsule, with the time it arrived.
+    // It goes to the avatar renderer untouched: that layer keeps its own
+    // history and interpolates from it, and handing it a value this file had
+    // already smoothed would be smoothing a smoothed signal -- which reads as a
+    // lag nobody can locate, because neither half of it is wrong on its own.
+    playerSample(slot, x, y, z, qx, qy, qz, qw, t) {
+      let r = remote.get(slot);
+      if (!r) { r = newRemote(slot); remote.set(slot, r); }
+      r.streamed = true;
+      r.pose.x = x; r.pose.y = y; r.pose.z = z;
+      r.pose.yaw = Math.atan2(2 * qy * qw, 1 - 2 * qy * qy);
+      if (typeof deps.onPlayerPose === 'function') {
+        deps.onPlayerPose(slot, { x, y, z, yaw: r.pose.yaw, nick: r.nick }, t);
+      }
+      return true;
+    },
+
+    removeBody(kind, id) {
+      if (kind === WIRE_KIND.DUCK) return world.ducks.release(id);
+      if (kind === WIRE_KIND.PROP) {
+        const rec = placed.propByKey(id);
+        return rec ? !!placed.despawnProp(rec) : false;
+      }
+      return false;
+    },
+
+    spawnDuck(slot, tier, x, y, z) {
+      return world.ducks.spawnSlot(slot, { x, y, z }, tier) !== null;
+    },
+
+    applyPlaced(key, netId, x, y, z, yaw, free) {
+      const existing = placed.objects.find((o) => o.key === key);
+      if (existing) return true;   // already ours, and the pose is the host's
+      const item = byNetId(netId);
+      if (!item || !item.collider) return false;
+      const half = item.collider.half;
+      const h = yaw * 0.5;
+      const rec = placed.place(item, {
+        position: { x, y, z },
+        quaternion: { x: 0, y: Math.sin(h), z: 0, w: Math.cos(h) },
+        valid: true, reason: null, yaw, free: !!free, snapped: !free,
+        box: { x, y, z, yaw, hx: half[0], hy: half[1], hz: half[2] },
+      });
+      if (!rec) return false;
+      // The HOST's instance key, adopted, or every later message about this
+      // object addresses something else.
+      rec.key = key;
+      placed.reserveKey(key);
+      return true;
+    },
+
+    applyDemolished(key) {
+      const rec = placed.objects.find((o) => o.key === key);
+      return rec ? !!placed.remove(rec) : false;
+    },
+
+    applyPropDropped(key, netId, p, q) {
+      if (placed.propByKey(key)) return true;
+      const item = byNetId(netId);
+      if (!item || !item.collider || !item.model) return false;
+      const rec = placed.dropProp(item, { x: p[0], y: p[1], z: p[2] }, ZERO);
+      if (!rec) return false;
+      rec.key = key;
+      placed.reserveKey(key);
+      if (q) rec.body.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, false);
+      return true;
+    },
+
+    applyPropTaken(key) {
+      const rec = placed.propByKey(key);
+      return rec ? !!placed.despawnProp(rec) : false;
+    },
+
+    applyMoney(m, earned) {
+      if (world.economy.set) world.economy.set(m);
+      // Money first, THEN the lifetime counter -- set() moves the balance with
+      // add(), and a positive add() raises `earned` on its way past. The same
+      // ordering src/sim/state.js restores in, and for the same reason.
+      if (typeof earned === 'number' && isFinite(earned) && world.economy.setTotalEarned) {
+        world.economy.setTotalEarned(earned);
+      }
+      return true;
+    },
+
+    // What the host's reconciler diffs to notice a prestige, and what a client
+    // is handed when one happens. The shop levels ride along because a client is
+    // never told about ownership outside the join snapshot, and after a prestige
+    // its idea of what the team owns is exactly wrong.
+    prestigeState() {
+      if (!deps.prestige) return null;
+      const s = deps.prestige.state();
+      return { n: s.count, mul: s.multiplier, levels: shop.ownedLevels() };
+    },
+
+    // The vendor's shelf, as the host's reconciler diffs it and as a client is
+    // handed it. `u` is the units left, `r` what the period started with (a
+    // refund puts a unit back and may not exceed it), `p` the period number and
+    // `e` how far into the period the host is -- which is what stops a client's
+    // countdown drifting away from the moment the shelf will actually turn.
+    stockState() {
+      const st = deps.stock;
+      if (!st) return null;
+      const t = st.table();
+      return { p: t.period, e: Math.round(t.elapsed * 100) / 100, u: t.units, r: t.rolled, sig: st.signature() };
+    },
+
+    applyStock(msg) {
+      if (!msg || !deps.stock) return false;
+      // `el`, not `e`: on a MSG.EVENT frame `e` is the event name itself.
+      deps.stock.setTable({ period: msg.p, elapsed: msg.el, units: msg.u, rolled: msg.r });
+      return true;
+    },
+
+    applyPrestige(msg) {
+      if (!msg) return false;
+      if (deps.prestige) deps.prestige.setState({ count: msg.n, multiplier: msg.mul });
+      if (msg.levels && typeof shop.setLevels === 'function') {
+        try { shop.setLevels(msg.levels); } catch (e) { /* reported by the caller's log */ }
+      }
+      // A machine in somebody's hotbar is not a prop and not a placed object, so
+      // no reconciled diff can take it away. Every inventory in the room drops
+      // whatever the prestige wiped.
+      if (deps.prestige) clearInventories((id) => deps.prestige.wipesId(id));
+      return true;
+    },
+
+    onReject(r) {
+      if (hud && typeof hud.showCap === 'function' && r && r.reason) hud.showCap(r.reason);
+      if (typeof onReject === 'function') onReject(r);
+    },
+  };
+
+  // --- lifecycle ----------------------------------------------------------------
+
+  // The LOBBY owns creating and closing the signalling session; this layer is
+  // handed the live one. Two things must not both own a session's lifetime, and
+  // the lobby is where a human decides to start or end one, so it wins.
+  // attachHost/attachClient/detach are the whole contract between them.
+
+  function attachHost(s) {
+    if (!s || !s.isHost) return null;
+    detach();
+    session = s;
+    localSlot = 0;
+    host = createHost({ session, game: adapter, onEvent: (e) => emit({ ...e, role: 'host' }) });
+    emit({ type: 'hosting', roomId: s.roomId, link: s.link ? s.link() : null });
+    return host;
+  }
+
+  function attachClient(s) {
+    if (!s || s.isHost) return null;
+    detach();
+    session = s;
+    localSlot = s.slot;
+    client = createClient({ session, game: adapter, onEvent: (e) => emit({ ...e, role: 'client' }) });
+    emit({ type: 'joining', roomId: s.roomId, slot: s.slot });
+    return client;
+  }
+
+  // Tears down the authority layer only. The session itself belongs to the
+  // lobby, so closing it is the lobby's call and never a side effect of this.
+  function detach() {
+    if (host) { host.close(); host = null; }
+    if (client) { client.close(); client = null; }
+    remote.clear();
+    roster = [];
+    localSlot = 0;
+    session = null;
+    emit({ type: 'detached' });
+    return true;
+  }
+
+  // Convenience for a headless test that has no lobby on screen: it creates the
+  // session itself and attaches it through exactly the same two functions, so
+  // there is no second code path for the tested case to diverge along.
+  async function startHost(opts) {
+    if (session) return { ok: false, error: 'already in a room' };
+    const res = await tryHostRoom(opts || {});
+    if (!res.ok) return res;
+    attachHost(res.session);
+    return { ok: true, roomId: res.session.roomId, link: res.session.link(), session: res.session };
+  }
+
+  async function join(roomId, opts) {
+    if (session) return { ok: false, error: 'already in a room' };
+    const res = await tryJoinRoom(roomId, opts || {});
+    if (!res.ok) return res;
+    attachClient(res.session);
+    return { ok: true, roomId, slot: res.session.slot, session: res.session };
+  }
+
+  async function leave() {
+    const s = session;
+    detach();
+    if (s) await s.close();
+    emit({ type: 'left' });
+    return true;
+  }
+
+  return {
+    // main.js calls exactly these three from the frame.
+    beginFrame() { lastFrameAt = now(); },
+    postStep() { return client ? client.postStep() : null; },
+    act,
+    perform,
+    // Who the host is currently acting FOR. A purchase drops a prop out of the
+    // tube and, if the row is buildable, puts a copy in somebody's hotbar --
+    // and "somebody" is the player who asked, not whoever happens to own the
+    // shop UI. main.js reads this inside its onPurchase handler, which is the
+    // one place that fact is knowable.
+    actingSlot: () => actingSlot,
+    // Written by src/sim/state.js when a join snapshot is loaded: the snapshot
+    // carries who is holding what, and this is where that lands.
+    setRoster,
+    give: (slot, item, n) => invAdd(slot, item, n === undefined ? 1 : n),
+    inventoryOf: (slot) => hotbarList(slot),
+    // Every inventory in the room at once. Prestige is the caller: it wipes
+    // catalog rows wholesale, and an item in a hand is the one place a wipe
+    // cannot reach through the world.
+    clearInventories,
+
+    // --- the hold, as the rest of the game asks about it ------------------------
+    // main.js used to read world.hold directly for "am I carrying something".
+    // On a CLIENT that controller is the local slot-0 one and it is always
+    // empty: the client's hold lives in the host's world, and the only true
+    // answer this side of the wire is the one the host sent in the roster.
+    holdingLocal() {
+      if (client) {
+        const r = roster.find((x) => x && x.slot === localSlot);
+        return !!(r && r.hold);
+      }
+      return !!(world.hold && world.hold.isHolding());
+    },
+    heldLocal() {
+      if (client) {
+        const r = roster.find((x) => x && x.slot === localSlot);
+        return r && r.hold && typeof r.hold.d === 'number' ? r.hold.d : null;
+      }
+      return world.hold && world.hold.isHolding() ? world.hold.heldDuck() : null;
+    },
+    // Who is holding what, for anybody -- the host's own answer when it has one,
+    // the host's last word when we are a client. Used by the avatar layer and by
+    // the tests.
+    heldBy(slot) {
+      const s = slot | 0;
+      if (client || s !== localSlot) {
+        const r = (client ? roster : buildRoster()).find((x) => x && x.slot === s);
+        return r && r.hold && typeof r.hold.d === 'number' ? r.hold.d : null;
+      }
+      return heldDuckOf(s);
+    },
+    holdSlots: () => (world.holdSlots ? world.holdSlots() : [0]),
+
+    // Lifecycle. The lobby calls the first three; the last three exist for a
+    // headless test that has no lobby on screen.
+    attachHost,
+    attachClient,
+    detach,
+    host: startHost,
+    join,
+    leave,
+    role: () => (host ? 'host' : client ? 'client' : 'single'),
+    isHost,
+    isClient,
+    isSingle: () => !session,
+    localSlot: () => localSlot,
+    // Everything a lobby screen or an avatar renderer needs, and nothing about
+    // peers or codecs. These are the exports the other G4 builder consumes.
+    roomState() {
+      if (host) return host.roomState();
+      if (client) return client.roomState();
+      return { role: 'single', roomId: null, slot: 0, players: [] };
+    },
+    // A client shows what the host sent it. Anyone else -- a host, or a single
+    // player with no room at all -- builds it, because in single player this is
+    // still the answer to "what is in my hands" and the snapshot is still a
+    // crash-recovery format. Returning an empty list off-line would quietly
+    // make every single-player snapshot incomplete in exactly the way this
+    // round set out to fix.
+    players: () => (client ? roster : buildRoster()),
+    playerPose(slot) {
+      if (slot === localSlot) {
+        const p = player.position();
+        const look = player.look ? player.look() : { yaw: 0, pitch: 0 };
+        return { slot, x: p.x, y: p.y, z: p.z, yaw: look.yaw, pitch: look.pitch, local: true };
+      }
+      const r = remote.get(slot);
+      if (!r) return null;
+      const t = r.capsule ? r.capsule.position() : r.pose;
+      return {
+        slot, x: t.x, y: t.y, z: t.z,
+        yaw: r.pose.yaw, pitch: r.pose.pitch,
+        nick: r.nick, hand: r.handId || currentHandId(slot), local: false,
+      };
+    },
+    remoteSlots: () => Array.from(remote.keys()),
+    onSessionEvent: (fn) => { if (session) return session.on(fn); return () => {}; },
+    stats(t) {
+      const base = { role: host ? 'host' : client ? 'client' : 'single', ...counters,
+        remotePlayers: remote.size };
+      if (host) return { ...base, ...host.stats(t) };
+      if (client) return { ...base, ...client.stats(t) };
+      return base;
+    },
+    // Test surface: a host tick without waiting for the worker clock.
+    tick() { return host ? host.tick() : null; },
+    _host: () => host,
+    _client: () => client,
+  };
+}
+
+export default createNetGame;
