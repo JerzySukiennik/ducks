@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ducks</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f2c218'/%3E%3Crect x='10' y='5' width='4' height='2' fill='%23e2751a'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%231a1a1a'/%3E%3C/svg%3E">
+<!-- The interface face (VT323) is NOT linked from here. It is shipped in
+     assets/fonts/ and declared by the @font-face pair in src/ui/theme.js, which
+     is where CRT.display names it. A Google Fonts <link> lived here briefly and
+     had to go: Gate F-A says the game boots and renders with the network
+     unplugged, and a stylesheet on fonts.googleapis.com fails that gate --
+     silently, because the fallback still draws and nobody notices the design
+     left the building. Two woff2 subsets, 14 KB, cost one local request. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0f1e; overflow: hidden; }
+  #app { position: fixed; inset: 0; }
+  #view {
+    display: block; width: 100%; height: 100%;
+    image-rendering: pixelated;
+  }
+  #grain {
+    position: fixed; inset: 0; pointer-events: none;
+    width: 100%; height: 100%;
+    mix-blend-mode: overlay;
+    image-rendering: pixelated;
+  }
+  #debug {
+    position: fixed; top: 8px; left: 8px; z-index: 10;
+    font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cfe3ff; background: rgba(6, 10, 22, 0.62);
+    padding: 6px 9px; border: 1px solid rgba(140, 180, 255, 0.22);
+    white-space: pre; pointer-events: none;
+  }
+  #boot-error {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 20; max-width: 620px;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #ffd7d7; background: #2a0f14; border: 1px solid #7a2b34;
+    padding: 14px 16px; white-space: pre-wrap;
+  }
+  #notices {
+    position: fixed; right: 8px; bottom: 8px; z-index: 15;
+    display: flex; flex-direction: column; gap: 6px;
+    max-width: min(320px, 46vw); pointer-events: none;
+  }
+  #notices .notice {
+    pointer-events: auto; display: flex; gap: 8px; align-items: flex-start;
+    font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #e6dcc0; background: rgba(38, 30, 10, 0.92);
+    border: 1px solid rgba(242, 194, 24, 0.35);
+    padding: 7px 9px; max-height: 25vh; overflow: auto;
+  }
+  #notices .notice button {
+    flex: none; margin: -2px -3px 0 0; padding: 0 3px;
+    font: inherit; line-height: 1; color: inherit;
+    background: none; border: 0; cursor: pointer; opacity: 0.65;
+  }
+  #notices .notice button:hover { opacity: 1; }
+  #hint {
+    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 10; font: 11px ui-monospace, Menlo, monospace;
+    color: rgba(207, 227, 255, 0.55); pointer-events: none;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/",
+    "@dimforge/rapier3d-compat": "https://unpkg.com/@dimforge/rapier3d-compat@0.14.0/rapier.es.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="hint">click or drag to look &middot; WSAD move &middot; shift sprint &middot; space jump &middot; F3 overlay</div>
+<script>
+// Fatal boot failure blocks with a panel; anything the game survives is a
+// dismissible toast that must never claim the game failed to start.
+(function () {
+  var fatalShown = false;
+  var seen = {};
+
+  function fatal(msg) {
+    if (fatalShown) return;
+    fatalShown = true;
+    var el = document.getElementById('boot-error') || document.createElement('div');
+    el.id = 'boot-error';
+    el.style.display = 'block';
+    el.textContent = 'Ducks failed to start\n\n' + msg;
+    if (!el.parentNode) document.body.appendChild(el);
+  }
+
+  function notice(msg, key) {
+    var id = key || msg;
+    if (seen[id]) return;
+    seen[id] = true;
+    var host = document.getElementById('notices');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'notices';
+      document.body.appendChild(host);
+    }
+    var box = document.createElement('div');
+    box.className = 'notice';
+    var text = document.createElement('span');
+    text.textContent = msg;
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.textContent = '×';
+    close.addEventListener('click', function () {
+      if (box.parentNode) box.parentNode.removeChild(box);
+    });
+    box.appendChild(text);
+    box.appendChild(close);
+    host.appendChild(box);
+  }
+
+  window.__ducksFatal = fatal;
+  window.__ducksNotice = notice;
+
+  function booted() {
+    return !!(window.GAME || window.__ducksBooted);
+  }
+
+  window.addEventListener('error', function (e) {
+    if (e.target && e.target.tagName === 'SCRIPT') {
+      // Only a boot-time script failure is fatal. Once the game runs, a late
+      // script failure is a notice: blocking a live game over it is a bug.
+      var src = e.target.src || 'inline';
+      if (booted()) notice('Script failed to load: ' + src, src);
+      else fatal('Script failed to load: ' + src);
+    } else if (e.message) notice('Runtime error: ' + e.message, e.message);
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    notice('Runtime notice: ' + (r && r.message ? r.message : r));
+  });
+  setTimeout(function () {
+    if (!window.GAME) fatal('Timed out waiting for modules (three / rapier CDN unreachable?).');
+  }, 15000);
+})();
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

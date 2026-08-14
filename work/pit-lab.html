@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pit Lab — strojenie dźwięku dołka</title>
+<style>
+  :root {
+    --bg: #101216; --panel: #171a20; --line: #262b34; --ink: #e8ecf2;
+    --dim: #99a2b0; --hot: #ffd166; --ok: #6fd08c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: rgba(16,18,22,.94);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+    padding: 14px 20px;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .2px; }
+  .sub { color: var(--dim); font-size: 12.5px; }
+  main { padding: 18px 20px 60px; max-width: 1080px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+  button {
+    background: #202631; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 14px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #2a3140; }
+  button.primary { background: var(--hot); color: #1a1508; border-color: var(--hot); font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .9px; color: var(--dim); margin: 0 0 10px; }
+  .knob { display: grid; grid-template-columns: minmax(220px, 1fr) 200px 92px; gap: 12px; align-items: center; padding: 5px 0; }
+  .knob label { font-size: 13px; }
+  .knob .val { font-variant-numeric: tabular-nums; text-align: right; color: var(--hot); }
+  .knob .def { color: #5f6773; font-size: 11px; }
+  input[type=range] { width: 100%; accent-color: var(--hot); }
+  select { background: #202631; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+  pre {
+    background: #0c0e12; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; overflow: auto; font-size: 12px; color: #cfe3ff; max-height: 260px;
+  }
+  .meter { font-variant-numeric: tabular-nums; color: var(--ok); }
+  .warn { color: var(--hot); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 820px) {
+    .grid2 { grid-template-columns: 1fr; }
+    .knob { grid-template-columns: 1fr; }
+    .knob .val { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pit Lab — dźwięk kaczki wpadającej do dołka</h1>
+  <div class="sub">
+    Ta strona importuje <code>../src/audio/pitsynth.js</code> i <code>../src/config.js</code> —
+    dokładnie te same pliki, których używa gra. Co tu usłyszysz, to usłyszysz w grze.
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2>Granie</h2>
+    <div class="row">
+      <button class="primary" id="fire">Jedna kaczka</button>
+      <button id="burst">Zrzut — 20 kaczek w 2 s</button>
+      <button id="burstBig">Duży zrzut — 60 kaczek w 3 s</button>
+      <button id="reset">Wyzeruj bieg</button>
+    </div>
+    <div class="row">
+      <label for="pre">Ile kaczek już wpadło:&nbsp;</label>
+      <input type="range" id="pre" min="0" max="60" step="1" value="0" style="width:260px">
+      <span class="val meter" id="preVal">0</span>
+      <span class="sub">— ustawia bieg, żeby posłuchać dowolnego miejsca serii</span>
+    </div>
+    <div class="row sub">
+      Stan: <span class="meter" id="stat">—</span>
+    </div>
+    <div class="row sub">
+      Ostatnie nuty (kaczka → Hz): <span class="meter" id="notes">—</span>
+    </div>
+  </div>
+
+  <div class="grid2" id="knobs"></div>
+
+  <div class="card">
+    <h2>Wartości</h2>
+    <div class="row">
+      <button class="primary" id="copy">Skopiuj obecne wartości</button>
+      <button id="defaults">Wróć do domyślnych</button>
+      <span class="sub" id="copied"></span>
+    </div>
+    <div class="sub">Wklej to w <code>src/config.js</code> → <code>audio.pit.synth</code>.</div>
+    <pre id="out"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Domyślne (te, które są teraz w grze)</h2>
+    <pre id="defs"></pre>
+  </div>
+</main>
+
+<script type="module">
+import config from '../src/config.js';
+import { createPitSynth, PIT_SYNTH_KNOBS, PIT_SYNTH_WAVES, WAVE_CHOICES } from '../src/audio/pitsynth.js';
+
+// The defaults are read from config.js, never restated here: the page is a view
+// of the game's numbers, so "wróć do domyślnych" really does mean what ships.
+const DEFAULTS = { ...config.audio.pit.synth };
+const MIX_GAIN = 0.4; // the duck_pit line in assets/audio/mix.json
+
+let ctx = null;
+function nodes() {
+  if (!ctx) return null;
+  if (ctx.state !== 'running') return null;
+  return { ctx, destination: master };
+}
+let master = null;
+
+function ensureCtx() {
+  if (ctx) { if (ctx.state !== 'running') ctx.resume(); return ctx; }
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return null;
+  ctx = new C();
+  master = ctx.createGain();
+  // config.audio.masterGain, same headroom as the game's bus.
+  master.gain.value = config.audio.masterGain;
+  master.connect(ctx.destination);
+  ctx.resume();
+  return ctx;
+}
+
+const synth = createPitSynth({
+  params: DEFAULTS,
+  audio: {
+    nodes,
+    gain: () => MIX_GAIN,
+    note: () => {},
+  },
+});
+
+// The lab's clock. In the game this is the SIMULATION clock; here wall time is
+// the same thing, because nothing else is running.
+const now = () => performance.now() / 1000;
+
+// --- knobs -------------------------------------------------------------------
+
+const groups = new Map();
+function groupBox(name) {
+  if (groups.has(name)) return groups.get(name);
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = '<h2>' + name + '</h2>';
+  document.getElementById('knobs').appendChild(el);
+  groups.set(name, el);
+  return el;
+}
+
+const valEls = {};
+for (const k of PIT_SYNTH_KNOBS) {
+  const box = groupBox(k.group);
+  const row = document.createElement('div');
+  row.className = 'knob';
+  const id = 'k_' + k.key;
+  row.innerHTML =
+    '<label for="' + id + '">' + k.label +
+    '<div class="def">domyślnie: ' + DEFAULTS[k.key] + (k.unit ? ' ' + k.unit : '') + '</div></label>' +
+    '<input type="range" id="' + id + '" min="' + k.min + '" max="' + k.max + '" step="' + k.step + '">' +
+    '<span class="val" id="v_' + k.key + '"></span>';
+  box.appendChild(row);
+  const input = row.querySelector('input');
+  input.value = DEFAULTS[k.key];
+  valEls[k.key] = row.querySelector('.val');
+  const show = () => {
+    const v = Number(input.value);
+    valEls[k.key].textContent = v + (k.unit ? ' ' + k.unit : '');
+    synth.setParam(k.key, v);
+    dump();
+  };
+  input.addEventListener('input', show);
+  show();
+}
+
+for (const w of PIT_SYNTH_WAVES) {
+  const box = groupBox(w.group);
+  const row = document.createElement('div');
+  row.className = 'knob';
+  row.innerHTML = '<label>' + w.label + '<div class="def">domyślnie: ' + DEFAULTS[w.key] + '</div></label>';
+  const sel = document.createElement('select');
+  for (const c of WAVE_CHOICES) {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    if (c === DEFAULTS[w.key]) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => { synth.setParam(w.key, sel.value); dump(); });
+  row.appendChild(sel);
+  row.appendChild(document.createElement('span'));
+  box.appendChild(row);
+}
+
+// --- playing -----------------------------------------------------------------
+
+function fireOne() {
+  ensureCtx();
+  const info = synth.duck(now(), { attenuation: 1 });
+  console.log('[pit-lab] duck step=' + info.step + ' f=' + info.freq + ' Hz gain=' + info.gain + ' played=' + info.played);
+  return info;
+}
+
+document.getElementById('fire').addEventListener('click', fireOne);
+
+function burst(count, seconds) {
+  ensureCtx();
+  const gap = (seconds * 1000) / count;
+  for (let i = 0; i < count; i++) setTimeout(fireOne, Math.round(i * gap));
+}
+document.getElementById('burst').addEventListener('click', () => burst(20, 2));
+document.getElementById('burstBig').addEventListener('click', () => burst(60, 3));
+document.getElementById('reset').addEventListener('click', () => { synth.reset(); });
+
+const pre = document.getElementById('pre');
+pre.addEventListener('input', () => {
+  document.getElementById('preVal').textContent = pre.value;
+  synth.setStreak(Number(pre.value), now());
+});
+
+// --- readout -----------------------------------------------------------------
+
+function tick() {
+  const s = synth.state(now());
+  document.getElementById('stat').textContent =
+    'bieg ' + s.stepNow + ' | następna nuta ' + s.nextFreq + ' Hz | nut zagranych ' + s.started +
+    ' | odrzuconych ' + s.dropped + ' | bez kontekstu ' + s.silent +
+    (ctx ? ' | ctx ' + ctx.state : ' | ctx: kliknij cokolwiek');
+  const n = synth.notes(10);
+  document.getElementById('notes').textContent =
+    n.length ? n.map((x) => x.step + '→' + x.freq).join('  ') : '—';
+  requestAnimationFrame(tick);
+}
+tick();
+
+// --- copy out ----------------------------------------------------------------
+
+function snippet() {
+  const p = synth.params();
+  const lines = [];
+  for (const k of PIT_SYNTH_KNOBS) lines.push('  ' + k.key + ': ' + p[k.key] + ',');
+  for (const w of PIT_SYNTH_WAVES) lines.push('  ' + w.key + ": '" + p[w.key] + "',");
+  return 'synth: {\n' + lines.join('\n') + '\n},';
+}
+function dump() { document.getElementById('out').textContent = snippet(); }
+dump();
+
+document.getElementById('defs').textContent = JSON.stringify(DEFAULTS, null, 2);
+
+document.getElementById('copy').addEventListener('click', async () => {
+  const text = snippet();
+  try { await navigator.clipboard.writeText(text); document.getElementById('copied').textContent = 'skopiowane do schowka'; }
+  catch (_) { document.getElementById('copied').textContent = 'schowek odmówił — zaznacz z pola niżej'; }
+  console.log('[pit-lab] snippet\n' + text);
+});
+
+document.getElementById('defaults').addEventListener('click', () => {
+  synth.setParams(DEFAULTS);
+  for (const k of PIT_SYNTH_KNOBS) {
+    const input = document.getElementById('k_' + k.key);
+    input.value = DEFAULTS[k.key];
+    valEls[k.key].textContent = DEFAULTS[k.key] + (k.unit ? ' ' + k.unit : '');
+  }
+  document.querySelectorAll('select').forEach((sel, i) => { sel.value = DEFAULTS[PIT_SYNTH_WAVES[i].key]; });
+  dump();
+});
+
+window.PITLAB = { synth, fireOne, burst, snippet, defaults: DEFAULTS, ctx: () => ctx };
+console.log('[pit-lab] gotowe. window.PITLAB.fireOne() / burst(20,2)');
+</script>
+</body>
+</html>

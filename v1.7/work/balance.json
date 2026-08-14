@@ -1,0 +1,476 @@
+{
+  "_comment": "Phase E working numbers. tools/economy-sim.py reads this; once the curve is accepted the values are copied into src/config.js and src/data/*.js. This file is the scratchpad, those files are the truth.",
+  "duckBaseValue": 1,
+  "rarityMultipliers": [
+    1,
+    3,
+    10,
+    35,
+    100,
+    350,
+    1000
+  ],
+  "rarityWeights": [
+    6800,
+    900,
+    220,
+    60,
+    15,
+    4,
+    1
+  ],
+  "clicksPerDuck": 10,
+  "pressSeconds": 4.5,
+  "machineSeconds": 2.0,
+  "conveyorRate": 5.0,
+  "fanRate": 2.2,
+  "noCollectorPenalty": 0.35,
+  "marketValuationMul": 1.15,
+  "luckyRubberMul": 1.2,
+  "swiftHandsMul": 0.85,
+  "sturdyBootsMul": 1.1,
+  "reinforcedCratesMul": 1.3,
+  "paybackHorizon": 1800,
+  "prestigeThreshold": 10000,
+  "prestigeExponent": 0.5,
+  "prestigeTargetMul": 2.5,
+  "prestigeMinSecondsLeft": 1500,
+  "keepOnPrestige": [
+    "bucket",
+    "box",
+    "box_big",
+    "cart"
+  ],
+  "bundles": [
+    {
+      "id": "fan_chain",
+      "items": {
+        "fan": 6
+      }
+    },
+    {
+      "id": "fan_chain_fed",
+      "items": {
+        "fan": 6,
+        "vacuum_station": 1
+      }
+    },
+    {
+      "id": "belt_chain",
+      "items": {
+        "conveyor": 18,
+        "vacuum_station": 1
+      }
+    },
+    {
+      "id": "belt_line_2",
+      "items": {
+        "conveyor": 36,
+        "vacuum_station": 2
+      }
+    },
+    {
+      "id": "heavy_fan_chain",
+      "items": {
+        "fan_strong": 4
+      }
+    },
+    {
+      "id": "heavy_fan_chain_fed",
+      "items": {
+        "fan_strong": 4,
+        "vacuum_station": 1
+      }
+    },
+    {
+      "id": "vibe_chain",
+      "items": {
+        "vibe_floor": 18,
+        "vacuum_station": 1
+      }
+    }
+  ],
+  "catalog": [
+    {
+      "id": "bucket",
+      "cost": 25
+    },
+    {
+      "id": "box",
+      "cost": 45
+    },
+    {
+      "id": "box_big",
+      "cost": 120
+    },
+    {
+      "id": "cart",
+      "cost": 180
+    },
+    {
+      "id": "press",
+      "cost": 200,
+      "times": 16,
+      "curve": 1.28
+    },
+    {
+      "id": "machine",
+      "cost": 650,
+      "times": 16,
+      "curve": 1.32
+    },
+    {
+      "id": "vacuum_station",
+      "cost": 450,
+      "times": 4,
+      "curve": 1.55
+    },
+    {
+      "id": "conveyor",
+      "cost": 110,
+      "times": 60,
+      "curve": 1.035
+    },
+    {
+      "id": "conveyor_corner",
+      "cost": 130,
+      "times": 12,
+      "curve": 1.05
+    },
+    {
+      "id": "conveyor_slope",
+      "cost": 150,
+      "times": 8,
+      "curve": 1.05
+    },
+    {
+      "id": "fan",
+      "cost": 60,
+      "times": 24,
+      "curve": 1.08
+    },
+    {
+      "id": "market_valuation",
+      "cost": 500,
+      "times": 8,
+      "curve": 1.55
+    },
+    {
+      "id": "lucky_rubber",
+      "cost": 800,
+      "times": 5,
+      "curve": 1.7
+    },
+    {
+      "id": "swift_hands",
+      "cost": 250,
+      "times": 4,
+      "curve": 1.7
+    },
+    {
+      "id": "sturdy_boots",
+      "cost": 300,
+      "times": 4,
+      "curve": 1.55
+    },
+    {
+      "id": "reinforced_crates",
+      "cost": 650,
+      "times": 3,
+      "curve": 1.8
+    },
+    {
+      "id": "sack",
+      "cost": 18
+    },
+    {
+      "id": "bucket_leaky",
+      "cost": 20
+    },
+    {
+      "id": "crate_wood",
+      "cost": 75
+    },
+    {
+      "id": "dumper",
+      "cost": 260
+    },
+    {
+      "id": "pallet_jack",
+      "cost": 560
+    },
+    {
+      "id": "machine_slow",
+      "cost": 165,
+      "times": 6,
+      "curve": 1.45
+    },
+    {
+      "id": "condenser",
+      "cost": 225,
+      "times": 6,
+      "curve": 1.42
+    },
+    {
+      "id": "hive",
+      "cost": 195,
+      "times": 6,
+      "curve": 1.42
+    },
+    {
+      "id": "duckomat",
+      "cost": 620,
+      "times": 8,
+      "curve": 1.34
+    },
+    {
+      "id": "incubator_double",
+      "cost": 720,
+      "times": 8,
+      "curve": 1.34
+    },
+    {
+      "id": "hatchery",
+      "cost": 860,
+      "times": 8,
+      "curve": 1.33
+    },
+    {
+      "id": "printer3d",
+      "cost": 900,
+      "times": 6,
+      "curve": 1.38
+    },
+    {
+      "id": "feeder_vibe",
+      "cost": 1050,
+      "times": 8,
+      "curve": 1.33
+    },
+    {
+      "id": "press_belt",
+      "cost": 1300,
+      "times": 8,
+      "curve": 1.33
+    },
+    {
+      "id": "slot_machine",
+      "cost": 1680,
+      "times": 6,
+      "curve": 1.35
+    },
+    {
+      "id": "geyser",
+      "cost": 2400,
+      "times": 4,
+      "curve": 1.5
+    },
+    {
+      "id": "press_gold",
+      "cost": 2850,
+      "times": 6,
+      "curve": 1.4
+    },
+    {
+      "id": "reactor",
+      "cost": 3000,
+      "times": 4,
+      "curve": 1.5
+    },
+    {
+      "id": "factory",
+      "cost": 4800,
+      "times": 6,
+      "curve": 1.4
+    },
+    {
+      "id": "pipe_endless",
+      "cost": 12600,
+      "times": 3,
+      "curve": 1.6
+    },
+    {
+      "id": "vibe_floor",
+      "cost": 85,
+      "times": 12,
+      "curve": 1.04
+    },
+    {
+      "id": "fan_strong",
+      "cost": 240,
+      "times": 6,
+      "curve": 1.18
+    }
+  ],
+  "conveyorSpan": 2.0,
+  "fanSpan": 6.0,
+  "collectorFeed": 0.6,
+  "attentionAfterAutomation": 0.4,
+  "saveIfBetterBy": 1.0,
+  "_producersComment": "Every machine that makes ducks by itself. `mean` is the mean value multiplier of its rarity weight set (config.rarity.sets): w_basic 2.2125, w_good 2.6919, w_rare 9.0833, w_elite 75.0. press and machine keep the w_basic mean, exactly as the frozen Phase E curve modelled them, so this table reproduces the accepted numbers rather than re-tuning the game while adding to it.",
+  "producers": [
+    {
+      "id": "press",
+      "seconds": 4.5,
+      "count": 1,
+      "mean": 2.2125
+    },
+    {
+      "id": "machine",
+      "seconds": 2.0,
+      "count": 1,
+      "mean": 2.2125
+    },
+    {
+      "id": "machine_slow",
+      "seconds": 9.0,
+      "count": 1,
+      "mean": 2.2125
+    },
+    {
+      "id": "condenser",
+      "seconds": 8.0,
+      "count": 1,
+      "mean": 2.6919
+    },
+    {
+      "id": "hive",
+      "seconds": 24.0,
+      "count": 3,
+      "mean": 2.2125
+    },
+    {
+      "id": "duckomat",
+      "seconds": 4.0,
+      "count": 1,
+      "mean": 2.2125
+    },
+    {
+      "id": "incubator_double",
+      "seconds": 7.0,
+      "count": 2,
+      "mean": 2.2125
+    },
+    {
+      "id": "hatchery",
+      "seconds": 3.0,
+      "count": 1,
+      "mean": 2.2125
+    },
+    {
+      "id": "printer3d",
+      "seconds": 15.0,
+      "count": 1,
+      "mean": 9.0833
+    },
+    {
+      "id": "feeder_vibe",
+      "seconds": 12.0,
+      "count": 5,
+      "mean": 2.2125
+    },
+    {
+      "id": "press_belt",
+      "seconds": 10.0,
+      "count": 5,
+      "mean": 2.2125
+    },
+    {
+      "id": "slot_machine",
+      "seconds": 8.0,
+      "count": 5.5,
+      "mean": 2.2125
+    },
+    {
+      "id": "geyser",
+      "seconds": 45.0,
+      "count": 30,
+      "mean": 2.2125
+    },
+    {
+      "id": "press_gold",
+      "seconds": 6.0,
+      "count": 1,
+      "mean": 9.0833
+    },
+    {
+      "id": "reactor",
+      "seconds": 60.0,
+      "count": 1,
+      "mean": 75.0
+    },
+    {
+      "id": "factory",
+      "seconds": 8.0,
+      "count": 10,
+      "mean": 2.2125
+    },
+    {
+      "id": "pipe_endless",
+      "seconds": 0.35,
+      "count": 1,
+      "mean": 2.2125
+    }
+  ],
+  "_carryComment": "Phase 1 containers appended to the four hard-coded Phase E rungs. `leak` is storage.leakPerSecond and costs a FIXED number of ducks per trip, not per load. No rung may out-haul the fan chain (2.2 ducks/s) for less than the chain costs -- Phase E discovery #1.",
+  "carry": [
+    {
+      "id": "sack",
+      "capacity": 5,
+      "overhead": 0.6,
+      "leak": 0.0
+    },
+    {
+      "id": "bucket_leaky",
+      "capacity": 10,
+      "overhead": 0.8,
+      "leak": 0.35
+    },
+    {
+      "id": "crate_wood",
+      "capacity": 22,
+      "overhead": 3.0,
+      "leak": 0.25
+    },
+    {
+      "id": "dumper",
+      "capacity": 34,
+      "overhead": 6.5,
+      "leak": 0.0
+    },
+    {
+      "id": "pallet_jack",
+      "capacity": 44,
+      "overhead": 8.5,
+      "leak": 0.0
+    }
+  ],
+  "belts": {
+    "conveyor": {
+      "span": 2.0,
+      "rate": 5.0
+    },
+    "conveyor_corner": {
+      "span": 2.0,
+      "rate": 5.0
+    },
+    "conveyor_slope": {
+      "span": 2.0,
+      "rate": 5.0
+    },
+    "vibe_floor": {
+      "span": 2.0,
+      "rate": 3.6
+    }
+  },
+  "fans": {
+    "fan": {
+      "span": 6.0,
+      "rate": 2.2
+    },
+    "fan_strong": {
+      "span": 10.0,
+      "rate": 3.2
+    }
+  }
+}
