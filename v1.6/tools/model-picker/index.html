@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ducks — modele</title>
+<style>
+:root{--bg:#111013;--panel:#191820;--panel2:#1f1e28;--line:#2c2b38;--ink:#e8e6ef;
+ --dim:#8b8a9c;--dimmer:#5d5c6d;--hazard:#f2c014;--hazard-dim:#8a6f0c;
+ --ok:#5fd08a;--ok-bg:#16241a;--warn:#e2604a;--warn-bg:#2a1614}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:96px}
+.stripe{height:6px;background:repeating-linear-gradient(135deg,var(--hazard) 0 14px,#111013 14px 28px)}
+header{position:sticky;top:0;z-index:30;background:rgba(17,16,19,.95);backdrop-filter:blur(10px);
+ border-bottom:1px solid var(--line)}
+.hw{max-width:1240px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+h1{margin:0;font-size:19px;letter-spacing:.03em}
+h1 span{color:var(--hazard)}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+.sp{flex:1}
+.stat{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+.stat b{font-size:16px}
+.stat .g{color:var(--ok)} .stat .r{color:var(--warn)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+ border-radius:7px;padding:8px 14px;transition:.12s}
+button:hover{border-color:var(--dimmer);background:#26252f}
+button:focus-visible{outline:2px solid var(--hazard);outline-offset:2px}
+.primary{background:var(--hazard);color:#17150a;border-color:var(--hazard);font-weight:650}
+.primary:hover{background:#ffd42a}
+main{max-width:1240px;margin:0 auto;padding:0 22px}
+h2{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--hazard);
+ border-bottom:1px solid var(--line);padding-bottom:9px;margin:34px 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+ display:flex;flex-direction:column}
+.card.ok{border-color:#33502f} .card.fix{border-color:#5c2b23}
+.card canvas{display:block;width:100%;height:180px;background:#0d0c10;image-rendering:pixelated;cursor:grab}
+.card canvas:active{cursor:grabbing}
+.meta{padding:10px 13px 4px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.meta h3{margin:0;font-size:14px;font-family:ui-monospace,Menlo,monospace}
+.meta .num{font-size:11px;color:var(--dimmer);font-variant-numeric:tabular-nums}
+.desc{padding:0 13px 9px;color:var(--dim);font-size:12.5px;flex:1}
+.tools{padding:0 13px 11px;display:flex;flex-direction:column;gap:7px}
+.row{display:flex;gap:7px}
+.row button{flex:1;padding:5px 8px;font-size:12.5px}
+.b-ok.on{background:var(--ok);color:#0d1c12;border-color:var(--ok);font-weight:650}
+.b-fix.on{background:var(--warn);color:#2a0f0c;border-color:var(--warn);font-weight:650}
+textarea{width:100%;min-height:52px;resize:vertical;border:1px solid var(--line);border-radius:7px;
+ background:var(--panel2);color:var(--ink);font:13px/1.45 inherit;padding:8px 10px}
+textarea:focus{outline:none;border-color:var(--hazard)}
+textarea.has{border-color:var(--hazard-dim);background:#221f14}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(25,24,32,.97);
+ backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.bw{max-width:1240px;margin:0 auto;padding:12px 22px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.bw .msg{color:var(--dim);font-size:13px;flex:1;min-width:220px}
+dialog{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;
+ max-width:min(840px,93vw);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.75)}
+.dh{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+.dh h3{margin:0;font-size:16px;flex:1}
+dialog textarea{border:0;border-radius:0;height:54vh;background:#0d0c10;color:#cfe6d5;
+ font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:16px 20px}
+</style>
+</head>
+<body>
+<div class="stripe"></div>
+<header><div class="hw">
+  <div><h1>DUCKS <span>/</span> modele</h1>
+  <div class="sub">Wszystkie zrobione w Blenderze. Ciągnij myszą po podglądzie, żeby obrócić.</div></div>
+  <div class="sp"></div>
+  <div class="stat"><span class="g">✓ <b id="nok">0</b></span> &nbsp; <span class="r">✎ <b id="nfix">0</b></span>
+    &nbsp; z <b id="ntot">0</b></div>
+  <button id="spin">⏸ Obrót</button>
+  <button class="primary" id="exp">Eksportuj uwagi</button>
+</div></header>
+
+<main id="main"></main>
+
+<div class="bar"><div class="bw">
+  <div class="msg" id="msg">Ładowanie…</div>
+  <button id="clear">Wyczyść uwagi</button>
+  <button class="primary" id="exp2">Eksportuj uwagi</button>
+</div></div>
+
+<dialog id="dlg"><div class="dh"><h3>Uwagi do modeli</h3>
+ <button id="copy">Kopiuj</button><button id="close">Zamknij</button></div>
+ <textarea id="out" readonly></textarea></dialog>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const KEY='ducks-model-notes-v1';
+const $=s=>document.querySelector(s);
+const msg=t=>$('#msg').innerHTML=t;
+let state={}, spinning=true, DATA=[];
+try{ state=JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ state={}; }
+const save=()=>{ try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){} };
+
+const R=new THREE.WebGLRenderer({antialias:false,alpha:true,powerPreference:'high-performance'});
+R.setPixelRatio(1); R.setSize(300,200,false);
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(30,300/200,0.01,500);
+scene.add(new THREE.HemisphereLight(0xdfe6ff,0x2a2a30,2.2));
+const key=new THREE.DirectionalLight(0xfff4dd,2.1); key.position.set(3,5,4); scene.add(key);
+const rim=new THREE.DirectionalLight(0x8fb4ff,0.75); rim.position.set(-4,2,-3); scene.add(rim);
+
+const tiles=[];
+function draw(t){
+  if(!t.obj) return;
+  scene.add(t.obj);
+  t.obj.rotation.set(0,t.yaw,0);
+  const d=t.r*2.4;
+  cam.near=Math.max(0.001,d/1000); cam.far=d*10;
+  const p=t.pitch;
+  cam.position.set(Math.cos(t.yaw*0+0.6)*d*Math.cos(p), d*Math.sin(p)+t.cy, Math.sin(0.6)*d*Math.cos(p));
+  cam.lookAt(0,t.cy,0); cam.updateProjectionMatrix();
+  R.render(scene,cam);
+  t.ctx.clearRect(0,0,t.cv.width,t.cv.height);
+  t.ctx.drawImage(R.domElement,0,0,t.cv.width,t.cv.height);
+  scene.remove(t.obj);
+}
+function tick(){
+  for(const t of tiles){
+    if(!t.obj||!t.vis) continue;
+    if(spinning && !t.drag) t.yaw+=0.011;
+    try{ draw(t); }catch(e){ t.obj=null; }
+  }
+  requestAnimationFrame(tick);
+}
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  const t=tiles[+e.target.dataset.ti]; if(t){ t.vis=e.isIntersecting; if(t.vis) try{draw(t)}catch(e){} }
+}),{rootMargin:'300px'});
+
+function counts(){
+  const ok=Object.values(state).filter(s=>s.st==='ok').length;
+  const fix=Object.values(state).filter(s=>s.st==='fix'||(s.note||'').trim()).length;
+  $('#nok').textContent=ok; $('#nfix').textContent=fix; $('#ntot').textContent=DATA.length;
+}
+
+const res=await fetch('models.json?x='+Date.now());
+DATA=await res.json();
+const groups=[...new Set(DATA.map(m=>m.group))];
+$('#main').innerHTML=groups.map(g=>
+  `<h2>${g}</h2><div class="grid">`+DATA.filter(m=>m.group===g).map(m=>{
+    const s=state[m.name]||{};
+    return `<div class="card${s.st==='ok'?' ok':''}${(s.st==='fix'||(s.note||'').trim())?' fix':''}" data-n="${m.name}">
+      <canvas width="300" height="200"></canvas>
+      <div class="meta"><h3>${m.name}</h3>
+        <span class="num">${m.tris} tri · ${m.kb} KB · ${m.dim[0]}×${m.dim[1]}×${m.dim[2]} m</span></div>
+      <div class="desc">${m.desc}</div>
+      <div class="tools">
+        <div class="row">
+          <button class="b-ok${s.st==='ok'?' on':''}">✓ Dobre</button>
+          <button class="b-fix${s.st==='fix'?' on':''}">✎ Do poprawki</button>
+        </div>
+        <textarea placeholder="Co poprawić w tym modelu?">${(s.note||'').replace(/</g,'&lt;')}</textarea>
+      </div></div>`;
+  }).join('')+`</div>`).join('');
+
+const loader=new GLTFLoader();
+const cards=[...document.querySelectorAll('.card')];
+msg(`Ładowanie <b>${cards.length}</b> modeli…`);
+let done=0,failed=0;
+
+cards.forEach((card,i)=>{
+  const name=card.dataset.n;
+  const cv=card.querySelector('canvas');
+  const t={cv,ctx:cv.getContext('2d'),obj:null,r:1,cy:0,yaw:0.6,pitch:0.42,vis:false,drag:false};
+  tiles.push(t); card.dataset.ti=i; io.observe(card);
+
+  loader.load(`models/blender/${name}.glb`, g=>{
+    const o=g.scene;
+    o.traverse(m=>{ if(m.isMesh&&m.material){ m.material=m.material.clone(); m.material.flatShading=true; m.material.needsUpdate=true; } });
+    const b=new THREE.Box3().setFromObject(o), sz=new THREE.Vector3(), c=new THREE.Vector3();
+    b.getSize(sz); b.getCenter(c);
+    o.position.set(-c.x,-b.min.y,-c.z);
+    t.r=Math.max(sz.x,sz.y,sz.z)||1; t.cy=sz.y/2; t.obj=o;
+    draw(t); done++;
+    if(done+failed===cards.length) msg(`Gotowe. <b>${done}</b> modeli${failed?`, ${failed} z błędem`:''}. Kliknij ✓ albo opisz co poprawić.`);
+  }, undefined, ()=>{ failed++; card.querySelector('.desc').innerHTML='<b style="color:var(--warn)">Nie wczytano modelu.</b>';
+    if(done+failed===cards.length) msg(`Gotowe. <b>${done}</b> modeli, <b style="color:var(--warn)">${failed}</b> z błędem.`); });
+
+  // obracanie mysza
+  let px=0,py=0;
+  cv.addEventListener('pointerdown',e=>{t.drag=true;px=e.clientX;py=e.clientY;cv.setPointerCapture(e.pointerId)});
+  cv.addEventListener('pointermove',e=>{ if(!t.drag)return;
+    t.yaw+=(e.clientX-px)*0.011; t.pitch=Math.max(-0.2,Math.min(1.35,t.pitch+(e.clientY-py)*0.006));
+    px=e.clientX;py=e.clientY; try{draw(t)}catch(err){} });
+  const up=()=>{t.drag=false};
+  cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+
+  const st=(v)=>{ const s=state[name]||{}; s.st=(s.st===v?null:v); state[name]=s; save();
+    card.querySelector('.b-ok').classList.toggle('on',s.st==='ok');
+    card.querySelector('.b-fix').classList.toggle('on',s.st==='fix');
+    card.classList.toggle('ok',s.st==='ok');
+    card.classList.toggle('fix',s.st==='fix'||!!(s.note||'').trim());
+    counts(); };
+  card.querySelector('.b-ok').onclick=()=>st('ok');
+  card.querySelector('.b-fix').onclick=()=>st('fix');
+  const ta=card.querySelector('textarea');
+  if((state[name]||{}).note) ta.classList.add('has');
+  ta.oninput=()=>{ const s=state[name]||{}; s.note=ta.value; state[name]=s; save();
+    ta.classList.toggle('has',!!ta.value.trim());
+    card.classList.toggle('fix',s.st==='fix'||!!ta.value.trim()); counts(); };
+});
+counts(); tick();
+
+$('#spin').onclick=()=>{spinning=!spinning;$('#spin').textContent=spinning?'⏸ Obrót':'▶ Obrót'};
+$('#clear').onclick=()=>{ if(confirm('Wyczyścić wszystkie uwagi i oceny?')){state={};save();location.reload();} };
+function doExport(){
+  const L=['// Ducks — uwagi do modeli',''];
+  const fix=DATA.filter(m=>{const s=state[m.name]||{};return s.st==='fix'||(s.note||'').trim();});
+  const ok=DATA.filter(m=>(state[m.name]||{}).st==='ok');
+  const none=DATA.filter(m=>!state[m.name]||(!state[m.name].st&&!(state[m.name].note||'').trim()));
+  if(fix.length){ L.push(`// === DO POPRAWKI (${fix.length}) ===`);
+    fix.forEach(m=>{ L.push(`  ${m.name}`); const n=((state[m.name]||{}).note||'').trim();
+      n.split('\n').forEach(x=>L.push('      '+x)); }); L.push(''); }
+  if(ok.length){ L.push(`// === DOBRE (${ok.length}) ===`); L.push('  '+ok.map(m=>m.name).join(', ')); L.push(''); }
+  if(none.length){ L.push(`// === BEZ OCENY (${none.length}) ===`); L.push('  '+none.map(m=>m.name).join(', ')); L.push(''); }
+  L.push('JSON:',JSON.stringify(state,null,1));
+  $('#out').value=L.join('\n'); $('#dlg').showModal();
+}
+$('#exp').onclick=doExport; $('#exp2').onclick=doExport;
+$('#close').onclick=()=>$('#dlg').close();
+$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#out').value);
+ $('#copy').textContent='Skopiowane ✓';setTimeout(()=>$('#copy').textContent='Kopiuj',1500);}catch(e){$('#out').select();}};
+</script>
+</body>
+</html>

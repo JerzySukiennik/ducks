@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ducks — 5 kierunków menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@400;500;600&family=Courier+Prime:wght@400;700&family=Special+Elite&family=VT323&family=Share+Tech+Mono&family=Archivo:wght@400;600;700&family=Jost:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   SHARED SKELETON
+   The layout is Hollowtree's, as asked: a left column carrying the brand and a
+   vertical nav, and a right area where panels cross-fade IN PLACE rather than
+   stacking. Every design below inherits this geometry and changes only palette,
+   type and its one signature move -- so what you are comparing is the design,
+   not five different layouts.
+   ========================================================================= */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#000;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+/* ---- the chooser ------------------------------------------------------- */
+#switch{position:fixed;z-index:100;top:0;left:0;right:0;height:44px;display:flex;
+  align-items:center;gap:2px;padding:0 12px;background:rgba(8,9,12,.72);
+  backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.09)}
+#switch b{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;
+  color:#8b8f96;text-transform:uppercase;margin-right:14px}
+#switch button{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;
+  color:#8b8f96;background:none;border:0;padding:9px 13px;cursor:pointer;border-radius:7px;
+  transition:color .13s ease,background .13s ease}
+#switch button:hover{color:#fff;background:rgba(255,255,255,.07)}
+#switch button[aria-current="true"]{color:#0a0a0a;background:#f2c218}
+#switch .hint{margin-left:auto;font:400 10px/1 ui-monospace,Menlo,monospace;
+  letter-spacing:.1em;color:#5c6067}
+
+/* ---- one screen -------------------------------------------------------- */
+.screen{position:fixed;inset:44px 0 0 0;display:none;overflow:hidden}
+.screen.on{display:block}
+.stage{position:absolute;inset:0;display:flex;align-items:center;
+  padding-left:clamp(28px,7vw,120px);padding-right:clamp(20px,4vw,64px);gap:clamp(24px,5vw,90px)}
+.col{width:min(460px,44vw);flex:0 0 auto;display:flex;flex-direction:column;gap:clamp(20px,3.4vh,38px)}
+.nav{display:flex;flex-direction:column;align-items:flex-start}
+.nav button{display:flex;align-items:baseline;gap:12px;background:none;border:0;
+  cursor:pointer;text-align:left;position:relative;width:100%}
+.panes{position:relative;display:grid;align-items:center;justify-items:start;flex:1 1 auto}
+.pane{grid-area:1/1;opacity:0;pointer-events:none;width:min(430px,42vw)}
+.pane.on{opacity:1;pointer-events:auto}
+.foot{position:absolute;left:clamp(28px,7vw,120px);bottom:26px;display:flex;gap:20px;align-items:center}
+
+/* Motion: a critically damped spring reads as this curve. Panels MATERIALISE --
+   blur and scale move together -- so a surface arrives like a real thing rather
+   than fading in. Enter and exit travel the same path, per the spatial rule. */
+.nav button,.pane{transition:
+  opacity .34s cubic-bezier(.22,.61,.36,1),
+  transform .34s cubic-bezier(.22,.61,.36,1),
+  filter .34s cubic-bezier(.22,.61,.36,1),
+  color .16s ease-out}
+.screen .nav button{opacity:0;transform:translateY(9px)}
+.screen.on .nav button{opacity:1;transform:none}
+.pane{transform:translateX(14px) scale(.985);filter:blur(7px)}
+.pane.on{transform:none;filter:blur(0)}
+.rowin{opacity:0;transform:translateY(7px);transition:opacity .3s cubic-bezier(.22,.61,.36,1),transform .3s cubic-bezier(.22,.61,.36,1)}
+.pane.on .rowin{opacity:1;transform:none}
+
+@media (prefers-reduced-motion:reduce){
+  .nav button,.pane,.rowin{transition:opacity .18s ease!important;transform:none!important;filter:none!important}
+}
+button:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+
+/* ============================================================================
+   01 — HAZARD.  Factory safety signage: the vernacular the plate is painted in.
+   The nav rail is a hazard-striped bar that fills behind the live item, and the
+   panel is cut like a warning plate. Yellow is the game's own tier-0 duck.
+   ========================================================================= */
+#d1{background:
+  radial-gradient(120% 90% at 12% 0%,#232529 0%,#141517 55%,#0e0f10 100%)}
+#d1 .eyebrow{font:600 10px/1 "Barlow Condensed",sans-serif;letter-spacing:.42em;
+  text-transform:uppercase;color:#f2c218}
+#d1 h1{font:400 clamp(52px,7.4vw,104px)/.84 "Archivo Black",sans-serif;
+  letter-spacing:-.035em;color:#f5f3ef;text-transform:uppercase}
+#d1 .tag{font:500 13px/1.5 ui-monospace,Menlo,monospace;color:#8d9299;max-width:34ch}
+#d1 .rule{height:9px;background:repeating-linear-gradient(-45deg,#f2c218 0 11px,#17181a 11px 22px);
+  width:118px;border-radius:1px}
+#d1 .nav{gap:1px;margin-left:-16px;margin-top:4px}
+#d1 .nav button{padding:11px 16px;color:#b9bec4;
+  font:600 21px/1 "Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase}
+#d1 .nav button::before{content:"";position:absolute;left:0;top:0;bottom:0;width:0;
+  background:repeating-linear-gradient(-45deg,rgba(242,194,24,.9) 0 7px,rgba(242,194,24,.35) 7px 14px);
+  transition:width .2s cubic-bezier(.22,.61,.36,1)}
+#d1 .nav button:hover,#d1 .nav button[aria-current="true"]{color:#fff}
+#d1 .nav button:hover::before,#d1 .nav button[aria-current="true"]::before{width:4px}
+#d1 .nav .n{font:600 10px/1 ui-monospace,Menlo,monospace;color:#6e737a;letter-spacing:.1em}
+#d1 .pane{background:#1b1d1f;border:1px solid #2c2f33;padding:22px 24px 24px;
+  clip-path:polygon(0 0,calc(100% - 15px) 0,100% 15px,100% 100%,15px 100%,0 calc(100% - 15px))}
+#d1 .pt{font:600 11px/1 "Barlow Condensed",sans-serif;letter-spacing:.3em;
+  text-transform:uppercase;color:#f2c218;margin-bottom:16px}
+#d1 .kv{display:flex;justify-content:space-between;gap:14px;padding:9px 0;
+  border-bottom:1px solid #26292d;font:500 12px/1.4 ui-monospace,Menlo,monospace;color:#9aa0a7}
+#d1 .kv b{color:#e9e6e0;font-weight:600}
+#d1 .foot{font:500 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;color:#5a5f66}
+
+/* ============================================================================
+   02 — WORK ORDER.  The reel calls the pit "corporate", and the loop is a job:
+   make units, deliver units, get paid. So the menu is the paperwork you sign
+   before the shift. Deliberately light -- the one screen that is NOT the void,
+   so entering the game is a step into the dark.
+   ========================================================================= */
+#d2{background:#cfc4ab;
+  background-image:radial-gradient(90% 70% at 20% 0%,#dad0b9 0%,#c6bba2 70%,#b9ae96 100%)}
+#d2 .stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(125,147,168,.15) 0 1px,transparent 1px 27px)}
+#d2 .eyebrow{font:400 11px/1 "Courier Prime",monospace;letter-spacing:.3em;
+  text-transform:uppercase;color:#8a7f68}
+#d2 h1{font:400 clamp(42px,5.6vw,74px)/.94 "Special Elite",serif;color:#232019;letter-spacing:-.01em}
+#d2 .tag{font:400 13px/1.6 "Courier Prime",monospace;color:#57503f;max-width:36ch}
+#d2 .stamp{display:inline-block;border:2.5px solid #b3402f;color:#b3402f;padding:5px 12px;
+  font:700 12px/1 "Courier Prime",monospace;letter-spacing:.22em;transform:rotate(-6deg);
+  text-transform:uppercase;opacity:.86}
+#d2 .nav{gap:0;width:100%}
+#d2 .nav button{padding:12px 4px;color:#2f2a20;border-bottom:1px dashed #a1957c;
+  font:400 16px/1 "Courier Prime",monospace;justify-content:space-between}
+#d2 .nav button .box{width:15px;height:15px;border:1.5px solid #6b6250;flex:0 0 auto;
+  position:relative;transition:background .14s ease}
+#d2 .nav button .box::after{content:"✕";position:absolute;inset:-4px 0 0 1px;color:#b3402f;
+  font:700 15px/1 "Courier Prime",monospace;opacity:0;transition:opacity .14s ease}
+#d2 .nav button:hover{color:#000}
+#d2 .nav button:hover .box,#d2 .nav button[aria-current="true"] .box{background:rgba(179,64,47,.09)}
+#d2 .nav button[aria-current="true"] .box::after{opacity:1}
+#d2 .nav .n{font:400 10px/1 "Courier Prime",monospace;color:#8a7f68;letter-spacing:.14em}
+#d2 .pane{background:#e4dbc6;border:1px solid #a89b81;padding:22px 24px;
+  box-shadow:5px 6px 0 rgba(35,32,25,.13)}
+#d2 .pt{font:700 11px/1 "Courier Prime",monospace;letter-spacing:.26em;text-transform:uppercase;
+  color:#232019;padding-bottom:11px;border-bottom:2px solid #232019;margin-bottom:14px}
+#d2 .kv{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+  border-bottom:1px dotted #a1957c;font:400 12px/1.4 "Courier Prime",monospace;color:#57503f}
+#d2 .kv b{color:#232019;font-weight:700}
+#d2 .foot{font:400 10px/1 "Courier Prime",monospace;letter-spacing:.14em;color:#7d7360}
+
+/* ============================================================================
+   03 — CRT.  The game renders to a 480px buffer and upscales: it is literally a
+   low-resolution image on a modern screen. This design admits that. Amber
+   phosphor rather than the usual green -- amber was the workstation monitor,
+   which fits a factory better than a hacker terminal.
+   ========================================================================= */
+#d3{background:#0b0906}
+#d3 .stage::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(180deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px);
+  mix-blend-mode:multiply}
+#d3 .stage::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:radial-gradient(72% 62% at 50% 46%,transparent 30%,rgba(0,0,0,.72) 100%)}
+#d3 .eyebrow{font:400 15px/1 "VT323",monospace;letter-spacing:.26em;color:#c0761b;text-transform:uppercase}
+#d3 h1{font:400 clamp(58px,8vw,112px)/.82 "VT323",monospace;color:#ffb000;letter-spacing:.02em;
+  text-shadow:0 0 14px rgba(255,176,0,.5),0 0 42px rgba(255,120,0,.22)}
+#d3 .tag{font:400 17px/1.35 "VT323",monospace;color:#b8862f;max-width:40ch}
+#d3 .cursor{display:inline-block;width:9px;height:17px;background:#ffb000;
+  animation:blink 1.05s steps(2,start) infinite;vertical-align:-2px;margin-left:5px}
+@keyframes blink{50%{opacity:0}}
+#d3 .nav{gap:0;margin-top:6px}
+#d3 .nav button{padding:6px 0;color:#c98f22;font:400 22px/1 "VT323",monospace;letter-spacing:.05em}
+#d3 .nav button::before{content:"› ";opacity:0;transition:opacity .1s}
+#d3 .nav button:hover,#d3 .nav button[aria-current="true"]{color:#ffcc55;
+  text-shadow:0 0 12px rgba(255,176,0,.6)}
+#d3 .nav button:hover::before,#d3 .nav button[aria-current="true"]::before{opacity:1}
+#d3 .nav .n{font:400 14px/1 "VT323",monospace;color:#8a6015}
+#d3 .pane{border:1px solid #6b4a12;padding:18px 20px;background:rgba(30,19,4,.6)}
+#d3 .pt{font:400 17px/1 "VT323",monospace;letter-spacing:.2em;color:#ffb000;text-transform:uppercase;
+  margin-bottom:12px}
+#d3 .kv{display:flex;justify-content:space-between;gap:14px;padding:5px 0;
+  font:400 17px/1.3 "VT323",monospace;color:#b8862f}
+#d3 .kv b{color:#ffcc55;font-weight:400}
+#d3 .foot{font:400 15px/1 "VT323",monospace;letter-spacing:.14em;color:#7a5511;z-index:6}
+
+/* ============================================================================
+   04 — BLUEPRINT.  The whole second act of the game is designing a factory on a
+   0.25 m grid. This is that drawing. The nav is the parts legend, and hovering
+   an item lights the matching part in a live orthographic section of the plate.
+   ========================================================================= */
+#d4{background:#0c2236;
+  background-image:
+    linear-gradient(rgba(79,195,247,.07) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(79,195,247,.07) 1px,transparent 1px),
+    linear-gradient(rgba(79,195,247,.14) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(79,195,247,.14) 1px,transparent 1px);
+  background-size:19px 19px,19px 19px,95px 95px,95px 95px}
+#d4 .eyebrow{font:400 10px/1 "Share Tech Mono",monospace;letter-spacing:.34em;
+  color:#4fc3f7;text-transform:uppercase}
+#d4 h1{font:700 clamp(46px,6.2vw,84px)/.9 "Archivo",sans-serif;color:#e8f4ff;letter-spacing:-.03em}
+#d4 .tag{font:400 12px/1.6 "Share Tech Mono",monospace;color:#7ba7c4;max-width:38ch}
+#d4 .dim{display:flex;align-items:center;gap:7px;font:400 10px/1 "Share Tech Mono",monospace;color:#4fc3f7}
+#d4 .dim i{flex:1;height:1px;background:#4fc3f7;position:relative;max-width:110px;font-style:normal}
+#d4 .dim i::before,#d4 .dim i::after{content:"";position:absolute;top:-3px;width:1px;height:7px;background:#4fc3f7}
+#d4 .dim i::before{left:0}#d4 .dim i::after{right:0}
+#d4 .nav{gap:1px;margin-top:2px;width:100%}
+#d4 .nav button{padding:9px 11px;color:#9ec8e0;border-left:2px solid transparent;
+  font:600 14px/1 "Archivo",sans-serif;letter-spacing:.02em;justify-content:space-between}
+#d4 .nav button:hover,#d4 .nav button[aria-current="true"]{color:#fff;border-left-color:#ff9f45;
+  background:rgba(79,195,247,.07)}
+#d4 .nav .n{font:400 10px/1 "Share Tech Mono",monospace;color:#5b87a3;letter-spacing:.1em}
+#d4 .pane{border:1px solid rgba(79,195,247,.32);padding:20px 22px;background:rgba(10,32,52,.72);
+  backdrop-filter:blur(8px)}
+#d4 .pt{font:400 10px/1 "Share Tech Mono",monospace;letter-spacing:.26em;color:#ff9f45;
+  text-transform:uppercase;margin-bottom:15px}
+#d4 .kv{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+  border-bottom:1px solid rgba(79,195,247,.15);font:400 12px/1.4 "Share Tech Mono",monospace;color:#8fb8d2}
+#d4 .kv b{color:#e8f4ff;font-weight:400}
+#d4 .foot{font:400 10px/1 "Share Tech Mono",monospace;letter-spacing:.14em;color:#4a7a99}
+
+/* ============================================================================
+   05 — GARGANTUA.  The sky already is a black hole, and the pit is the same
+   idea at ground level: a hole that eats what you give it. This design is
+   almost nothing -- one luminous arc, very quiet type, and a lot of void. The
+   accretion arc IS the nav rail. Spend the boldness on the emptiness.
+   ========================================================================= */
+#d5{background:radial-gradient(120% 100% at 78% 52%,#101526 0%,#080b14 42%,#04050a 100%)}
+#d5 .glow{position:absolute;right:-12%;top:50%;width:min(760px,68vw);aspect-ratio:1;
+  transform:translateY(-50%);pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,138,61,.16),rgba(255,138,61,.05) 44%,transparent 68%)}
+#d5 .disk{position:absolute;right:-12%;top:50%;width:min(760px,68vw);aspect-ratio:1;
+  transform:translateY(-50%) rotate(-14deg);pointer-events:none;border-radius:50%;
+  border:1px solid rgba(255,193,120,.34);
+  box-shadow:0 0 60px rgba(255,138,61,.14),inset 0 0 90px rgba(255,138,61,.07)}
+#d5 .disk::after{content:"";position:absolute;inset:13%;border-radius:50%;background:#000;
+  box-shadow:0 0 42px 12px rgba(0,0,0,.9)}
+#d5 .eyebrow{font:300 10px/1 "Jost",sans-serif;letter-spacing:.5em;color:#ffb27a;text-transform:uppercase}
+#d5 h1{font:200 clamp(50px,7vw,96px)/.98 "Jost",sans-serif;color:#f4f1ec;letter-spacing:.12em;
+  text-transform:uppercase}
+#d5 .tag{font:300 13px/1.7 "Jost",sans-serif;color:#8d93a3;max-width:34ch;letter-spacing:.02em}
+#d5 .nav{gap:2px;margin-top:8px;padding-left:20px;position:relative}
+#d5 .nav::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:1px;
+  background:linear-gradient(180deg,transparent,rgba(255,178,122,.5),transparent)}
+#d5 .nav button{padding:10px 0;color:#9aa0b0;font:300 18px/1 "Jost",sans-serif;letter-spacing:.16em;
+  text-transform:uppercase}
+#d5 .nav button::before{content:"";position:absolute;left:-20px;top:50%;width:1px;height:0;
+  background:#ffb27a;transform:translateY(-50%);transition:height .26s cubic-bezier(.22,.61,.36,1),box-shadow .26s}
+#d5 .nav button:hover,#d5 .nav button[aria-current="true"]{color:#fff}
+#d5 .nav button:hover::before,#d5 .nav button[aria-current="true"]::before{height:22px;
+  box-shadow:0 0 10px rgba(255,178,122,.8)}
+#d5 .nav .n{font:300 9px/1 "Jost",sans-serif;color:#5f6575;letter-spacing:.24em}
+#d5 .pane{border:1px solid rgba(255,255,255,.09);padding:22px 24px;border-radius:14px;
+  background:rgba(12,15,26,.5);backdrop-filter:blur(22px) saturate(140%)}
+#d5 .pt{font:300 9px/1 "Jost",sans-serif;letter-spacing:.4em;color:#ffb27a;text-transform:uppercase;
+  margin-bottom:17px}
+#d5 .kv{display:flex;justify-content:space-between;gap:14px;padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);font:300 12px/1.4 "Jost",sans-serif;color:#8d93a3;
+  letter-spacing:.04em}
+#d5 .kv b{color:#f4f1ec;font-weight:400}
+#d5 .foot{font:300 9px/1 "Jost",sans-serif;letter-spacing:.28em;color:#565c6b}
+</style>
+</head>
+<body>
+
+<div id="switch">
+  <b>Ducks — menu</b>
+  <button data-go="d1" aria-current="true">01 Hazard</button>
+  <button data-go="d2">02 Work order</button>
+  <button data-go="d3">03 CRT</button>
+  <button data-go="d4">04 Blueprint</button>
+  <button data-go="d5">05 Gargantua</button>
+  <span class="hint">1–5 przełącza · kliknij pozycję w nawigacji</span>
+</div>
+
+<!-- ===================== 01 HAZARD ===================== -->
+<section class="screen on" id="d1">
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="eyebrow">Zakład przetwarzania · sektor 7</div>
+        <h1>Ducks</h1>
+        <div class="rule" style="margin:14px 0 12px"></div>
+        <div class="tag">Kaczki wpadają do dziury. Dziura płaci. Resztę zbudujesz sam.</div>
+      </div>
+      <nav class="nav"></nav>
+    </div>
+    <div class="panes"></div>
+  </div>
+  <div class="foot">v0.1.0 · ducks.gzowo.fun</div>
+</section>
+
+<!-- ===================== 02 WORK ORDER ===================== -->
+<section class="screen" id="d2">
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="eyebrow">Zlecenie robocze nr 0417</div>
+        <h1>Ducks</h1>
+        <div style="margin:13px 0 12px"><span class="stamp">Do wykonania</span></div>
+        <div class="tag">Dostarcz kaczki do otworu. Rozliczenie po sesji.</div>
+      </div>
+      <nav class="nav"></nav>
+    </div>
+    <div class="panes"></div>
+  </div>
+  <div class="foot">Formularz D-1 · wersja 0.1.0</div>
+</section>
+
+<!-- ===================== 03 CRT ===================== -->
+<section class="screen" id="d3">
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="eyebrow">terminal zakładowy</div>
+        <h1>DUCKS<span class="cursor"></span></h1>
+        <div class="tag">System gotowy. Wybierz tryb pracy.</div>
+      </div>
+      <nav class="nav"></nav>
+    </div>
+    <div class="panes"></div>
+  </div>
+  <div class="foot">rev 0.1.0 — ducks.gzowo.fun</div>
+</section>
+
+<!-- ===================== 04 BLUEPRINT ===================== -->
+<section class="screen" id="d4">
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="eyebrow">Rys. 01 — plac, rzut z góry</div>
+        <h1>Ducks</h1>
+        <div class="dim" style="margin:12px 0 12px"><span>35,00 m</span><i></i><span>pit ⌀3,00</span></div>
+        <div class="tag">Od korby do fabryki. Siatka 0,25 m.</div>
+      </div>
+      <nav class="nav"></nav>
+    </div>
+    <div class="panes"></div>
+  </div>
+  <div class="foot">skala 1:100 · v0.1.0</div>
+</section>
+
+<!-- ===================== 05 GARGANTUA ===================== -->
+<section class="screen" id="d5">
+  <div class="glow"></div><div class="disk"></div>
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="eyebrow">bez dna</div>
+        <h1>Ducks</h1>
+        <div class="tag" style="margin-top:16px">Wszystko, co wrzucisz, znika. Za każdym razem płaci.</div>
+      </div>
+      <nav class="nav"></nav>
+    </div>
+    <div class="panes"></div>
+  </div>
+  <div class="foot">v0.1.0</div>
+</section>
+
+<script>
+/* The five screens share one content model. Labels name what the player
+   controls, in the interface's voice -- "Graj sam", not "Tryb jednoosobowy". */
+const ITEMS = [
+  { n:'01', label:'Graj sam',      note:'jeden gracz, bez sieci',
+    pane:'Start', rows:[['Świat','plac 120 m · pit 3 m'],['Sesja','2–4 h, bez zapisu'],
+                        ['Kaczki','pula 300'],['Zaczynasz','przy korbie, 35 m od dziury']] },
+  { n:'02', label:'Wspólnie',      note:'załóż pokój albo dołącz',
+    pane:'Pokój', rows:[['Gracze','do 4'],['Widoczność','prywatny — tylko z linku'],
+                        ['Kasa','wspólna dla drużyny'],['Host','liczy całą fizykę']] },
+  { n:'03', label:'Sterowanie',    note:'pełna lista klawiszy',
+    pane:'Klawisze', rows:[['Ruch','WSAD · Shift bieg · Spacja skok'],
+                        ['Nieś / postaw','LPM'],['Rzuć kaczkę','PPM'],
+                        ['Podnieś / sklep','E'],['Odłóż z ręki','Q'],
+                        ['Obróć','R / T · MMB'],['Kąt swobodny','[ ]  · G zeruje'],
+                        ['Rozbiórka','X'],['Ekwipunek','1 – 9']] },
+  { n:'04', label:'Ustawienia',    note:'dźwięk, mysz, obraz',
+    pane:'Ustawienia', rows:[['Głośność','master · efekty · tło'],
+                        ['Czułość myszy','0,0022'],['Pole widzenia','70°'],
+                        ['Pikseloza','bufor 480 px'],['Nick','player'],['Kolor','●']] },
+  { n:'05', label:'Zakończ sesję', note:'podsumowanie i wynik',
+    pane:'Koniec', rows:[['Wrzucone','—'],['Zarobek','—'],['Najrzadsza','—'],['Prestiże','—']] },
+];
+
+for (const screen of document.querySelectorAll('.screen')) {
+  const nav = screen.querySelector('.nav');
+  const panes = screen.querySelector('.panes');
+  const made = [];
+  ITEMS.forEach((it, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    // The box is only drawn in the Work order design; elsewhere it collapses away.
+    const box = screen.id === 'd2' ? '<span class="box"></span>' : '';
+    b.innerHTML = `<span class="n">${it.n}</span><span style="flex:1">${it.label}</span>${box}`;
+    // Staggered arrival: the list assembles rather than appearing at once.
+    b.style.transitionDelay = (0.05 + i * 0.045).toFixed(3) + 's';
+
+    const p = document.createElement('div');
+    p.className = 'pane';
+    p.innerHTML = `<div class="pt">${it.pane}</div>` + it.rows.map((r, j) =>
+      `<div class="kv rowin" style="transition-delay:${(0.04 + j * 0.03).toFixed(3)}s"><span>${r[0]}</span><b>${r[1]}</b></div>`
+    ).join('');
+    panes.appendChild(p);
+    nav.appendChild(b);
+    made.push({ b, p });
+
+    b.addEventListener('click', () => {
+      const alreadyOn = b.getAttribute('aria-current') === 'true';
+      made.forEach(m => { m.b.removeAttribute('aria-current'); m.p.classList.remove('on'); });
+      // Clicking the live item closes it -- Escape, Back and the item itself all
+      // run through one path, so none of them can look dead.
+      if (!alreadyOn) { b.setAttribute('aria-current', 'true'); p.classList.add('on'); }
+    });
+  });
+  made[0].b.setAttribute('aria-current', 'true');
+  made[0].p.classList.add('on');
+}
+
+/* Switching screens replays each design's entrance, because how a menu ARRIVES
+   is half of what you are choosing between. */
+function go(id) {
+  for (const s of document.querySelectorAll('.screen')) {
+    s.classList.remove('on');
+    s.querySelectorAll('.nav button').forEach(b => { b.style.opacity = ''; b.style.transform = ''; });
+  }
+  const t = document.getElementById(id);
+  void t.offsetWidth;
+  t.classList.add('on');
+  document.querySelectorAll('#switch button').forEach(b =>
+    b.setAttribute('aria-current', String(b.dataset.go === id)));
+}
+document.querySelectorAll('#switch button').forEach(b =>
+  b.addEventListener('click', () => go(b.dataset.go)));
+addEventListener('keydown', e => {
+  const i = ['1','2','3','4','5'].indexOf(e.key);
+  if (i >= 0) go('d' + (i + 1));
+});
+</script>
+</body>
+</html>
