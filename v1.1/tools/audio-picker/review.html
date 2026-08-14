@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ducks — odsłuch przyciętych dźwięków</title>
+<style>
+:root{--bg:#111013;--panel:#191820;--panel2:#1f1e28;--line:#2c2b38;--ink:#e8e6ef;
+ --dim:#8b8a9c;--dimmer:#5d5c6d;--hazard:#f2c014;--hazard-dim:#8a6f0c;--ok:#5fd08a;--warn:#e2604a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:60px}
+.stripe{height:6px;background:repeating-linear-gradient(135deg,var(--hazard) 0 14px,#111013 14px 28px)}
+header{position:sticky;top:0;z-index:20;background:rgba(17,16,19,.94);backdrop-filter:blur(10px);
+ border-bottom:1px solid var(--line)}
+.hw{max-width:1000px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:19px;letter-spacing:.03em}
+h1 span{color:var(--hazard)}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+.sp{flex:1}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+ border-radius:7px;padding:8px 14px;transition:.12s}
+button:hover{border-color:var(--dimmer);background:#26252f}
+button:focus-visible{outline:2px solid var(--hazard);outline-offset:2px}
+.primary{background:var(--hazard);color:#17150a;border-color:var(--hazard);font-weight:650}
+.primary:hover{background:#ffd42a}
+main{max-width:1000px;margin:0 auto;padding:0 22px}
+h2{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--hazard);
+ border-bottom:1px solid var(--line);padding-bottom:9px;margin:36px 0 16px}
+.scenes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.scene{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 16px}
+.scene h3{margin:0 0 4px;font-size:15px}
+.scene p{margin:0 0 12px;color:var(--dim);font-size:13px}
+.scene .go{width:100%}
+.scene.hot{border-color:var(--hazard-dim)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;color:var(--dim);font-weight:500;font-size:11.5px;letter-spacing:.09em;
+ text-transform:uppercase;padding:0 10px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 10px;border-bottom:1px solid #232231;vertical-align:middle}
+tr:hover td{background:var(--panel2)}
+.ev{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--ink)}
+.desc{color:var(--dim);font-size:12.5px}
+.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
+.b{padding:4px 10px;font-size:12px;border-radius:6px}
+.b.playing{background:var(--hazard);color:#17150a;border-color:var(--hazard)}
+.pill{font-size:10.5px;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--dimmer)}
+.pill.loop{border-color:var(--hazard-dim);color:var(--hazard)}
+.mixer{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.mixer label{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--dim);margin-bottom:5px}
+.mixer label span{flex:0 0 92px}
+.mixer input[type=range]{flex:1;accent-color:var(--hazard)}
+.mixer label b{flex:0 0 34px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:500}
+.log{position:fixed;left:0;right:0;bottom:0;background:rgba(25,24,32,.97);border-top:1px solid var(--line);
+ padding:11px 22px;font-size:13px;color:var(--dim);backdrop-filter:blur(8px)}
+.log b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="stripe"></div>
+<header><div class="hw">
+  <div><h1>DUCKS <span>/</span> odsłuch</h1>
+  <div class="sub">Przycięte i skonwertowane. <b>1,2 MB</b> zamiast 22,9 MB.</div></div>
+  <div class="sp"></div>
+  <button id="stop">■ Stop</button>
+</div></header>
+
+<main>
+  <h2>Scenariusze z gry</h2>
+  <p class="desc" style="margin:-6px 0 16px">Tu usłyszysz dźwięki tak, jak zabrzmią naprawdę — w seriach, z losową wysokością i nakładaniem. Pojedynczy plik nic nie mówi; dopiero seria pokazuje, czy coś męczy.</p>
+  <div class="scenes" id="scenes"></div>
+
+  <h2>Warianty do porównania</h2>
+  <p class="desc" style="margin:-6px 0 14px">Kliknij, żeby posłuchać jeden po drugim. Powiedz numer, który wchodzi.</p>
+  <div id="variants"></div>
+
+  <h2>Pojedyncze dźwięki</h2>
+  <table><thead><tr><th>Zdarzenie</th><th>Co to</th><th class="num">Długość</th><th class="num">Waga</th><th></th><th></th></tr></thead>
+  <tbody id="rows"></tbody></table>
+</main>
+
+<div class="log" id="log">Kliknij scenariusz. <b>Kaskada 40 kaczek</b> to najważniejszy test.</div>
+
+<script type="module">
+// module scope — pozwala na top-level await przy wczytaniu mix.json
+const AC=new (window.AudioContext||window.webkitAudioContext)();
+const buf={}, master=AC.createGain(); master.gain.value=0.8;
+const comp=AC.createDynamicsCompressor(); master.connect(comp).connect(AC.destination);
+let live=[], MIX={}, loopNodes={};
+const $=s=>document.querySelector(s);
+const log=t=>$('#log').innerHTML=t;
+const mix=id=>(MIX[id]!==undefined?MIX[id]:0.5);
+
+async function load(id){
+  if(buf[id]) return buf[id];
+  const r=await fetch(`sfx_out/${id}.mp3`);
+  if(!r.ok) throw new Error(id+' '+r.status);
+  return buf[id]=await AC.decodeAudioData(await r.arrayBuffer());
+}
+function play(b,{rate=1,gain=1,when=0,loop=false}={}){
+  const s=AC.createBufferSource(); s.buffer=b; s.playbackRate.value=rate; s.loop=loop;
+  const g=AC.createGain(); g.gain.value=gain; s.connect(g).connect(master);
+  s.start(AC.currentTime+when); live.push(s); return s;
+}
+function stopAll(){ live.forEach(s=>{try{s.stop()}catch(e){}}); live=[];
+  document.querySelectorAll('.playing').forEach(b=>b.classList.remove('playing')); }
+$('#stop').onclick=()=>{stopAll();log('Zatrzymane.')};
+
+try{ MIX=await (await fetch('mix.json?x='+Date.now())).json(); }
+catch(e){ log('<b style="color:#e2604a">Nie wczytano mix.json</b> — poziomy domyślne 0.5'); }
+
+const SCENES=[
+ {id:'cascade',hot:1,t:'Kaskada 40 kaczek do pitu',
+  d:'Wysypujesz duży box nad dziurą. Każda kaczka liczona osobno, wysokość rośnie. To jest ta „dźwiękowa haptyka”.',
+  run:async()=>{const p=await load('duck_pit'),c=await load('cash');
+    for(let i=0;i<40;i++) play(p,{when:i*0.042,rate:1+i*0.028,gain:0.55});
+    play(c,{when:40*0.042+0.05,gain:0.9}); log('Kaskada: <b>40 kaczek</b> w 1,7 s, potem kasa.');}},
+
+ {id:'crank',hot:1,t:'10 kliknięć korby → kaczka',
+  d:'Pełny obrót Manual Duck Workbench. Wysokość rośnie z każdym klikiem, dziesiąty jest najwyższy, potem prasa wypluwa kaczkę.',
+  run:async()=>{const k=await load('crank_click'),e=await load('machine_eject'),
+    s=await load('duck_squeak'),i2=await load('duck_impact');
+    for(let i=0;i<10;i++) play(k,{when:i*0.26,rate:1+i*0.045,gain:0.8});
+    play(e,{when:2.62,gain:0.9});
+    play(s,{when:3.15,rate:0.9+Math.random()*0.3,gain:0.7});
+    play(i2,{when:3.16,gain:0.5});
+    log('Korba: 10 klików, prasa, kaczka ląduje.');}},
+
+ {id:'rain',t:'Deszcz kaczek na beton',
+  d:'25 kaczek spada w losowych momentach. Test najważniejszy dla uszu: czy pisk męczy przy dużej liczbie.',
+  run:async()=>{const s=await load('duck_squeak'),i2=await load('duck_impact');
+    for(let i=0;i<25;i++){const w=Math.random()*3.5;
+      play(s,{when:w,rate:0.75+Math.random()*0.6,gain:0.35+Math.random()*0.3});
+      play(i2,{when:w+0.005,rate:0.9+Math.random()*0.3,gain:0.3});}
+    log('25 kaczek w 3,5 s. Jeśli to męczy — trzeba ściszyć pisk albo dać go co drugiej kaczce.');}},
+
+ {id:'factory',hot:1,t:'Fabryka w ruchu (pętle razem)',
+  d:'Maszyna, wiatrak, taśmociąg i odkurzacz naraz. Teraz 3× ciszej — to ma być tło, nie hałas. Pod spodem masz suwaki, żeby dostroić samemu.',
+  mixer:['world_ambient','machine_loop','fan_loop','conveyor_loop','vacuum_loop'],
+  run:async()=>{const ids=['world_ambient','machine_loop','fan_loop','conveyor_loop','vacuum_loop'];
+    for(const id of ids){
+      const g=AC.createGain(); g.gain.value=mix(id); g.connect(master);
+      const s=AC.createBufferSource(); s.buffer=await load(id); s.loop=true;
+      s.connect(g); s.start(); live.push(s); loopNodes[id]=g;
+    }
+    log('Pięć pętli naraz, poziomy domyślne. Ruszaj suwakami — zapiszę to, co ustawisz.');}},
+
+ {id:'buy',hot:1,t:'Zakup w sklepie → rura',
+  d:'Poprzednio brzmiało jak wybuch, bo to było dosłownie wysypywanie ciężarówki złomu. Teraz drewniana beczka. Warianty do porównania niżej.',
+  run:async()=>{const c=await load('ui_click'),o=await load('shop_open'),
+    b=await load('buy_ok'),ca=await load('cash'),t=await load('tube_drop');
+    play(o,{gain:mix('shop_open')}); play(c,{when:0.6,gain:mix('ui_click')});
+    play(b,{when:0.75,gain:mix('buy_ok')}); play(ca,{when:0.9,gain:mix('cash')});
+    play(t,{when:1.7,gain:mix('tube_drop')});
+    log('Sklep → zakup → rura.');}},
+
+ {id:'jam',t:'Plac się zapełnia i maszyny stają',
+  d:'Kaczki lecą coraz gęściej, aż licznik dobija 300 i wszystko staje z alarmem.',
+  run:async()=>{const s=await load('duck_squeak'),i2=await load('duck_impact'),j=await load('machine_jam');
+    for(let i=0;i<18;i++){const w=i*0.16;
+      play(s,{when:w,rate:0.8+Math.random()*0.5,gain:0.32});
+      play(i2,{when:w+0.005,gain:0.25});}
+    play(j,{when:3.1,gain:0.85}); log('Zator. Alarm ma być czytelny, ale nie straszyć.');}},
+
+ {id:'spill',t:'Box się przewraca',
+  d:'Przechylasz kontener za mocno, wysypuje się wszystko i kaczki lądują na betonie.',
+  run:async()=>{const b=await load('box_spill'),s=await load('duck_squeak'),i2=await load('duck_impact');
+    play(b,{gain:0.9});
+    for(let i=0;i<20;i++){const w=0.25+Math.random()*1.6;
+      play(s,{when:w,rate:0.75+Math.random()*0.6,gain:0.3});
+      play(i2,{when:w+0.005,gain:0.28});}
+    log('Katastrofa, o którą prosiłeś.');}},
+
+ {id:'rare',t:'Wypada rzadka kaczka',
+  d:'Prasa wypluwa złotą. Dzwonek sygnalizacyjny plus pisk niżej strojony, bo cięższa.',
+  run:async()=>{const e=await load('machine_eject'),r=await load('duck_rare'),
+    s=await load('duck_squeak'),i2=await load('duck_impact');
+    play(e,{gain:0.8}); play(r,{when:0.28,gain:0.8});
+    play(s,{when:0.95,rate:0.62,gain:0.75}); play(i2,{when:0.96,rate:0.7,gain:0.55});
+    log('Rzadki drop. Ma być świętem, ale nie przerywać rytmu.');}},
+
+ {id:'pit',t:'Stoisz nad pitem',
+  d:'Ambient dziury i placu razem, plus wpadająca co chwilę kaczka.',
+  run:async()=>{play(await load('pit_ambient'),{loop:true,gain:mix('pit_ambient')});
+    play(await load('world_ambient'),{loop:true,gain:mix('world_ambient')});
+    const p=await load('duck_pit'),c=await load('cash');
+    for(let i=0;i<6;i++){play(p,{when:1+i*1.3,rate:0.95+Math.random()*0.2,gain:mix('duck_pit')});
+      play(c,{when:1.1+i*1.3,gain:mix('cash')*0.8});}
+    log('Ambient + pojedyncze wrzuty. Pętle grają dalej — Stop żeby wyciszyć.');}},
+
+ {id:'walk',t:'Chodzisz i łapiesz kaczkę',
+  d:'Kroki po betonie, złapanie, rzut do dziury.',
+  run:async()=>{const f=await load('footstep'),g=await load('grab'),
+    t=await load('throw'),p=await load('duck_pit'),c=await load('cash');
+    for(let i=0;i<8;i++) play(f,{when:i*0.36,rate:0.92+Math.random()*0.18,gain:0.55});
+    play(g,{when:2.9,gain:0.8}); play(t,{when:3.5,gain:0.8});
+    play(p,{when:4.0,gain:0.7}); play(c,{when:4.1,gain:0.6});
+    log('Ręczna pętla gry.');}},
+
+ {id:'prestige',t:'Prestige',
+  d:'Gwizd parowy. Kasuje maszyny, zostawia budowle.',
+  run:async()=>{play(await load('prestige'),{gain:0.85}); log('Prestige.');}},
+
+ {id:'fall',t:'Wpadasz do pitu',
+  d:'Dwie sekundy w otchłań, zero kary.',
+  run:async()=>{play(await load('player_fall'),{gain:0.8}); log('Respawn przy rurze.');}},
+];
+
+const META={
+ duck_squeak:['Pisk kaczki o beton',0],duck_impact:['Warstwa fizyczna',0],
+ duck_pit:['Kaczka wpada do pitu',0],duck_rare:['Rzadka kaczka',0],
+ cash:['Pieniądze',0],pit_ambient:['Ambient pitu',1],world_ambient:['Ambient placu',1],
+ player_fall:['Gracz wpada',0],pit_burp:['Pit beka',0],
+ crank_click:['Klik korby',0],machine_eject:['Maszyna wypluwa',0],
+ machine_loop:['Maszyna pracuje',1],machine_jam:['Zator',0],
+ fan_loop:['Wiatrak',1],conveyor_loop:['Taśmociąg',1],vacuum_loop:['Odkurzacz',1],
+ broom:['Zamiatanie',0],build_place:['Postawienie',0],build_rotate:['Obrót hologramu',0],
+ build_invalid:['Nie można postawić',0],build_demolish:['Rozbiórka',0],
+ tube_drop:['Zakup z rury',0],box_spill:['Wysyp boxa',0],cart_loop:['Taczka',1],
+ grab:['Złapanie',0],throw:['Rzut',0],footstep:['Krok',0],jump_land:['Lądowanie',0],
+ shop_open:['Sklep otwarty',0],shop_close:['Sklep zamknięty',0],buy_ok:['Zakup udany',0],
+ buy_fail:['Brak kasy',0],ui_hover:['Hover',0],ui_click:['Klik UI',0],
+ tab_switch:['Zmiana zakładki',0],prestige:['Prestige',0],session_end:['Koniec sesji',0],
+ achievement:['Osiągnięcie',0],player_join:['Gracz dołączył',0],radio:['Radio w budce',1]};
+
+$('#scenes').innerHTML=SCENES.map(s=>
+ `<div class="scene${s.hot?' hot':''}"><h3>${s.t}</h3><p>${s.d}</p>
+  <button class="go primary" data-s="${s.id}">▶ Odtwórz</button>
+  ${s.mixer?`<div class="mixer">${s.mixer.map(id=>
+    `<label><span>${id.replace('_loop','').replace('_ambient',' amb.')}</span>
+     <input type="range" min="0" max="60" value="0" data-m="${id}">
+     <b data-v="${id}">–</b></label>`).join('')}
+   <button class="b" id="expmix" style="width:100%;margin-top:8px">Skopiuj ustawione poziomy</button></div>`:''}
+  </div>`).join('');
+document.querySelectorAll('[data-m]').forEach(r=>{
+  const id=r.dataset.m; r.value=Math.round(mix(id)*100);
+  document.querySelector(`[data-v="${id}"]`).textContent=mix(id).toFixed(2);
+  r.oninput=()=>{const v=r.value/100; MIX[id]=v;
+    document.querySelector(`[data-v="${id}"]`).textContent=v.toFixed(2);
+    if(loopNodes[id]) loopNodes[id].gain.setTargetAtTime(v,AC.currentTime,0.05);};
+});
+const em=$('#expmix');
+if(em) em.onclick=async()=>{
+  const t=JSON.stringify(Object.fromEntries(
+    [...document.querySelectorAll('[data-m]')].map(r=>[r.dataset.m,+(r.value/100).toFixed(2)])),null,1);
+  try{await navigator.clipboard.writeText(t); em.textContent='Skopiowane ✓'; setTimeout(()=>em.textContent='Skopiuj ustawione poziomy',1500);}
+  catch(e){ log('Poziomy: <b>'+t.replace(/\n/g,' ')+'</b>'); }
+};
+$('#scenes').querySelectorAll('.go').forEach(b=>b.onclick=async()=>{
+  stopAll(); if(AC.state==='suspended') await AC.resume();
+  try{ await SCENES.find(x=>x.id===b.dataset.s).run(); }
+  catch(e){ log('<b style="color:#e2604a">Błąd:</b> '+e.message); }
+});
+
+const VARIANTS=[
+ {t:'Pisk kaczki — Twój plik, dwa cięcia',n:'duck_squeak',
+  o:[['duck_squeak','1. Sam pisk (0,30 s) — domyślny'],
+     ['alt/duck_squeak__pelny','2. Pisk z ogonem (0,50 s) — pełne ściśnij-i-puść']],
+  extra:'Test serii: 20 kaczek z losową wysokością'},
+ {t:'Zakup wypada z rury — zamiast wybuchu',n:'tube_drop',
+  o:[['alt/tube_drop__drewno','1. Drewniana beczka — domyślny, najlżejszy'],
+     ['alt/tube_drop__metal','2. Wózek metalowy'],
+     ['alt/tube_drop__zaladunek','3. Załadunek złomu'],
+     ['alt/tube_drop__zlom-cichszy','4. Ten sam złom co wcześniej, ale spokojniejszy moment']]},
+];
+$('#variants').innerHTML=VARIANTS.map((v,i)=>
+ `<div class="scene" style="margin-bottom:12px"><h3>${v.t}</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+  ${v.o.map(([id,lab])=>`<button class="b" data-var="${id}" data-n="${v.n}">▶ ${lab}</button>`).join('')}
+  ${v.extra?`<button class="b" data-serie="${i}">▶ ${v.extra}</button>`:''}
+  </div></div>`).join('');
+$('#variants').querySelectorAll('[data-var]').forEach(b=>b.onclick=async()=>{
+  stopAll(); if(AC.state==='suspended') await AC.resume();
+  play(await load(b.dataset.var),{gain:mix(b.dataset.n)});
+  log('<b>'+b.textContent.replace('▶ ','')+'</b>');
+});
+$('#variants').querySelectorAll('[data-serie]').forEach(b=>b.onclick=async()=>{
+  stopAll(); if(AC.state==='suspended') await AC.resume();
+  const s=await load('duck_squeak'), im=await load('duck_impact');
+  for(let i=0;i<20;i++){const w=Math.random()*3;
+    play(s,{when:w,rate:0.75+Math.random()*0.6,gain:mix('duck_squeak')});
+    play(im,{when:w+0.005,rate:0.9+Math.random()*0.3,gain:mix('duck_impact')});}
+  log('20 kaczek Twoim dźwiękiem. <b>Tak brzmi realna gra.</b>');
+});
+
+(async()=>{
+ const rows=[];
+ for(const [id,[desc,isLoop]] of Object.entries(META)){
+   let dur='?',sz='?';
+   try{ const h=await fetch(`sfx_out/${id}.mp3`,{method:'HEAD'});
+        sz=Math.max(1,Math.round(+h.headers.get('content-length')/1024))+' KB';
+        const b=await load(id); dur=b.duration.toFixed(2)+' s';
+   }catch(e){ dur='BRAK'; }
+   rows.push(`<tr><td class="ev">${id}</td><td class="desc">${desc}</td>
+     <td class="num">${dur}</td><td class="num">${sz}</td>
+     <td>${isLoop?'<span class="pill loop">pętla</span>':''}</td>
+     <td style="text-align:right"><button class="b" data-p="${id}" data-l="${isLoop}">▶</button></td></tr>`);
+ }
+ $('#rows').innerHTML=rows.join('');
+ $('#rows').querySelectorAll('.b').forEach(b=>b.onclick=async()=>{
+   stopAll(); if(AC.state==='suspended') await AC.resume();
+   const id=b.dataset.p, loop=b.dataset.l==='true';
+   b.classList.add('playing');
+   const s=play(await load(id),{loop});
+   if(!loop) s.onended=()=>b.classList.remove('playing');
+   log(loop?`<b>${id}</b> — pętla gra w kółko, słuchaj szwu. Stop żeby wyłączyć.`:`<b>${id}</b>`);
+ });
+})();
+addEventListener('keydown',e=>{if(e.key==='Escape')stopAll()});
+addEventListener('pagehide',stopAll);
+</script>
+</body>
+</html>
