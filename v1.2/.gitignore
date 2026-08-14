@@ -1,0 +1,14 @@
+# The game ships from the repo root, so anything here is served. Keep the
+# authoring tools' working data out: the picker folders are a megabyte and a
+# half each of source material that the built game never loads.
+tools/__pycache__/
+tools/model-picker/models/
+tools/audio-picker/sfx/
+tools/audio-picker/sfx_out/
+
+# The audio the game actually plays lives in assets/audio/; sfx_out is the
+# staging copy it was built from and would double the download for nothing.
+
+.DS_Store
+*.pyc
+node_modules/

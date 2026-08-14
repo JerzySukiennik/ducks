@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ducks net harness</title>
+<style>
+  body { font: 12px/1.4 ui-monospace, Menlo, monospace; background: #0a0f1e; color: #cfe3ff; margin: 12px; }
+  pre { white-space: pre-wrap; }
+  b { color: #f2c218; }
+</style>
+</head>
+<body>
+<h3>Ducks net harness <b id="tab"></b></h3>
+<pre id="log">loading modules...</pre>
+<script type="module">
+// Verification harness for src/net/*. Not part of the game: it exists so the
+// signalling path can be driven from a console without the renderer.
+import { getFirebase, netStatus, SDK_URLS } from '../src/net/firebase.js';
+import { hostRoom, joinRoom, listPublicRooms, tabToken } from '../src/net/signaling.js';
+
+const lines = [];
+const el = document.getElementById('log');
+document.getElementById('tab').textContent = tabToken();
+
+function log(s) {
+  lines.push(new Date().toISOString().slice(14, 23) + '  ' + s);
+  el.textContent = lines.slice(-80).join('\n');
+}
+
+const NET = {
+  tab: tabToken(),
+  events: [],
+  control: [],
+  state: [],
+  session: null,
+  log: () => lines,
+  status: netStatus,
+  urls: SDK_URLS,
+  async auth() {
+    const t0 = performance.now();
+    const fb = await getFirebase();
+    return { uid: fb.uid, loadMs: fb.loadMs, totalMs: Math.round(performance.now() - t0), sdk: fb.sdkVersion };
+  },
+  async authMustFail() {
+    try {
+      await getFirebase();
+      return { degraded: false, note: 'SDK loaded - this run is NOT the offline case' };
+    } catch (e) {
+      return { degraded: true, code: e.code, message: e.message, pageAlive: true };
+    }
+  },
+  async host(opts) {
+    const s = await hostRoom({ nick: 'host', isPublic: true, ...(opts || {}) });
+    wire(s);
+    NET.session = s;
+    log('hosting room ' + s.roomId);
+    return s.roomId;
+  },
+  async join(roomId) {
+    const s = await joinRoom(roomId, { nick: 'client' });
+    wire(s);
+    NET.session = s;
+    log('joined room ' + roomId + ' as slot ' + s.slot);
+    return s.slot;
+  },
+  rooms: () => listPublicRooms(),
+  send(msg) {
+    const s = NET.session;
+    if (!s) return 0;
+    return s.isHost ? s.broadcastControl(msg) : (s.sendControl(msg) ? 1 : 0);
+  },
+  sendState(n) {
+    const s = NET.session;
+    if (!s) return 0;
+    const bytes = new Uint8Array(n || 12).fill(7);
+    const peers = s.peers();
+    let sent = 0;
+    peers.forEach((p) => { if (p.sendState(bytes)) sent++; });
+    return sent;
+  },
+  peerStates: () => (NET.session ? NET.session.peers().map((p) => ({ label: p.label, state: p.state(), ...p.stats() })) : []),
+  async candidates() {
+    if (!NET.session) return [];
+    return Promise.all(NET.session.peers().map((p) => p.selectedCandidatePair()));
+  },
+  stats: () => (NET.session ? NET.session.stats() : null),
+  async close() {
+    if (NET.session) await NET.session.close();
+    NET.session = null;
+  },
+};
+
+function wire(s) {
+  s.on((ev) => {
+    const tag = ev.type
+      + (ev.slot !== undefined && ev.slot !== null ? ':' + ev.slot : '')
+      + (ev.state ? ':' + ev.state : '')
+      + (ev.channel ? ':' + ev.channel : '');
+    NET.events.push(tag + (ev.reason ? ' (' + ev.reason + ')' : ''));
+    log(tag + (ev.reason ? ' (' + ev.reason + ')' : ''));
+    if (ev.type === 'control') NET.control.push(ev.msg);
+    if (ev.type === 'state') NET.state.push(ev.bytes.byteLength);
+  });
+}
+
+// --- G4 round 2: the AUTHORITY layer, not just the transport -----------------
+//
+// Everything above drives src/net/signaling.js and peer.js in isolation, which
+// is the right test for a handshake and the wrong test for a game: host.js and
+// client.js only mean anything with a world behind them. So the gates below are
+// driven against the REAL page (index.html) in two tabs through window.GAME,
+// and what lives here is the glue for doing that from one side.
+//
+// Two tabs on one machine prove exactly three things about the transport --
+// peerId collision, unbuffered ICE, and ondatachannel with an already-open
+// channel -- and NOTHING about NAT traversal. There is no TURN server. See the
+// note in work/gauntlet-run.md; this harness does not pretend otherwise.
+//
+// localStorage is the cross-tab channel for comparing two snapshots, and it is
+// legitimate here for one reason: both tabs are the same origin and the
+// comparison is a TEST artefact. Nothing in src/ reads it.
+const SNAP_KEY = '__ducksHostSnap';
+
+Object.assign(NET, {
+  // Run on the HOST tab: publish what the host thinks the world is.
+  publishSnapshot() {
+    const G = window.GAME;
+    if (!G || !G.debugSnapshot) return { ok: false, error: 'GAME.debugSnapshot missing' };
+    const s = G.debugSnapshot();
+    localStorage.setItem(SNAP_KEY, JSON.stringify(s));
+    return { ok: true, chars: JSON.stringify(s).length, ducks: s.ducks.length, clock: s.clock };
+  },
+
+  // Run on the CLIENT tab: gate E-F, to the metre rather than to the eye.
+  compareSnapshot() {
+    const G = window.GAME;
+    const raw = localStorage.getItem(SNAP_KEY);
+    if (!raw) return { ok: false, error: 'no host snapshot published' };
+    const h = JSON.parse(raw);
+    const c = G.debugSnapshot();
+    const hp = new Map(h.ducks.map((d) => [d.slot, d.p]));
+    let worst = 0;
+    let worstSlot = null;
+    let missing = 0;
+    let over1cm = 0;
+    c.ducks.forEach((d) => {
+      const p = hp.get(d.slot);
+      if (!p) { missing++; return; }
+      const e = Math.hypot(d.p[0] - p[0], d.p[1] - p[1], d.p[2] - p[2]);
+      if (e > 0.01) over1cm++;
+      if (e > worst) { worst = e; worstSlot = d.slot; }
+    });
+    const hs = new Set(h.ducks.map((d) => d.slot));
+    const cs = new Set(c.ducks.map((d) => d.slot));
+    return {
+      ok: missing === 0 && over1cm === 0 && hs.size === cs.size,
+      hostDucks: h.ducks.length,
+      clientDucks: c.ducks.length,
+      onlyHost: [...hs].filter((x) => !cs.has(x)).length,
+      onlyClient: [...cs].filter((x) => !hs.has(x)).length,
+      missing,
+      over1cm,
+      maxDeltaMeters: worst,
+      worstSlot,
+      moneyMatch: h.money === c.money,
+      // The gap this round closed: who is holding what, in the join path.
+      handsHost: h.players.map((p) => p.slot + ':' + (p.hand || '-')).join(' '),
+      handsClient: c.players.map((p) => p.slot + ':' + (p.hand || '-')).join(' '),
+      handsMatch: JSON.stringify(h.players.map((p) => [p.slot, p.hand, p.hotbar]))
+        === JSON.stringify(c.players.map((p) => [p.slot, p.hand, p.hotbar])),
+    };
+  },
+
+  // Rule 6, measured at the only instant it can be measured: a client's request
+  // must change NOTHING locally. Returns the world before and immediately after
+  // the call, with no step in between.
+  probeRequest(req) {
+    const G = window.GAME;
+    const shot = () => ({
+      money: G.debugMoney(),
+      placed: G.debugPlacedList().length,
+      props: G.debugPropList().length,
+      hotbar: G.debugHotbarState().slots.filter(Boolean).map((s) => s.id + 'x' + s.count),
+    });
+    const before = shot();
+    const ret = G.net.act(req);
+    const immediately = shot();
+    return {
+      before,
+      immediately,
+      ret,
+      appliedLocally: JSON.stringify(before) !== JSON.stringify(immediately),
+    };
+  },
+
+  // Gate E-H. Read off the sliding window the overlay reads, per client, over a
+  // real span of wall clock -- not projected from a frame size.
+  async upstream(seconds) {
+    const G = window.GAME;
+    const secs = Math.max(1, Number(seconds) || 5);
+    const a = G.debugNetUpstream();
+    await new Promise((r) => setTimeout(r, secs * 1000));
+    const b = G.debugNetUpstream();
+    return { seconds: secs, start: a, end: b, worstKBPerSecond: b.worstClientKBPerSecond };
+  },
+
+  game: () => window.GAME,
+});
+
+// --- G4 round 3: the HOLD, which needs two live games at once -----------------
+//
+// The gates below are about two players reaching for the same 300-body pool, and
+// three of them cannot be expressed one tab at a time:
+//
+//   * "both grab in the SAME tick" needs two synchronous calls with no clock
+//     between them. Two tabs cannot be told to do anything simultaneously.
+//   * "a joining player sees the carry" needs a join to happen WHILE somebody is
+//     mid-carry, which means holding one game still at a chosen instant.
+//   * "a carrier disconnecting releases the duck" needs a body count from the
+//     host taken at a known moment either side of the drop.
+//
+// So the rig runs the two games as same-origin IFRAMES of this page: two real
+// instances of index.html, two real RTCPeerConnections, real Firebase
+// signalling, and one JS context that can drive both. It is exactly as honest
+// about the network as two tabs are, which is to say: it proves peerId
+// collision, ICE buffering and ondatachannel-on-an-open-channel, and NOTHING
+// AT ALL about NAT traversal. Both ends are this MacBook. There is no TURN
+// server. The honest test is still two machines on different networks.
+//
+// rAF runs in an iframe of a visible tab, so the two games play normally; the
+// tests that need determinism drive debugStep() instead of waiting.
+const RIG = {
+  host: null,
+  client: null,
+  roomId: null,
+
+  frame(id) {
+    const f = document.createElement('iframe');
+    f.id = id;
+    f.src = '../index.html';
+    f.width = 320;
+    f.height = 200;
+    f.style.cssText = 'border:1px solid #234; margin:4px; vertical-align:top';
+    document.body.appendChild(f);
+    return f;
+  },
+
+  async waitFor(fn, ms, label) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < (ms || 20000)) {
+      let v = null;
+      try { v = fn(); } catch (e) { v = null; }
+      if (v) return v;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error('timed out waiting for ' + (label || 'condition'));
+  },
+
+  async boot() {
+    if (RIG.host) return { ok: true, reused: true };
+    RIG.hostFrame = RIG.frame('hostFrame');
+    RIG.clientFrame = RIG.frame('clientFrame');
+    await RIG.waitFor(() => RIG.hostFrame.contentWindow.__ducksBooted, 60000, 'host boot');
+    await RIG.waitFor(() => RIG.clientFrame.contentWindow.__ducksBooted, 60000, 'client boot');
+    RIG.host = RIG.hostFrame.contentWindow.GAME;
+    RIG.client = RIG.clientFrame.contentWindow.GAME;
+    log('rig booted: two games in one page');
+    return { ok: true, host: RIG.host.debugNetRole(), client: RIG.client.debugNetRole() };
+  },
+
+  // Real signalling, real peer connection, real join snapshot.
+  async connect() {
+    const h = await RIG.host.debugNetHost({ nick: 'host', isPublic: false });
+    if (!h.ok) return h;
+    RIG.roomId = h.roomId;
+    const c = await RIG.client.debugNetJoin(h.roomId, { nick: 'client' });
+    if (!c.ok) return c;
+    await RIG.waitFor(() => RIG.client.debugNetStatsLive().ready, 30000, 'join snapshot');
+    log('connected: room ' + h.roomId + ', client is slot ' + c.slot);
+    return { ok: true, roomId: h.roomId, slot: c.slot };
+  },
+
+  // Advance both games deterministically, with the host reconciling in between.
+  // Never "wait N seconds and measure": a hidden tab has no rAF and a visible
+  // one has no schedule anybody can predict.
+  step(seconds, ticks) {
+    const s = seconds === undefined ? 1 / 60 : seconds;
+    const n = Math.max(1, Math.round(ticks === undefined ? 1 : ticks));
+    for (let i = 0; i < n; i++) {
+      RIG.host.debugStep(s);
+      RIG.host.debugNetTick(1);
+      RIG.client.debugStep(s);
+    }
+    return { seconds: s * n, ticks: n };
+  },
+
+  // Let real messages cross the wire. Requests and broadcasts are asynchronous
+  // however hard a test wishes otherwise, so this keeps both games running at
+  // wall-clock pace while it waits for something to become true.
+  async settle(ms, until) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < (ms || 500)) {
+      RIG.host.debugNetTick(1);
+      await new Promise((r) => requestAnimationFrame(r));
+      if (until) { try { if (until()) break; } catch (e) { /* keep going */ } }
+    }
+    return performance.now() - t0;
+  },
+
+  // Put a duck exactly in front of a player's eye, in BOTH worlds. Note that
+  // debugSpawnDucks ignores its position argument (it lays out its own grid), so
+  // a test that needs a duck somewhere specific moves a live body -- which
+  // creates nothing: the pool is still the same 300 rigid bodies.
+  placeDuckAt(id, pos) {
+    const a = RIG.host.debugMoveDuck(id, pos);
+    const b = RIG.client.debugMoveDuck(id, pos);
+    return { host: a, client: b };
+  },
+
+  // The duck the client is looking at, two metres in front of its own eye.
+  duckInFrontOfClient(id) {
+    const eye = RIG.client.debugEye();
+    return RIG.placeDuckAt(id, { x: eye.x, y: eye.y - 0.2, z: eye.z - 2.0 });
+  },
+
+  report() {
+    return { host: RIG.host.debugHoldReport(), client: RIG.client.debugHoldReport() };
+  },
+};
+
+NET.rig = RIG;
+window.RIG = RIG;
+
+window.NET = NET;
+log('modules loaded, tab ' + NET.tab);
+const room = new URLSearchParams(location.search).get('room');
+if (room) NET.join(room).catch((e) => log('join failed: ' + e.message));
+</script>
+</body>
+</html>
