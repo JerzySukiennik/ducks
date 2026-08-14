@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- The real game page with ONE difference: a CSP that refuses every request to
+     www.gstatic.com, so the lazy Firebase import fails the way an unreachable
+     network fails. Everything the game itself needs (self, unpkg, blob workers,
+     rapier's wasm) is still allowed, because "no network" in this project means
+     "no Firebase", not "no pinned CDN modules". -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://unpkg.com blob:; connect-src 'self' https://unpkg.com blob: data:; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The page lives in work/ but the game resolves its assets against the
+     document, so the base is pinned to the project root. -->
+<base href="/">
+<title>Ducks (Firebase blocked)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0f1e; overflow: hidden; }
+  #app { position: fixed; inset: 0; }
+  #view { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  #grain { position: fixed; inset: 0; pointer-events: none; width: 100%; height: 100%; mix-blend-mode: overlay; image-rendering: pixelated; }
+  #debug { position: fixed; top: 8px; left: 8px; z-index: 10; font: 11px/1.35 ui-monospace, Menlo, monospace; color: #cfe3ff; background: rgba(6, 10, 22, 0.62); padding: 6px 9px; border: 1px solid rgba(140, 180, 255, 0.22); white-space: pre; pointer-events: none; }
+  #boot-error { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 20; max-width: 620px; font: 12px/1.5 ui-monospace, Menlo, monospace; color: #ffd7d7; background: #2a0f14; border: 1px solid #7a2b34; padding: 14px 16px; white-space: pre-wrap; }
+  #notices { position: fixed; right: 8px; bottom: 8px; z-index: 15; display: flex; flex-direction: column; gap: 6px; max-width: min(320px, 46vw); pointer-events: none; }
+  #notices .notice { pointer-events: auto; font: 11px/1.4 ui-monospace, Menlo, monospace; color: #e6dcc0; background: rgba(38, 30, 10, 0.92); border: 1px solid rgba(242, 194, 24, 0.35); padding: 7px 9px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/",
+    "@dimforge/rapier3d-compat": "https://unpkg.com/@dimforge/rapier3d-compat@0.14.0/rapier.es.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+window.__ducksErrors = [];
+window.addEventListener('error', function (e) { window.__ducksErrors.push(String(e.message || (e.target && e.target.src))); }, true);
+window.addEventListener('unhandledrejection', function (e) { window.__ducksErrors.push('rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)); });
+window.__ducksFatal = function (m) { window.__ducksErrors.push('FATAL: ' + m); };
+window.__ducksNotice = function (m) { window.__ducksErrors.push('NOTICE: ' + m); };
+</script>
+<script type="module" src="/src/main.js"></script>
+<script type="module">
+import { getFirebase, netStatus } from '/src/net/firebase.js';
+import { tryHostRoom, tryJoinRoom, listPublicRooms } from '/src/net/signaling.js';
+
+const OFF = { ready: false };
+window.OFF = OFF;
+(async () => {
+  const t0 = performance.now();
+  try {
+    await getFirebase();
+    OFF.getFirebase = { rejected: false, note: 'SDK loaded - this run is NOT the blocked case' };
+  } catch (e) {
+    OFF.getFirebase = { rejected: true, code: e.code, message: e.message };
+  }
+  OFF.host = await tryHostRoom({ nick: 'offline', isPublic: true });
+  OFF.join = await tryJoinRoom('whatever', { nick: 'offline' });
+  try {
+    OFF.rooms = await listPublicRooms();
+    OFF.roomsThrew = false;
+  } catch (e) {
+    OFF.roomsThrew = e.message;
+  }
+  OFF.status = netStatus();
+  OFF.ms = Math.round(performance.now() - t0);
+  OFF.ready = true;
+})();
+</script>
+</body>
+</html>
