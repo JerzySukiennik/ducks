@@ -29,7 +29,16 @@ const CSS = `
 #lobby.open { display: flex; }
 #lobby input, #lobby button { font: inherit; color: inherit; letter-spacing: inherit; }
 #lobby button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-#lobby-scrim { position: absolute; inset: 0; background: ${CRT.scrim}; }
+#lobby-scrim { position: absolute; inset: 0; background: ${CRT.scrim};
+  transition: background ${CRT.normal} ${CRT.ease}; }
+/* While a room is WAITING, the scrim goes opaque. The intro dresses its set the
+   moment a room is opened -- 272 ducks and twenty objects, so the pile has time
+   to fall asleep before the camera rolls -- and at 62% opacity the player
+   watched that happen behind the panel. It reads as the game spawning junk on
+   its own. Opaque here rather than delaying the staging, because the staging
+   has to start early: that is the whole reason the overflow shot does not
+   stutter. */
+#lobby.waiting #lobby-scrim { background: ${CRT.bg}; }
 #lobby-panel { position: relative; width: min(720px, 92vw); max-height: 86vh;
   display: flex; flex-direction: column; pointer-events: auto;
   background: ${CRT.bgRaised}; border: ${CRT.hairline} solid ${CRT.border};
@@ -439,6 +448,10 @@ export function createLobbyUI(opts) {
   }
 
   function renderPlayers() {
+    // `waiting` = in a room that has not started. Set here because this is the
+    // function both setPlayers() and setPhase() already call, so the class
+    // cannot drift from the state it describes.
+    root.classList.toggle('waiting', !!session && phase !== 'playing');
     playersBox.textContent = '';
     if (!session) { renderStart(); return; }
     const list = players.length ? players : [{ slot: session.slot, nick: session.nick, self: true }];
