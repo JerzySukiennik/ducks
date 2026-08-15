@@ -343,6 +343,19 @@ export function createHost({ session, game, onEvent }) {
     if (text === rosterSeen) return;
     rosterSeen = text;
     broadcast({ t: MSG.PLAYERS, players: list });
+    // ...and tell THIS tab too. The host used to be the one player nobody told:
+    // clients learned the roster from this message, while the host's own waiting
+    // room was pushed from the frame loop instead. That made the host's player
+    // list depend on requestAnimationFrame -- which a hidden tab freezes dead,
+    // the trap this project has now hit five times -- and it meant the two sides
+    // were fed by two different mechanisms, so only one of them could be right
+    // at a time. Measured before this line existed: the host's roster held two
+    // players and its panel drew one, because an empty list falls back to
+    // "just me".
+    //
+    // The reconciler runs on the worker clock, so this fires whether the tab is
+    // in front or not, and both sides now read the same list from the same event.
+    emit({ type: 'roster', players: list });
   }
 
   function drainSettled() {

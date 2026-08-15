@@ -1428,7 +1428,21 @@ export function createNetGame(deps) {
       const c = deps.localColor();
       if (c) colorBy.set(0, c);
     }
-    host = createHost({ session, game: adapter, onEvent: (e) => emit({ ...e, role: 'host' }) });
+    host = createHost({
+      session,
+      game: adapter,
+      onEvent: (e) => {
+        // The roster the reconciler just broadcast is also news for THIS tab.
+        // Routing it to the same onRoster a client uses means the waiting room
+        // is fed by one mechanism in both roles instead of two -- see the note
+        // in host.js reconcileRoster().
+        if (e && e.type === 'roster' && typeof onRoster === 'function') {
+          roster = Array.isArray(e.players) ? e.players : [];
+          onRoster(roster);
+        }
+        return emit({ ...e, role: 'host' });
+      },
+    });
     emit({ type: 'hosting', roomId: s.roomId, link: s.link ? s.link() : null });
     return host;
   }

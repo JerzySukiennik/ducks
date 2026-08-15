@@ -1,7 +1,7 @@
 {
   "name": "Ducks",
-  "version": "1.7",
-  "phase": "v1.7",
+  "version": "1.7.1",
+  "phase": "v1.7.1",
   "three": "0.169.0",
   "rapier": "0.14.0"
 }
