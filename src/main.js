@@ -695,6 +695,15 @@ async function boot() {
     benches.setClicksPerDuck(s.clicksPerDuckMul);
     machine.setClicksPerDuck(s.clicksPerDuckMul);
     world.economy.duckValueMul = s.duckValueMul;
+    // The three that were computed and never read. An audit measured Sturdy
+    // Boots x3 moving the walk speed from 5.196 to 5.198 m/s -- noise for about
+    // $1,020 -- Long Arms x2 still failing at exactly the base 4.0 m, and Strong
+    // Arm consumed by nothing at all. src/data/stats.js already named the reader
+    // for each; this is that wiring, and it belongs here beside the other two so
+    // the next stat added has an obvious place to be applied.
+    if (player.setMoveSpeedMul) player.setMoveSpeedMul(s.moveSpeedMul);
+    if (world.hold && world.hold.setGrabRangeAdd) world.hold.setGrabRangeAdd(s.grabRangeAdd);
+    if (world.hold && world.hold.setThrowImpulseMul) world.hold.setThrowImpulseMul(s.throwImpulseMul);
     return s;
   }
   applyStats();

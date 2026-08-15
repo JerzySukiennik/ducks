@@ -35,6 +35,20 @@ export function createHold({
     groups.GROUP_WORLD | groups.GROUP_PROP
   );
 
+  // Long Arms and Strong Arm, set from main.js applyStats(). Both were computed
+
+  // and stored by the shop and read by NOBODY: two levels of Long Arms left the
+
+  // grab failing at exactly the base 4.0 m, and throwImpulseMul was never touched
+
+  // at all. src/data/stats.js names hold.grabRange and hold.throwImpulse as their
+
+  // readers -- this is that wiring.
+
+  let grabRangeAdd = 0;
+
+  let throwImpulseMul = 1;
+
   let held = null;          // rigid body
   let heldDuckId = null;
   let restore = null;       // damping to put back on release
@@ -100,7 +114,7 @@ export function createHold({
     const excludeBody = a ? a.body : null;
     const ray = new RAPIER.Ray({ x: origin.x, y: origin.y, z: origin.z }, nd);
     const hit = world.castRay(
-      ray, cfg.grabRange, true, undefined, QUERY_GROUPS, undefined, excludeBody || undefined
+      ray, cfg.grabRange + grabRangeAdd, true, undefined, QUERY_GROUPS, undefined, excludeBody || undefined
     );
     if (!hit) return refuse('nothing in reach');
     const collider = hit.collider || (hit.colliderHandle !== undefined
@@ -166,9 +180,9 @@ export function createHold({
     wake();
     if (a) {
       applyImpulse(body, {
-        x: a.dir.x * cfg.throwImpulse * m,
-        y: a.dir.y * cfg.throwImpulse * m,
-        z: a.dir.z * cfg.throwImpulse * m,
+        x: a.dir.x * cfg.throwImpulse * throwImpulseMul * m,
+        y: a.dir.y * cfg.throwImpulse * throwImpulseMul * m,
+        z: a.dir.z * cfg.throwImpulse * throwImpulseMul * m,
       });
     }
     if (cfg.ccdOnThrow && typeof body.enableCcd === 'function') body.enableCcd(true);
@@ -244,6 +258,12 @@ export function createHold({
   }
 
   return {
+
+    setGrabRangeAdd(v) { grabRangeAdd = (typeof v === 'number' && isFinite(v)) ? v : 0; return grabRangeAdd; },
+
+    setThrowImpulseMul(v) { throwImpulseMul = (typeof v === 'number' && isFinite(v) && v > 0) ? v : 1; return throwImpulseMul; },
+
+    grabRange: () => cfg.grabRange + grabRangeAdd,
     tryGrab,
     release,
     throw: doThrow,

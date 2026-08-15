@@ -16,6 +16,8 @@ function clamp(v, lo, hi) {
 }
 
 export function createPlayer({ RAPIER, world, controller, params, spawn }) {
+  // Set from src/main.js applyStats() whenever the shop's stats change.
+  let moveSpeedMul = 1;
   const P = params;
   const halfHeight = Math.max(0.05, P.height / 2 - P.radius); // cylinder half-height
 
@@ -84,7 +86,12 @@ export function createPlayer({ RAPIER, world, controller, params, spawn }) {
     if (inputSource) update(dt, inputSource(dt) || NO_INPUT);
     const fwd = clamp(input.fwd || 0, -1, 1);
     const right = clamp(input.right || 0, -1, 1);
-    const speed = input.sprint ? P.sprintSpeed : P.walkSpeed;
+    // moveSpeedMul comes from Sturdy Boots. It used to be computed, stored and
+    // never read: three levels of the upgrade moved the measured walk speed from
+    // 5.196 to 5.198 m/s -- noise -- while charging about $1,020. The stat table
+    // in src/data/stats.js even names `player.walkSpeed` as its reader; the
+    // wiring was simply never done.
+    const speed = (input.sprint ? P.sprintSpeed : P.walkSpeed) * moveSpeedMul;
 
     // Yaw 0 looks down -Z; right is +X.
     const sin = Math.sin(yaw);
@@ -145,6 +152,12 @@ export function createPlayer({ RAPIER, world, controller, params, spawn }) {
   }
 
   return {
+    // Sturdy Boots. Set from main.js applyStats(); see the read site above.
+    setMoveSpeedMul(v) {
+      moveSpeedMul = (typeof v === 'number' && isFinite(v) && v > 0) ? v : 1;
+      return moveSpeedMul;
+    },
+    moveSpeedMul: () => moveSpeedMul,
     update,
     setInputSource,
     position,
