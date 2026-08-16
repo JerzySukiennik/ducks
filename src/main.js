@@ -972,6 +972,11 @@ async function boot() {
   settingsUI = createSettingsUI({
     container,
     settings,
+    // What the renderer is ACTUALLY drawing into, so the panel can show the
+    // gap between the width the player asked for and the width the adaptive
+    // sampler settled on instead of quietly presenting one as the other.
+    // A function, not a number: the value changes while the panel is open.
+    live: { bufferWidth: () => renderer.bufferWidth },
     onUi: (kind) => audio.ui(kind),
     onOpen: () => { uiCapture(); },
     onClose: () => { uiCapture(); if (menu) menu.sync(); },
@@ -997,12 +1002,14 @@ async function boot() {
     settings,
     version: meta.version,
     degraded: !!degraded,
+    // Same fact, same source, for the menu's one-line Settings summary.
+    bufferWidth: () => renderer.bufferWidth,
     session: () => lobby.session(),
     onUi: (kind) => audio.ui(kind),
     onOpen: () => { uiCapture(); },
     onClose: (reason) => {
       if (!uiCapture()) input.requestLock();
-      // "Graj sam" gets the intro too. It runs through the SAME cutscene.start()
+      // The menu's "Play" button gets the intro too. It runs through the SAME cutscene.start()
       // the host's REQ.START path uses -- one timeline, one teardown, one skip --
       // rather than a solo-only copy that would drift from it. Only the deliberate
       // press counts: 'scrim', 'close' and 'cutscene' must not re-enter it, or
@@ -1010,7 +1017,7 @@ async function boot() {
       if (reason !== 'play') return;
       if (!cutscene || cutscene.isActive()) return;
       if (lobby && lobby.session && lobby.session()) return;   // a room drives its own start
-      // Solo takes the mode the lobby is showing, so "Graj sam" in creative is
+      // Solo takes the mode the lobby is showing, so pressing Play in creative is
       // creative.
       applyCreative(lobby.creative ? lobby.creative() : false);
       Promise.resolve(cutscene.prepare()).then(() => {
@@ -1034,8 +1041,18 @@ async function boot() {
     // there is nobody to tell, so the summary is raised directly.
     onEndSession: () => {
       menu.close('end');
+      // Strike the intro's set FIRST, exactly as the leave path above does. The
+      // two ends of a session were asymmetric: leaving a room discarded the
+      // cutscene, ending a solo session did not, so `endSession()` raised the
+      // summary while the intro was still holding its own stage -- and the
+      // player got the film replayed over the only artefact a 2-4 hour session
+      // with no save ever produces. One missing line, on the path that matters
+      // most.
       if (lobby.session()) lobby.leave();
-      else endSession('You ended the session.');
+      else {
+        if (cutscene) cutscene.discard();
+        endSession('You ended the session.');
+      }
     },
   });
 
@@ -1267,7 +1284,10 @@ async function boot() {
   function gambleStart(key) {
     const rec = placed.objects.find((o) => o.key === key);
     if (!rec) return { ok: false, reason: 'nothing there' };
-    const cost = config.gamble.cost;
+    // The ROLL fee, which is a different number from what the box costs to buy
+    // (config.gamble.boxPrice). They were one key until it became clear that
+    // meant no roll could be repriced without repricing the machine.
+    const cost = config.gamble.rollCost;
     if (gamble.isRolling(key)) return { ok: false, reason: 'It is already rolling' };
     if (!world.economy.canAfford(cost)) {
       return { ok: false, reason: 'You need $' + cost + ' for a roll' };
@@ -2116,6 +2136,34 @@ async function boot() {
     net.act({ a: REQ.CRANK, down: false });
   }
 
+  // SAY WHY IT DID NOT WORK.
+  //
+  // Every action in this file goes through net.act(), which returns the host's
+  // verdict -- and about sixteen of those verdicts were being thrown away on the
+  // floor. The reasons already existed and were already written in English
+  // ('too far from the workbench', 'already holding something', 'nothing to
+  // grab'); nothing ever showed them, so a refused grab was indistinguishable
+  // from a dropped input, and the player's only theory was that the game had
+  // missed the click.
+  //
+  // Three things this does not do, each of them on purpose:
+  //   - it says nothing on a PENDING result. On a client the answer has not
+  //     arrived yet; it comes back through net's onReject, which routes to this
+  //     same message box through this same translator.
+  //   - it says nothing on success, obviously, and nothing when there is no
+  //     reason to give -- a verdict with no words is a bug in the verdict, not a
+  //     message to invent one for.
+  //   - it does not dress the words itself. reasonText() is the one place a
+  //     refusal becomes a sentence, so the solo path and the client path cannot
+  //     print the same refusal two different ways.
+  function reportRefusal(res) {
+    if (!res || res.ok || res.pending) return null;
+    if (!res.reason) return null;
+    const text = reasonText(res.reason);
+    hud.showCap(text);
+    return text;
+  }
+
   // Hold to carry: the down edge grabs, the up edge drops. A down edge aimed at
   // the wheel starts a CRANK HOLD instead of grabbing, so the two never fight.
   function handleActions(onWheel) {
@@ -2132,7 +2180,7 @@ async function boot() {
     // than remembered.
     if (a.scroll) net.act({ a: REQ.HOLD_DIST, n: a.scroll });
     for (let i = 0; i < a.throw; i++) {
-      if (net.holdingLocal()) net.act({ a: REQ.HURL });
+      if (net.holdingLocal()) reportRefusal(net.act({ a: REQ.HURL }));
     }
     for (let i = 0; i < a.grabDown; i++) {
       if (shopUI.isOpen()) break;
@@ -2144,7 +2192,7 @@ async function boot() {
       // Through the request door like everything else. On a host and in single
       // player this lands on the same tool module it always did; on a client it
       // is a question, and the ducks move because the HOST's broom moved them.
-      if (tools.takesGrabButton()) { net.act({ a: REQ.TOOL, down: true }); continue; }
+      if (tools.takesGrabButton()) { reportRefusal(net.act({ a: REQ.TOOL, down: true })); continue; }
       // A BUILDING in hand means the click places it, never grabs. A carryable
       // that is not a tool (an empty bucket, say) does neither, so it leaves the
       // grab button alone instead of swallowing it.
@@ -2158,26 +2206,30 @@ async function boot() {
         const aim = view.aim();
         cranking = true;
         crankHeldTarget = onWheel;
-        net.act({
+        // A refused crank must ALSO drop the local hold flag, or the button is
+        // held against a wheel the host said no to and the up edge later sends a
+        // release for a hold that never started.
+        const r = net.act({
           a: REQ.CRANK,
           down: true,
           o: [aim.origin.x, aim.origin.y, aim.origin.z],
           d: [aim.dir.x, aim.dir.y, aim.dir.z],
         });
+        if (reportRefusal(r)) { cranking = false; crankHeldTarget = null; }
       } else {
         // The aim travels as evidence, not as a target id: the host casts the
         // ray itself and decides what was hit.
         const aim = view.aim();
-        net.act({
+        reportRefusal(net.act({
           a: REQ.GRAB,
           o: [aim.origin.x, aim.origin.y, aim.origin.z],
           d: [aim.dir.x, aim.dir.y, aim.dir.z],
-        });
+        }));
       }
     }
     for (let i = 0; i < a.grabUp; i++) {
       if (demolishing) { demolishHold = 0; continue; }
-      if (tools.takesGrabButton()) { net.act({ a: REQ.TOOL, down: false }); continue; }
+      if (tools.takesGrabButton()) { reportRefusal(net.act({ a: REQ.TOOL, down: false })); continue; }
       // A release that ends a crank is not a drop. Without this the up edge fell
       // through to REQ.DROP, which is harmless but noise, and the hold would
       // never be told to stop.
@@ -2196,25 +2248,64 @@ async function boot() {
   // the fanfare fires once per step rather than every frame after it.
   function onboardingStep(id) { if (hud.completeStep(id)) audio.achievement(); }
 
+  // THE CUTSCENE LEAK, and why these three numbers exist.
+  //
+  // Every trigger below reads a LIFETIME total -- ducks scored, ducks grabbed,
+  // ducks cranked -- and the intro flies over a world that is doing all three:
+  // it stages a pile, drops ducks down the chute and lands some of them in the
+  // pit. updateOnboarding() is not called while the camera is flying, so none of
+  // that ticked a step as it happened; it ticked on the FIRST frame after the
+  // intro, all at once, before the player had moved a step. That is the
+  // "`score` was already ticked before I moved" defect, and it is not a bug in
+  // the trigger: the trigger was reading the world's total and calling it the
+  // player's.
+  //
+  // So the totals are baselined the moment the player takes control. Everything
+  // below asks "since you got here", which is the only question onboarding was
+  // ever asking. Rebaselined on every hand-over (a solo start, a room start, a
+  // skipped intro) because each of those is a fresh player taking control of a
+  // world that has been running without them.
+  let onboardBase = null;
+  function resetOnboardingBaseline() {
+    onboardBase = {
+      scored: world.pit ? world.pit.totalScored() : 0,
+      grabs: world.hold ? world.hold.grabCount() : 0,
+      cranks: crankPops,
+      places: placeCount,
+    };
+    return onboardBase;
+  }
+
   function updateOnboarding(pos) {
+    if (!onboardBase) resetOnboardingBaseline();
+    const b = onboardBase;
     const t = props.machineBase();
     const dx = pos.x - t.x;
     const dz = pos.z - t.z;
     if (dx * dx + dz * dz < config.hud.machineHintRadius * config.hud.machineHintRadius) {
       onboardingStep('walk');
     }
+    // Cranking is its own step now. It used to be the back half of "walk to the
+    // workbench and crank out a duck", which completed on ARRIVING -- so the
+    // step taught two things and was satisfied by one of them.
+    if (crankPops > b.cranks) onboardingStep('crank');
     // On a CLIENT the local slot-0 controller never grabs anything (the hold
     // lives in the host's world), so the onboarding step reads the same fact the
     // HUD does rather than a counter that can only ever move in single player.
-    if (world.hold.grabCount() > 0 || net.holdingLocal()) onboardingStep('grab');
-    if (world.pit.totalScored() > 0) onboardingStep('score');
-    // The second half of the loop, and both triggers below already existed.
+    if (world.hold.grabCount() > b.grabs || net.holdingLocal()) onboardingStep('grab');
+    if (world.pit.totalScored() > b.scored) onboardingStep('score');
+    // The second half of the loop.
     // 'shop'  standing at the booth: the same test the crosshair prompt uses to
     //         decide whether E opens the shop, so the hint cannot ask for a key
     //         that would do nothing.
     // 'buy'   fired from the purchase notification (shop.onPurchase, above), not
     //         from here: a purchase is an event, and it is the same event on a
     //         host and on a client.
+    // 'place' the last step, and the reason the list no longer stops at 'buy':
+    //         a purchase is an object in the hotbar and the player was never
+    //         told what to do with it. placeCount moves for exactly one reason
+    //         (doPlace succeeded), so this cannot tick on somebody else's build.
+    if (placeCount > b.places) onboardingStep('place');
     if (props.boothDistance(pos) <= config.booth.useRange) onboardingStep('shop');
   }
 
@@ -2384,28 +2475,52 @@ async function boot() {
     const gambleAt = cinematic ? null : gambleTarget();
     // Build and demolish notices come first: when a mode owns the crosshair, the
     // thing it is refusing or removing beats "Press E - Shop" every time.
+    //
+    // The FOURTH argument names the button each of these is about. It is not
+    // decoration: hud.setPrompt hands it to the onboarding line, which stands
+    // down while a contextual prompt has claimed the same button. That is what
+    // stops "Hold left click to carry a duck" and "Hold left click to crank"
+    // being on screen together at the wheel. Every branch that mentions a button
+    // in its words must name that button here, or the two will argue again.
+    const promptLabel = cinematic ? null
+      : shopUI.isOpen() ? null
+      : buildNotice ? buildNotice.label
+        : pickable && pourableCount(pickable.prop)
+          ? 'Press E - Pick up ' + pickable.row.name
+            + '   R - Pour out ' + pourableCount(pickable.prop)
+          : pickable ? 'Press E - Pick up ' + pickable.row.name
+          : gambleAt
+            ? (gamble.isRolling(gambleAt.rec.key)
+              ? 'Rolling...'
+              : 'Press E - Gamble ($' + config.gamble.rollCost + ')')
+          : onWheel && !net.holdingLocal() ? 'Hold left click to crank'
+            : nearBooth ? 'Press E - Shop'
+              : null;
+    // Only an INSTRUCTION claims a button. A refusal and a status are not
+    // instructions and must not silence the onboarding line: "No ground in view"
+    // is the game reporting, "Hold LMB - remove Conveyor for $70" is the game
+    // telling you what the button does. Getting this wrong hid the last
+    // onboarding step -- the one that teaches placing -- for exactly as long as
+    // the player was pointing somewhere they could not build, which is precisely
+    // when they most needed reading. Same reasoning for "Rolling...": the box
+    // heard you, there is nothing to press.
+    const promptInput = cinematic || shopUI.isOpen() ? null
+      : buildNotice ? (buildNotice.bad ? null : 'lmb')
+        : pickable ? 'e'
+          : gambleAt ? (gamble.isRolling(gambleAt.rec.key) ? null : 'e')
+            : onWheel && !net.holdingLocal() ? 'lmb'
+              : nearBooth ? 'e'
+                : null;
     hud.setPrompt(
-      cinematic ? null
-        : shopUI.isOpen() ? null
-        : buildNotice ? buildNotice.label
-          : pickable && pourableCount(pickable.prop)
-            ? 'Press E - Pick up ' + pickable.row.name
-              + '   R - Pour out ' + pourableCount(pickable.prop)
-            : pickable ? 'Press E - Pick up ' + pickable.row.name
-            : gambleAt
-              ? (gamble.isRolling(gambleAt.rec.key)
-                ? 'Rolling...'
-                : 'Press E - Gamble ($' + config.gamble.cost + ')')
-            : onWheel && !net.holdingLocal() ? 'Hold left click to crank'
-              : nearBooth ? 'Press E - Shop'
-                : null,
+      promptLabel,
       // NO NUMBER on the crank. The bar under the crosshair is the whole readout
       // now -- a percentage beside the prompt is something you read instead of
       // watching the wheel, which is the opposite of what the hold is for. The
       // demolish/build notice keeps its percent: that one is a countdown, not a
       // gauge, and it has no bar of its own.
       buildNotice ? buildNotice.percent : null,
-      !!(buildNotice && buildNotice.bad)
+      !!(buildNotice && buildNotice.bad),
+      promptInput
     );
     // The fill bar. Shown while the crosshair is on a wheel OR while this player
     // is still holding one, so a hand that drifts off the rim mid-fill does not
@@ -2515,6 +2630,8 @@ async function boot() {
     // message. There is no crankOnce any more: a crank is a held state that
     // main.js integrates once per frame, not an event the net layer fires.
     hud, wheelAimFrom, crankStates,
+    // So a client's refusals read as sentences, exactly like a solo player's.
+    reasonText,
     // The gambling box, in the same shape the wheel is handed over: ONE aim
     // test, run by the host from its own belief about where the asker is
     // looking, and ONE place that spends the money and starts the roll. No box
@@ -2715,6 +2832,14 @@ async function boot() {
       // matters -- the world audited against the boot baseline, so "the set was
       // struck" is a measurement rather than a claim.
       setCinematicChrome(false);
+      // THE HAND-OVER. This is the instant the player takes control of a world
+      // that has been running -- and scoring, and grabbing -- without them, so
+      // it is where onboarding starts counting. Without this line every step
+      // whose trigger the intro happened to satisfy was already ticked before
+      // the player had moved. Here rather than in updateOnboarding() because
+      // this is the event; a lazy first-call baseline would be taken on
+      // whichever frame happened to run first and would not survive a skip.
+      resetOnboardingBaseline();
       // The audit is taken ONE FRAME LATER, not here. finish() runs inside the
       // frame, before ducksView.sync() has had a chance to notice that 174
       // ducks were just released -- auditing on this line reported 218 live
@@ -3319,10 +3444,17 @@ async function boot() {
         money: hud.moneyText(),
         step: hud.stepText(),
         stepIndex: hud.stepIndex(),
+        // `step` is what the CURRENT step says; `stepVisible` is whether it is
+        // on screen at all. They differ exactly when the step has yielded its
+        // button to the crosshair prompt, which is the whole point of the
+        // layering -- a check that counts instructions must read this one.
+        stepVisible: hud.stepVisible(),
+        stepInputs: hud.stepInputs(),
         steps: hud.stepsDone(),
         capVisible: hud.capVisible(),
         prompt: hud.promptText(),
         promptVisible: hud.promptVisible(),
+        promptInput: hud.promptInput(),
       };
     },
     // --- G5 verification surface ---------------------------------------------
@@ -3337,19 +3469,12 @@ async function boot() {
         labelText: focus.labelText(),
       };
     },
-    debugKeyBarState() {
-      const bar = hud.keyBar;
-      // The key bar is off the game screen: its fifteen prompts live in the
-      // menu's Controls panel now. Reported rather than thrown, so a check that
-      // asks about it gets the truth instead of a stack trace.
-      if (!bar) return { mode: 'off', glyphs: 0, prompts: 0, text: '' };
-      return {
-        mode: bar.mode(),
-        glyphs: bar.glyphCount(),
-        prompts: bar.promptCount(),
-        text: bar.root.textContent,
-      };
-    },
+    // debugKeyBarState() is GONE. It reported on src/ui/keybar.js, which was
+    // deleted -- so it was a permanently-off stub answering questions about a
+    // file that does not exist, and any check still calling it was being told
+    // "off" forever rather than that it was asking about nothing. The key list
+    // it used to describe is KEY_ROWS in src/ui/controls.js, which is read
+    // through the menu's Controls panel and has its own state().
     debugSkyState() {
       return {
         time: view.blackHole.time(),

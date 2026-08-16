@@ -190,6 +190,49 @@ export const config = {
       circleSegments: 32,
       circleLift: 0.03,
     },
+
+    // THE CONTACT SHADOW under every placed object and every dropped prop.
+    //
+    // The measurement that put it here, taken in this 480 px backbuffer with a
+    // Machine standing on clean plate at 10 m: floor luminance 88, machine body
+    // luminance 80 -- 1.10:1 across the edge the eye uses to find the object.
+    // The full argument for darkening the FLOOR rather than repainting the
+    // object or moving the plate is written where the material is built, in
+    // src/render/materials.js.
+    //
+    // One InstancedMesh for every contact patch in the world, so this is ONE
+    // extra draw call however many objects are standing.
+    contact: {
+      enabled: 1,
+      // Peak darkening straight under the object, and it was tuned by walking
+      // the floor away from a placed Machine and reading the backbuffer, not by
+      // taste. At the shipped 0.62/2.10/0.30 the floor 0.7 m from the base
+      // measures luminance 55 against an undarkened 88 -- and back to 90 by
+      // 1.0 m, so the darkening is local to the contact rather than a stain the
+      // object sits in. The first pass at 0.55/1.45/0.42 measured 87 at the
+      // same point on the smaller models, i.e. it did nothing outside the
+      // footprint at all, which is the failure mode `spread` exists to avoid.
+      opacity: 0.62,
+      // How far the patch spreads past the object's own footprint, as a
+      // multiplier on its collider half-extents. Comfortably over 1, because a
+      // patch that stopped at the footprint would be entirely hidden by the
+      // object standing on it and would do nothing from a standing camera --
+      // measured, see the note on `opacity`.
+      spread: 2.10,
+      // Metres above the plate. Belt and braces with the polygon offset below;
+      // see the markings for the same pairing and the same reason.
+      lift: 0.012,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+      // The alpha ramp. `core` is the fraction of the half-extent held at full
+      // darkness before the penumbra starts.
+      textureSize: 64,
+      core: 0.30,
+      // Capacity of the single shared pool. build.instanceCapacity is per
+      // MODEL; this one pool has to hold a patch for every placed object of
+      // every model at once, so it is sized independently.
+      capacity: 512,
+    },
   },
 
   perf: {
@@ -221,7 +264,19 @@ export const config = {
     flashHzStart: 1.2,
     flashHzEnd: 9.0,
     cooldownSeconds: 0.6,
-    cost: 120,
+    // TWO PRICES, TWO KEYS. They used to be one -- `gamble.cost` was read both
+    // as what a single roll costs and as the shop price of the box itself -- so
+    // the box was worth exactly one pull of its own handle, and, worse, tuning
+    // either number silently retuned the other. There is no edit to "make rolls
+    // cheaper" that does not also mark the box down, which is not a balance
+    // decision anybody would choose to make; it was just what sharing a key did.
+    //
+    // rollCost is the fee the prompt quotes and the refusal names.
+    // boxPrice is what the vendor charges for the machine. It is deliberately
+    // several rolls' worth: a box that pays for itself on the first pull is not
+    // a gamble, it is a purchase with extra steps.
+    rollCost: 120,
+    boxPrice: 480,
     // Cheap prizes are common, expensive ones rare: weight = 1 / cost^power.
     prizePower: 1.15,
     // A losing roll is not empty -- it pays ducks instead, so the box always
@@ -282,7 +337,41 @@ export const config = {
     // barely travelled (0.116 m -> 0.144 m on a 2 m/s sweep). Both halves have
     // to come down for the broom to feel like it is pushing something.
     plateFriction: 0.45,
-    plateColor: 0x5b5f63,
+    // THE PLATE IS DARKER THAN IT WAS (0x5b5f63 -> 0x474a4d), AND IT IS THE
+    // OTHER HALF OF THE OBJECT-VERSUS-GROUND FIX.
+    //
+    // config.render.contact grounds an object at its base; it does nothing for
+    // the part of the silhouette standing against the floor BEHIND it, which is
+    // most of the silhouette. That is a plate problem, and here is the
+    // measurement, taken by masking each object out of the frame by difference
+    // and comparing the median luminance inside the mask against a ring of
+    // floor just outside it, at 10 m in the real 480 px backbuffer:
+    //
+    //                    body   floor ring   contrast     -> after
+    //   machine          76.1      61.1        1.205        1.665
+    //   conveyor         70.4      65.1        1.069        1.318
+    //   platform         65.3      63.0        1.031        1.224
+    //   vacuum_station   71.3      69.7        1.020        1.226
+    //   press            68.7      42.7        1.475        1.516
+    //
+    // 1.02 to 1.20 is the whole defect in one column: the object and the ground
+    // behind it were the same value, so the silhouette had nothing to bite on
+    // and only the trim separated them.
+    //
+    // DOWN rather than up, and that direction is a judgement with two reasons
+    // behind it. Buildable bodies measure 53 to 76, so a plate BELOW that band
+    // separates the whole catalogue in one move, where a plate above it would
+    // have to clear 76 and would then (a) close the gap to the gold that means
+    // "duck" -- the one thing a critic said already pops at any distance -- and
+    // (b) destroy the workbench's wayfinding, which works precisely because two
+    // warm lamps are the only warm light on a DARK plate. Both were re-shot at
+    // 35 m after this change and both still read.
+    //
+    // THE KNOWN COST, because it is real: an object whose body is darker than
+    // the band loses a little. `container` (body 53) went 1.213 -> 1.121. There
+    // is no single plate value that separates a catalogue spanning 53 to 76 in
+    // both directions; this value buys four clear wins for one small loss.
+    plateColor: 0x474a4d,
     markingColor: 0xd8b520,
     // The zenith stays essentially black -- the black hole and the starfield are
     // the only bright things up there and they need somewhere dark to be bright
@@ -2103,8 +2192,18 @@ export const config = {
     // The bus output. Jurek's mix.json numbers already sit under 1, so this is
     // headroom against summing, not a second volume knob to reach for.
     masterGain: 0.9,
-    // A clip with no line in mix.json. broom.mp3 is the only one today.
+    // A clip with no line in mix.json. Nothing shipped uses it any more --
+    // broom was the last one and got an explicit line when the bank was
+    // re-rendered, because "whatever the default happens to be" is not a
+    // decision anybody made about a specific sound.
     defaultClipGain: 0.4,
+    // Where the loop points live. Every looping clip now ships with 0.15 s of
+    // its own tail wrapped onto the front and 0.15 s of its head onto the back,
+    // and this file says which slice of the buffer is the actual period. The
+    // seam therefore sits INSIDE the buffer, where no mp3 decoder can move it;
+    // see src/audio/bus.js. Missing or unreadable, every loop falls back to
+    // looping the whole buffer, which is what it did before.
+    loopsPath: './assets/audio/loops.json',
     // Voice limiting. 300 ducks landing in the same frame must not be 300
     // simultaneous squeaks -- both because it clips and because it is a wall of
     // noise where the sound should be a texture.
@@ -2122,6 +2221,71 @@ export const config = {
     // The played-clip log, for verification. It is a ring buffer: it can never
     // grow without bound during a long session.
     logMax: 400,
+
+    // --- the room ------------------------------------------------------------
+    // The plate is 35 m of bare concrete with a hole in the middle and the game
+    // had NO reverb of any kind: every sound arrived dry, which is the acoustic
+    // of an anechoic chamber and not of a warehouse. A machine at the far wall
+    // and a machine at your elbow differed only in level.
+    //
+    // One ConvolverNode, fed by a per-voice send whose gain rises with distance,
+    // so near sounds stay dry and far ones arrive mostly as room. The impulse
+    // response is GENERATED (src/audio/bus.js buildImpulse) rather than shipped:
+    // an IR file would be another download and another licence to account for,
+    // and a concrete box is early reflections plus an exponentially decaying
+    // noise tail, which is a few lines of arithmetic.
+    reverb: {
+      enabled: 1,
+      // RT60 for the tail. Bare concrete, ~35 x ~35 m, no absorption to speak
+      // of: long. Under a second would read as a small tiled room.
+      seconds: 2.1,
+      // Air and surfaces eat the top end faster than the bottom, so the tail
+      // gets progressively duller. 1 is no damping; lower is darker sooner.
+      damping: 0.34,
+      // Time before the first reflection comes back, in seconds -- the distance
+      // to the nearest wall over the speed of sound. 17 m at 343 m/s is 50 ms
+      // there and back; the plate's centre is about that far from the edge.
+      preDelaySeconds: 0.05,
+      // Discrete early reflections laid in front of the tail: [time, gain].
+      // These are what make a room read as BIG rather than merely as wet.
+      earlyTaps: [[0.011, 0.7], [0.019, -0.52], [0.029, 0.44], [0.043, -0.33], [0.062, 0.24]],
+      // Left and right get different noise, which is the whole of the stereo
+      // width -- a mono IR through a stereo convolver is a wider mono.
+      stereo: 1,
+      // How much of the reverb return reaches the sfx bus, before any send.
+      wetGain: 0.5,
+      // The send curve. At or inside `dryMeters` a voice sends nothing; at or
+      // past `wetMeters` it sends `sendMax`. Between, linear in distance.
+      // dryMeters matches audio.refDistance -- inside the reference distance a
+      // sound is at your hands and a room around it would be wrong.
+      dryMeters: 3,
+      wetMeters: 26,
+      sendMax: 0.85,
+      // A sound with no world position -- a menu click, a purchase -- is not in
+      // the room at all and sends nothing.
+      sendUnpositioned: 0,
+    },
+
+    // --- ducking -------------------------------------------------------------
+    // The pit payoff is the sound the whole game points at, and it was competing
+    // with its own factory: every machine, fan, conveyor and cart loop runs on
+    // the loop bus underneath it. This dips that bus for the length of the
+    // payoff so the run comes through the hum instead of over it.
+    //
+    // It is a node of its own after loopBus, NOT the loop bus's own gain, so it
+    // cannot fight the player's ambience slider: the slider owns loopBus.gain
+    // and the duck owns the node after it, and neither ever writes the other's
+    // value.
+    duck: {
+      enabled: 1,
+      // How far down, in dB. 6 is clearly audible without the bed disappearing;
+      // a bed that vanishes and comes back reads as a dropout.
+      depthDb: -6,
+      attackSeconds: 0.04,
+      // Held for about as long as a pit run lasts before it starts recovering.
+      holdSeconds: 0.35,
+      releaseSeconds: 0.55,
+    },
 
     // --- variation -----------------------------------------------------------
     // The reward for automating well used to be a LOUDER MACHINE GUN. At 300
@@ -2439,7 +2603,8 @@ export const REQUIRED_CONFIG_KEYS = [
   'gamble.flashHzStart',
   'gamble.flashHzEnd',
   'gamble.cooldownSeconds',
-  'gamble.cost',
+  'gamble.rollCost',
+  'gamble.boxPrice',
   'gamble.prizePower',
   'gamble.duckPrizeMin',
   'gamble.duckPrizeMax',
@@ -2544,6 +2709,15 @@ export const REQUIRED_CONFIG_KEYS = [
   'render.hint.pathLift',
   'render.hint.circleSegments',
   'render.hint.circleLift',
+  'render.contact.enabled',
+  'render.contact.opacity',
+  'render.contact.spread',
+  'render.contact.lift',
+  'render.contact.polygonOffsetFactor',
+  'render.contact.polygonOffsetUnits',
+  'render.contact.textureSize',
+  'render.contact.core',
+  'render.contact.capacity',
   'perf.maxSampleMs',
   'perf.visibilityGraceMs',
   'perf.sampleWindowMs',
@@ -3104,6 +3278,24 @@ export const REQUIRED_CONFIG_KEYS = [
   'audio.maxDistance',
   'audio.minAudibleGain',
   'audio.logMax',
+  // audio.loopsPath and audio.reverb.earlyTaps are deliberately NOT here:
+  // assertConfig registers NUMERIC keys, and those two are a string and a list
+  // of pairs. Listing them would fail the boot check on a correct config.
+  'audio.reverb.enabled',
+  'audio.reverb.seconds',
+  'audio.reverb.damping',
+  'audio.reverb.preDelaySeconds',
+  'audio.reverb.stereo',
+  'audio.reverb.wetGain',
+  'audio.reverb.dryMeters',
+  'audio.reverb.wetMeters',
+  'audio.reverb.sendMax',
+  'audio.reverb.sendUnpositioned',
+  'audio.duck.enabled',
+  'audio.duck.depthDb',
+  'audio.duck.attackSeconds',
+  'audio.duck.holdSeconds',
+  'audio.duck.releaseSeconds',
   'audio.loops.fadeInSeconds',
   'audio.loops.fadeOutSeconds',
   'audio.loops.countExponent',

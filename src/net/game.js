@@ -1496,7 +1496,12 @@ export function createNetGame(deps) {
     },
 
     onReject(r) {
-      if (hud && typeof hud.showCap === 'function' && r && r.reason) hud.showCap(r.reason);
+      // Through the same translator solo uses. Without it a CLIENT saw the raw
+      // code -- `overlap`, `too_far` -- where a solo player saw the sentence,
+      // so the one player who most needs telling why got the least.
+      if (hud && typeof hud.showCap === 'function' && r && r.reason) {
+        hud.showCap(typeof deps.reasonText === 'function' ? deps.reasonText(r.reason) : r.reason);
+      }
       if (typeof onReject === 'function') onReject(r);
     },
   };

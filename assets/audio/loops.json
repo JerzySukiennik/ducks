@@ -1,0 +1,37 @@
+{
+ "machine_loop": {
+  "loopStart": 0.15,
+  "loopEnd": 4.0,
+  "bodySeconds": 3.85
+ },
+ "fan_loop": {
+  "loopStart": 0.15,
+  "loopEnd": 3.95,
+  "bodySeconds": 3.8
+ },
+ "conveyor_loop": {
+  "loopStart": 0.15,
+  "loopEnd": 4.0,
+  "bodySeconds": 3.85
+ },
+ "vacuum_loop": {
+  "loopStart": 0.15,
+  "loopEnd": 3.0,
+  "bodySeconds": 2.85
+ },
+ "cart_loop": {
+  "loopStart": 0.15,
+  "loopEnd": 2.53,
+  "bodySeconds": 2.38
+ },
+ "world_ambient": {
+  "loopStart": 0.15,
+  "loopEnd": 7.9,
+  "bodySeconds": 7.75
+ },
+ "pit_ambient": {
+  "loopStart": 0.15,
+  "loopEnd": 7.9,
+  "bodySeconds": 7.75
+ }
+}

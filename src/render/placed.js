@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import config from '../config.js';
 import { propMaterial } from './props.js';
 import { detectRotor } from './rotor.js';
+import { contactMaterial } from './materials.js';
 import {
   shapeOf, blowDirection, setBlowQuaternion, streamGeometry, createAirMaterial,
 } from './airflow.js';
@@ -239,6 +240,73 @@ export function createPlaced({ scene, models, world, groups }) {
   let nextKey = 1;
   let lastAnimTime = null;
 
+  // --- the contact shadow ----------------------------------------------------
+  //
+  // ONE pool for every placed object in the world, not one per model, because
+  // the patch is the same quad every time -- only the matrix differs. That is
+  // what makes this one extra draw call rather than one per model, and it is
+  // why it is worth doing at all: the measurement it exists to fix is in
+  // config.render.contact, and the reasoning is in materials.js.
+  //
+  // It is deliberately built lazily, on the first object that needs it, so a
+  // world with nothing placed in it does not pay for a pool or a texture.
+  let contactPool = null;
+
+  function contactPoolFor() {
+    if (contactPool) return contactPool;
+    if (!config.render.contact.enabled) return null;
+    // A unit quad in the XZ plane, facing up. PlaneGeometry is built in XY, so
+    // it is rotated once here rather than by every instance matrix.
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.rotateX(-Math.PI / 2);
+    contactPool = createPool(scene, geo, contactMaterial(),
+      Math.round(config.render.contact.capacity),
+      // Neither casts nor receives. It is not a shadow, it is the darkening a
+      // single directional light cannot produce; putting it in the shadow pass
+      // would have it occlude itself and the plate under it.
+      { name: 'pool:contact', noShadow: true, renderOrder: 1 });
+    pools.set(':contact', contactPool);
+    return contactPool;
+  }
+
+  // Sized from the COLLIDER, not the mesh: the collider is the object's real
+  // footprint on the grid, and it is the one number that is authored in world
+  // metres for every row. Reading the mesh bounding box instead would give a
+  // fan its blade sweep and a lamp post its lamp head.
+  function writeContact(rec) {
+    if (!rec.contactPool || rec.contactSlot < 0) return;
+    const c = config.render.contact;
+    const w = Math.max(0.05, rec.hx * 2 * c.spread);
+    const d = Math.max(0.05, rec.hz * 2 * c.spread);
+    // The plate, not the object's centre: an object whose collider is sunk into
+    // the ground or floating above it still contacts the floor at y = 0, and
+    // that is where the darkening belongs.
+    _q.setFromAxisAngle(_rotorAxis.set(0, 1, 0), rec.yaw);
+    _streamM.compose(
+      _p.set(rec.x, c.lift, rec.z),
+      _q,
+      _s.set(w, 1, d)
+    );
+    rec.contactPool.set(rec.contactSlot, _streamM);
+  }
+
+  function attachContact(rec) {
+    const pool = contactPoolFor();
+    if (!pool) return;
+    const slot = pool.alloc();
+    if (slot < 0) return;
+    rec.contactPool = pool;
+    rec.contactSlot = slot;
+    writeContact(rec);
+  }
+
+  function releaseContact(rec) {
+    if (!rec.contactPool || rec.contactSlot < 0) return;
+    rec.contactPool.release(rec.contactSlot);
+    rec.contactPool = null;
+    rec.contactSlot = -1;
+  }
+
   function poolFor(name) {
     let p = pools.get(name);
     if (p) return p;
@@ -361,11 +429,16 @@ export function createPlaced({ scene, models, world, groups }) {
       lidSlot: -1,
       lidAngle: 0,
       lid: null,
+      // The patch of darkened floor this object stands on. See the block above
+      // createPool's caller for what it is and the measurement it answers.
+      contactPool: null,
+      contactSlot: -1,
     };
     attachWheel(rec, item);
     attachRotor(rec, item);
     attachStream(rec, item);
     attachLid(rec, item);
+    attachContact(rec);
     objects.push(rec);
     return rec;
   }
@@ -749,6 +822,9 @@ export function createPlaced({ scene, models, world, groups }) {
     if (i < 0) return false;
     objects.splice(i, 1);
     rec.pool.release(rec.slot);
+    // The floor stops being darkened when the thing standing on it goes. A
+    // patch left behind is a shadow with nothing casting it.
+    releaseContact(rec);
     if (rec.wheelPool && rec.wheelSlot >= 0) {
       rec.wheelPool.release(rec.wheelSlot);
       rec.wheelPool = null;

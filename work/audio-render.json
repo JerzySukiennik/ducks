@@ -1,0 +1,1671 @@
+{
+ "validation": {
+  "rows": [
+   {
+    "file": "world_ambient.mp3",
+    "mine": -31.9,
+    "ffmpeg": -31.9,
+    "deltaLU": -0.001
+   },
+   {
+    "file": "pit_ambient.mp3",
+    "mine": -31.29,
+    "ffmpeg": -31.3,
+    "deltaLU": 0.011
+   },
+   {
+    "file": "machine_loop.mp3",
+    "mine": -43.48,
+    "ffmpeg": -43.5,
+    "deltaLU": 0.023
+   },
+   {
+    "file": "fan_loop.mp3",
+    "mine": -13.42,
+    "ffmpeg": -13.4,
+    "deltaLU": -0.025
+   },
+   {
+    "file": "conveyor_loop.mp3",
+    "mine": -21.67,
+    "ffmpeg": -21.7,
+    "deltaLU": 0.028
+   },
+   {
+    "file": "pit_burp.mp3",
+    "mine": -22.1,
+    "ffmpeg": -22.1,
+    "deltaLU": 0.004
+   },
+   {
+    "file": "player_fall.mp3",
+    "mine": -14.35,
+    "ffmpeg": -14.4,
+    "deltaLU": 0.051
+   },
+   {
+    "file": "prestige.mp3",
+    "mine": -18.23,
+    "ffmpeg": -18.2,
+    "deltaLU": -0.034
+   }
+  ],
+  "maxAbsDeltaLU": 0.051,
+  "pass": true
+ },
+ "work": [
+  {
+   "clip": "ui_click",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 2.6,
+    "sourceBandDb": -26.38,
+    "addedBandDb": -35.38,
+    "relativeDb": -9.0,
+    "gain": 3.3161
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 4.33,
+   "limiterDb": -9.0,
+   "achievedDb": -13.06,
+   "offTargetDb": -2.86,
+   "hitGrCap": true,
+   "crestDb": 12.06,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.22,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "ui_hover",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 4.11,
+    "sourceBandDb": -44.7,
+    "addedBandDb": -53.7,
+    "relativeDb": -9.0,
+    "gain": 1.92848
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 9.83,
+   "limiterDb": -9.0,
+   "achievedDb": -12.65,
+   "offTargetDb": -2.45,
+   "hitGrCap": true,
+   "crestDb": 11.65,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.51,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "tab_switch",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -15.71,
+    "sourceBandDb": -54.22,
+    "addedBandDb": -69.93,
+    "relativeDb": -15.71,
+    "gain": 0.24407
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 19574
+   },
+   "matchGainDb": -5.99,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 6.41,
+   "encodePasses": 1,
+   "decodedPeakDb": -3.81,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "shop_open",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -50.51,
+    "sourceBandDb": -78.77,
+    "addedBandDb": -129.27,
+    "relativeDb": -50.51,
+    "gain": 0.0028
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -8.1,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 1.21,
+   "encodePasses": 1,
+   "decodedPeakDb": -9.03,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "shop_close",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 0.58,
+    "sourceBandDb": -93.94,
+    "addedBandDb": -102.94,
+    "relativeDb": -9.0,
+    "gain": 3.42689
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -5.16,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 4.1,
+   "encodePasses": 1,
+   "decodedPeakDb": -6.1,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "buy_ok",
+   "category": "ui",
+   "topExtension": {
+    "applied": false,
+    "reason": "no energy under the split"
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -5.24,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 4.02,
+   "encodePasses": 1,
+   "decodedPeakDb": -6.16,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "buy_fail",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -2.95,
+    "sourceBandDb": -33.56,
+    "addedBandDb": -42.56,
+    "relativeDb": -9.0,
+    "gain": 1.18876
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -3.91,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 8.22,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.08,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "build_invalid",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -8.27,
+    "sourceBandDb": -60.16,
+    "addedBandDb": -69.16,
+    "relativeDb": -9.0,
+    "gain": 0.19233
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -5.02,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 3.97,
+   "encodePasses": 1,
+   "decodedPeakDb": -6.24,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "build_rotate",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 0.24,
+    "sourceBandDb": -79.98,
+    "addedBandDb": -88.98,
+    "relativeDb": -9.0,
+    "gain": 0.00525
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 3.5,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 5.83,
+   "encodePasses": 1,
+   "decodedPeakDb": -4.38,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "cash",
+   "category": "ui",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 1.01,
+    "sourceBandDb": -36.93,
+    "addedBandDb": -45.93,
+    "relativeDb": -9.0,
+    "gain": 3.71155
+   },
+   "trimmedSamples": {
+    "head": 796,
+    "tail": 367
+   },
+   "matchGainDb": 4.33,
+   "limiterDb": -7.42,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 9.2,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.53,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "duck_squeak",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 8.17,
+    "sourceBandDb": -25.6,
+    "addedBandDb": -34.6,
+    "relativeDb": -9.0,
+    "gain": 5.37349
+   },
+   "trimmedSamples": {
+    "head": 615,
+    "tail": 0
+   },
+   "matchGainDb": -2.37,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 9.17,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.21,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "duck_impact",
+   "category": "world",
+   "topExtension": {
+    "applied": false,
+    "reason": "no energy under the split"
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -6.58,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 5.67,
+   "encodePasses": 1,
+   "decodedPeakDb": -4.53,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "footstep",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -3.49,
+    "sourceBandDb": -78.89,
+    "addedBandDb": -87.89,
+    "relativeDb": -9.0,
+    "gain": 0.1487
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 5.82,
+   "limiterDb": -9.0,
+   "achievedDb": -12.48,
+   "offTargetDb": -2.28,
+   "hitGrCap": true,
+   "crestDb": 11.48,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.02,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "grab",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -2.59,
+    "sourceBandDb": -50.88,
+    "addedBandDb": -59.88,
+    "relativeDb": -9.0,
+    "gain": 0.32061
+   },
+   "trimmedSamples": {
+    "head": 990,
+    "tail": 639
+   },
+   "matchGainDb": 19.4,
+   "limiterDb": -6.91,
+   "achievedDb": -10.33,
+   "offTargetDb": -0.13,
+   "hitGrCap": false,
+   "crestDb": 9.33,
+   "encodePasses": 3,
+   "decodedPeakDb": -1.06,
+   "encodeTrimDb": -0.28
+  },
+  {
+   "clip": "throw",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -3.31,
+    "sourceBandDb": -42.02,
+    "addedBandDb": -51.02,
+    "relativeDb": -9.0,
+    "gain": 1.96383
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 0.43,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 8.61,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.0,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "jump_land",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -4.53,
+    "sourceBandDb": -78.57,
+    "addedBandDb": -87.57,
+    "relativeDb": -9.0,
+    "gain": 2.3618
+   },
+   "trimmedSamples": {
+    "head": 50,
+    "tail": 0
+   },
+   "matchGainDb": -0.09,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 5.92,
+   "encodePasses": 1,
+   "decodedPeakDb": -4.28,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "broom",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -4.86,
+    "sourceBandDb": -53.43,
+    "addedBandDb": -62.43,
+    "relativeDb": -9.0,
+    "gain": 0.30292
+   },
+   "trimmedSamples": {
+    "head": 642,
+    "tail": 0
+   },
+   "matchGainDb": 5.33,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 8.19,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.1,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "crank_click",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -3.32,
+    "sourceBandDb": -40.66,
+    "addedBandDb": -49.66,
+    "relativeDb": -9.0,
+    "gain": 1.94101
+   },
+   "trimmedSamples": {
+    "head": 941,
+    "tail": 0
+   },
+   "matchGainDb": 4.46,
+   "limiterDb": -5.56,
+   "achievedDb": -10.31,
+   "offTargetDb": -0.11,
+   "hitGrCap": false,
+   "crestDb": 9.31,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.27,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "machine_eject",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -9.95,
+    "sourceBandDb": -70.63,
+    "addedBandDb": -80.59,
+    "relativeDb": -9.95,
+    "gain": 0.07393
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 10.16,
+   "limiterDb": -7.3,
+   "achievedDb": -10.21,
+   "offTargetDb": -0.01,
+   "hitGrCap": false,
+   "crestDb": 9.21,
+   "encodePasses": 2,
+   "decodedPeakDb": -1.09,
+   "encodeTrimDb": -0.12
+  },
+  {
+   "clip": "machine_jam",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -34.83,
+    "sourceBandDb": -62.64,
+    "addedBandDb": -97.47,
+    "relativeDb": -34.83,
+    "gain": 0.00117
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 1.36,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 5.9,
+   "encodePasses": 1,
+   "decodedPeakDb": -4.27,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "tube_drop",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -7.59,
+    "sourceBandDb": -46.08,
+    "addedBandDb": -55.08,
+    "relativeDb": -9.0,
+    "gain": 1.34509
+   },
+   "trimmedSamples": {
+    "head": 142,
+    "tail": 0
+   },
+   "matchGainDb": -5.07,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 7.02,
+   "encodePasses": 1,
+   "decodedPeakDb": -3.08,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "box_spill",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -0.91,
+    "sourceBandDb": -62.06,
+    "addedBandDb": -71.06,
+    "relativeDb": -9.0,
+    "gain": 1.10801
+   },
+   "trimmedSamples": {
+    "head": 354,
+    "tail": 17712
+   },
+   "matchGainDb": 18.28,
+   "limiterDb": -9.0,
+   "achievedDb": -12.45,
+   "offTargetDb": -2.25,
+   "hitGrCap": true,
+   "crestDb": 11.45,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.99,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "build_place",
+   "category": "world",
+   "topExtension": {
+    "applied": false,
+    "reason": "no energy under the split"
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -3.18,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 8.99,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.22,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "build_demolish",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 8.81,
+    "sourceBandDb": -26.41,
+    "addedBandDb": -35.41,
+    "relativeDb": -9.0,
+    "gain": 13.20248
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -2.44,
+   "limiterDb": -4.47,
+   "achievedDb": -10.29,
+   "offTargetDb": -0.09,
+   "hitGrCap": false,
+   "crestDb": 9.29,
+   "encodePasses": 2,
+   "decodedPeakDb": -1.24,
+   "encodeTrimDb": -0.76
+  },
+  {
+   "clip": "player_fall",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -8.59,
+    "sourceBandDb": -47.02,
+    "addedBandDb": -56.02,
+    "relativeDb": -9.0,
+    "gain": 0.74589
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -5.77,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 4.11,
+   "encodePasses": 1,
+   "decodedPeakDb": -6.17,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "pit_burp",
+   "category": "world",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -20.99,
+    "sourceBandDb": -63.13,
+    "addedBandDb": -84.12,
+    "relativeDb": -20.99,
+    "gain": 0.02881
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -0.38,
+   "limiterDb": 0.0,
+   "achievedDb": -10.2,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 9.01,
+   "encodePasses": 1,
+   "decodedPeakDb": -1.21,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "achievement",
+   "category": "stinger",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -10.98,
+    "sourceBandDb": -39.75,
+    "addedBandDb": -50.73,
+    "relativeDb": -10.98,
+    "gain": 0.54222
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -2.92,
+   "limiterDb": 0.0,
+   "achievedDb": -11.4,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 7.33,
+   "encodePasses": 1,
+   "decodedPeakDb": -4.05,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "session_end",
+   "category": "stinger",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -5.81,
+    "sourceBandDb": -52.35,
+    "addedBandDb": -61.35,
+    "relativeDb": -9.0,
+    "gain": 0.1116
+   },
+   "trimmedSamples": {
+    "head": 1629,
+    "tail": 0
+   },
+   "matchGainDb": 1.58,
+   "limiterDb": 0.0,
+   "achievedDb": -11.4,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 6.13,
+   "encodePasses": 1,
+   "decodedPeakDb": -5.24,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "prestige",
+   "category": "stinger",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 1.57,
+    "sourceBandDb": -48.18,
+    "addedBandDb": -57.18,
+    "relativeDb": -9.0,
+    "gain": 1.03928
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": 0.77,
+   "limiterDb": 0.0,
+   "achievedDb": -11.4,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 6.88,
+   "encodePasses": 1,
+   "decodedPeakDb": -5.16,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "duck_rare",
+   "category": "stinger",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -1.36,
+    "sourceBandDb": -32.9,
+    "addedBandDb": -41.9,
+    "relativeDb": -9.0,
+    "gain": 5.14267
+   },
+   "trimmedSamples": {
+    "head": 160,
+    "tail": 0
+   },
+   "matchGainDb": -4.0,
+   "limiterDb": 0.0,
+   "achievedDb": -11.4,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 9.9,
+   "encodePasses": 1,
+   "decodedPeakDb": -2.85,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "player_join",
+   "category": "stinger",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -45.64,
+    "sourceBandDb": -71.85,
+    "addedBandDb": -117.5,
+    "relativeDb": -45.64,
+    "gain": 8e-05
+   },
+   "trimmedSamples": {
+    "head": 0,
+    "tail": 0
+   },
+   "matchGainDb": -7.36,
+   "limiterDb": 0.0,
+   "achievedDb": -11.4,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 3.07,
+   "encodePasses": 1,
+   "decodedPeakDb": -8.34,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "machine_loop",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": 3.11,
+    "sourceBandDb": -59.38,
+    "addedBandDb": -68.38,
+    "relativeDb": -9.0,
+    "gain": 0.08231
+   },
+   "seamWork": {
+    "crossfadeSamples": 6615,
+    "rotatedSamples": 90950,
+    "crossfadeMs": 150.0,
+    "wrapScoreDb": 0.046
+   },
+   "matchGainDb": 20.12,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 12.55,
+   "seamAfter": {
+    "sampleStep": 0.010659,
+    "sampleStepDb": -39.45,
+    "stepVsTypical": 0.299,
+    "firstSample": 0.008613,
+    "lastSample": -0.002046,
+    "levelStepDb@5ms": 0.04,
+    "levelStepDb@20ms": 0.05,
+    "levelStepDb@60ms": 0.02,
+    "worstLevelStepDb": 0.05
+   },
+   "loop": {
+    "bodySamples": 169785,
+    "bodySeconds": 3.85,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 4.0
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -10.91,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "fan_loop",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -7.76,
+    "sourceBandDb": -48.76,
+    "addedBandDb": -57.76,
+    "relativeDb": -9.0,
+    "gain": 1.15499
+   },
+   "seamWork": {
+    "crossfadeSamples": 8820,
+    "rotatedSamples": 105733,
+    "crossfadeMs": 200.0,
+    "wrapScoreDb": 0.196
+   },
+   "matchGainDb": -9.53,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 12.58,
+   "seamAfter": {
+    "sampleStep": 0.005247,
+    "sampleStepDb": -45.6,
+    "stepVsTypical": 0.736,
+    "firstSample": -0.109254,
+    "lastSample": -0.114501,
+    "levelStepDb@5ms": 0.05,
+    "levelStepDb@20ms": 0.2,
+    "levelStepDb@60ms": 0.05,
+    "worstLevelStepDb": 0.2
+   },
+   "loop": {
+    "bodySamples": 167580,
+    "bodySeconds": 3.8,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 3.95
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -10.24,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "conveyor_loop",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -2.74,
+    "sourceBandDb": -57.79,
+    "addedBandDb": -66.79,
+    "relativeDb": -9.0,
+    "gain": 1.18178
+   },
+   "seamWork": {
+    "crossfadeSamples": 6615,
+    "rotatedSamples": 169137,
+    "crossfadeMs": 150.0,
+    "wrapScoreDb": 0.165
+   },
+   "matchGainDb": -1.19,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 13.76,
+   "seamAfter": {
+    "sampleStep": 0.000177,
+    "sampleStepDb": -75.03,
+    "stepVsTypical": 0.04,
+    "firstSample": 0.220956,
+    "lastSample": 0.220778,
+    "levelStepDb@5ms": 0.16,
+    "levelStepDb@20ms": -0.16,
+    "levelStepDb@60ms": 0.13,
+    "worstLevelStepDb": 0.16
+   },
+   "loop": {
+    "bodySamples": 169785,
+    "bodySeconds": 3.85,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 4.0
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -9.13,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "vacuum_loop",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -9.42,
+    "sourceBandDb": -47.77,
+    "addedBandDb": -57.19,
+    "relativeDb": -9.42,
+    "gain": 0.273
+   },
+   "seamWork": {
+    "crossfadeSamples": 6615,
+    "rotatedSamples": 56391,
+    "crossfadeMs": 150.0,
+    "wrapScoreDb": 0.066
+   },
+   "matchGainDb": -5.53,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 11.42,
+   "seamAfter": {
+    "sampleStep": 0.011761,
+    "sampleStepDb": -38.59,
+    "stepVsTypical": 0.81,
+    "firstSample": 0.009145,
+    "lastSample": -0.002616,
+    "levelStepDb@5ms": -0.07,
+    "levelStepDb@20ms": 0.01,
+    "levelStepDb@60ms": -0.01,
+    "worstLevelStepDb": 0.07
+   },
+   "loop": {
+    "bodySamples": 125685,
+    "bodySeconds": 2.85,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 3.0
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -11.4,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "cart_loop",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -4.8,
+    "sourceBandDb": -52.72,
+    "addedBandDb": -61.72,
+    "relativeDb": -9.0,
+    "gain": 1.24183
+   },
+   "seamWork": {
+    "crossfadeSamples": 5292,
+    "rotatedSamples": 74424,
+    "crossfadeMs": 120.0,
+    "wrapScoreDb": 0.196
+   },
+   "matchGainDb": -1.26,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 18.68,
+   "seamAfter": {
+    "sampleStep": 0.009944,
+    "sampleStepDb": -40.05,
+    "stepVsTypical": 0.891,
+    "firstSample": 0.007192,
+    "lastSample": -0.002752,
+    "levelStepDb@5ms": 0.17,
+    "levelStepDb@20ms": -0.13,
+    "levelStepDb@60ms": 0.2,
+    "worstLevelStepDb": 0.2
+   },
+   "loop": {
+    "bodySamples": 104958,
+    "bodySeconds": 2.38,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 2.53
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -4.38,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "world_ambient",
+   "category": "loop",
+   "topExtension": {
+    "applied": true,
+    "slopeDbPerOctave": -2.59,
+    "sourceBandDb": -89.14,
+    "addedBandDb": -98.14,
+    "relativeDb": -9.0,
+    "gain": 1.68414
+   },
+   "seamWork": {
+    "crossfadeSamples": 11025,
+    "rotatedSamples": 10319,
+    "crossfadeMs": 250.0,
+    "wrapScoreDb": 0.047
+   },
+   "matchGainDb": 8.91,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": 0.0,
+   "hitGrCap": false,
+   "crestDb": 13.83,
+   "seamAfter": {
+    "sampleStep": 0.001809,
+    "sampleStepDb": -54.85,
+    "stepVsTypical": 0.791,
+    "firstSample": -0.079969,
+    "lastSample": -0.07816,
+    "levelStepDb@5ms": -0.03,
+    "levelStepDb@20ms": 0.05,
+    "levelStepDb@60ms": -0.04,
+    "worstLevelStepDb": 0.05
+   },
+   "loop": {
+    "bodySamples": 341775,
+    "bodySeconds": 7.75,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 7.9
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -9.15,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "pit_ambient",
+   "category": "loop",
+   "topExtension": {
+    "applied": false,
+    "reason": "no energy under the split"
+   },
+   "seamWork": {
+    "crossfadeSamples": 11025,
+    "rotatedSamples": 288773,
+    "crossfadeMs": 250.0,
+    "wrapScoreDb": 0.075
+   },
+   "matchGainDb": 8.39,
+   "limiterDb": 0.0,
+   "achievedDb": -23.0,
+   "offTargetDb": -0.0,
+   "hitGrCap": false,
+   "crestDb": 14.39,
+   "seamAfter": {
+    "sampleStep": 0.000227,
+    "sampleStepDb": -72.87,
+    "stepVsTypical": 0.126,
+    "firstSample": 0.195772,
+    "lastSample": 0.195544,
+    "levelStepDb@5ms": -0.02,
+    "levelStepDb@20ms": -0.07,
+    "levelStepDb@60ms": -0.05,
+    "worstLevelStepDb": 0.07
+   },
+   "loop": {
+    "bodySamples": 341775,
+    "bodySeconds": 7.75,
+    "guardSamples": 6615,
+    "loopStart": 0.15,
+    "loopEnd": 7.9
+   },
+   "encodePasses": 1,
+   "decodedPeakDb": -8.59,
+   "encodeTrimDb": 0.0
+  },
+  {
+   "clip": "cutscene",
+   "category": "music",
+   "limiterDb": -1.91,
+   "samplesBefore": 1323000,
+   "samplesAfter": 1323000,
+   "durationHeld": true,
+   "encodePasses": 2,
+   "decodedPeakDb": -1.36,
+   "durationS": 30.0
+  }
+ ],
+ "mix": [
+  {
+   "clip": "ui_click",
+   "category": "ui",
+   "fileBeforeDb": -9.13,
+   "fileAfterDb": -13.17,
+   "gainBefore": 0.28,
+   "gainAfter": 0.4458,
+   "effectiveBeforeDb": -20.19,
+   "effectiveAfterDb": -20.19,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "ui_hover",
+   "category": "ui",
+   "fileBeforeDb": -14.83,
+   "fileAfterDb": -12.7,
+   "gainBefore": 0.18,
+   "gainAfter": 0.1409,
+   "effectiveBeforeDb": -29.72,
+   "effectiveAfterDb": -29.72,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "tab_switch",
+   "category": "ui",
+   "fileBeforeDb": -4.15,
+   "fileAfterDb": -10.26,
+   "gainBefore": 0.28,
+   "gainAfter": 0.5658,
+   "effectiveBeforeDb": -15.21,
+   "effectiveAfterDb": -15.21,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "shop_open",
+   "category": "ui",
+   "fileBeforeDb": -2.03,
+   "fileAfterDb": -10.18,
+   "gainBefore": 0.44,
+   "gainAfter": 1.0,
+   "effectiveBeforeDb": -9.16,
+   "effectiveAfterDb": -10.18,
+   "effectiveDeltaDb": -1.02,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "shop_close",
+   "category": "ui",
+   "fileBeforeDb": -5.0,
+   "fileAfterDb": -10.2,
+   "gainBefore": 0.42,
+   "gainAfter": 0.7643,
+   "effectiveBeforeDb": -12.54,
+   "effectiveAfterDb": -12.53,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "buy_ok",
+   "category": "ui",
+   "fileBeforeDb": -4.91,
+   "fileAfterDb": -10.2,
+   "gainBefore": 0.52,
+   "gainAfter": 0.9561,
+   "effectiveBeforeDb": -10.59,
+   "effectiveAfterDb": -10.59,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "buy_fail",
+   "category": "ui",
+   "fileBeforeDb": -6.23,
+   "fileAfterDb": -10.24,
+   "gainBefore": 0.48,
+   "gainAfter": 0.7616,
+   "effectiveBeforeDb": -12.61,
+   "effectiveAfterDb": -12.61,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "build_invalid",
+   "category": "ui",
+   "fileBeforeDb": -5.13,
+   "fileAfterDb": -10.19,
+   "gainBefore": 0.44,
+   "gainAfter": 0.7879,
+   "effectiveBeforeDb": -12.26,
+   "effectiveAfterDb": -12.26,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "build_rotate",
+   "category": "ui",
+   "fileBeforeDb": -13.66,
+   "fileAfterDb": -10.19,
+   "gainBefore": 0.2,
+   "gainAfter": 0.1341,
+   "effectiveBeforeDb": -27.64,
+   "effectiveAfterDb": -27.64,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "cash",
+   "category": "ui",
+   "fileBeforeDb": -10.44,
+   "fileAfterDb": -10.4,
+   "gainBefore": 0.44,
+   "gainAfter": 0.438,
+   "effectiveBeforeDb": -17.57,
+   "effectiveAfterDb": -17.57,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "duck_squeak",
+   "category": "world",
+   "fileBeforeDb": -9.45,
+   "fileAfterDb": -10.74,
+   "gainBefore": 0.34,
+   "gainAfter": 0.3944,
+   "effectiveBeforeDb": -18.82,
+   "effectiveAfterDb": -18.82,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "duck_impact",
+   "category": "world",
+   "fileBeforeDb": -3.57,
+   "fileAfterDb": -10.2,
+   "gainBefore": 0.2,
+   "gainAfter": 0.4291,
+   "effectiveBeforeDb": -17.55,
+   "effectiveAfterDb": -17.55,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "footstep",
+   "category": "world",
+   "fileBeforeDb": -9.42,
+   "fileAfterDb": -12.48,
+   "gainBefore": 0.28,
+   "gainAfter": 0.3983,
+   "effectiveBeforeDb": -20.48,
+   "effectiveAfterDb": -20.48,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "grab",
+   "category": "world",
+   "fileBeforeDb": -26.75,
+   "fileAfterDb": -10.58,
+   "gainBefore": 0.32,
+   "gainAfter": 0.0497,
+   "effectiveBeforeDb": -36.65,
+   "effectiveAfterDb": -36.65,
+   "effectiveDeltaDb": -0.01,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "throw",
+   "category": "world",
+   "fileBeforeDb": -11.0,
+   "fileAfterDb": -10.18,
+   "gainBefore": 0.38,
+   "gainAfter": 0.3458,
+   "effectiveBeforeDb": -19.4,
+   "effectiveAfterDb": -19.4,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "jump_land",
+   "category": "world",
+   "fileBeforeDb": -10.15,
+   "fileAfterDb": -10.2,
+   "gainBefore": 0.34,
+   "gainAfter": 0.342,
+   "effectiveBeforeDb": -19.52,
+   "effectiveAfterDb": -19.52,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "broom",
+   "category": "world",
+   "fileBeforeDb": -15.5,
+   "fileAfterDb": -10.18,
+   "gainBefore": 0.4,
+   "gainAfter": 0.2168,
+   "effectiveBeforeDb": -23.46,
+   "effectiveAfterDb": -23.46,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": true
+  },
+  {
+   "clip": "crank_click",
+   "category": "world",
+   "fileBeforeDb": -10.03,
+   "fileAfterDb": -10.56,
+   "gainBefore": 0.44,
+   "gainAfter": 0.4677,
+   "effectiveBeforeDb": -17.16,
+   "effectiveAfterDb": -17.16,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "machine_eject",
+   "category": "world",
+   "fileBeforeDb": -18.83,
+   "fileAfterDb": -10.34,
+   "gainBefore": 0.48,
+   "gainAfter": 0.1806,
+   "effectiveBeforeDb": -25.21,
+   "effectiveAfterDb": -25.21,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "machine_jam",
+   "category": "world",
+   "fileBeforeDb": -11.48,
+   "fileAfterDb": -10.2,
+   "gainBefore": 0.58,
+   "gainAfter": 0.5005,
+   "effectiveBeforeDb": -16.21,
+   "effectiveAfterDb": -16.21,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "tube_drop",
+   "category": "world",
+   "fileBeforeDb": -5.08,
+   "fileAfterDb": -10.21,
+   "gainBefore": 0.58,
+   "gainAfter": 1.0,
+   "effectiveBeforeDb": -9.81,
+   "effectiveAfterDb": -10.21,
+   "effectiveDeltaDb": -0.4,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "box_spill",
+   "category": "world",
+   "fileBeforeDb": -23.49,
+   "fileAfterDb": -12.51,
+   "gainBefore": 0.62,
+   "gainAfter": 0.1751,
+   "effectiveBeforeDb": -27.64,
+   "effectiveAfterDb": -27.64,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "build_place",
+   "category": "world",
+   "fileBeforeDb": -6.97,
+   "fileAfterDb": -10.21,
+   "gainBefore": 0.58,
+   "gainAfter": 0.8422,
+   "effectiveBeforeDb": -11.7,
+   "effectiveAfterDb": -11.7,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "build_demolish",
+   "category": "world",
+   "fileBeforeDb": -8.5,
+   "fileAfterDb": -11.54,
+   "gainBefore": 0.54,
+   "gainAfter": 0.7663,
+   "effectiveBeforeDb": -13.85,
+   "effectiveAfterDb": -13.85,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "player_fall",
+   "category": "world",
+   "fileBeforeDb": -4.41,
+   "fileAfterDb": -10.22,
+   "gainBefore": 0.58,
+   "gainAfter": 1.0,
+   "effectiveBeforeDb": -9.14,
+   "effectiveAfterDb": -10.22,
+   "effectiveDeltaDb": -1.08,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "pit_burp",
+   "category": "world",
+   "fileBeforeDb": -9.76,
+   "fileAfterDb": -10.17,
+   "gainBefore": 0.38,
+   "gainAfter": 0.3984,
+   "effectiveBeforeDb": -18.16,
+   "effectiveAfterDb": -18.16,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "achievement",
+   "category": "stinger",
+   "fileBeforeDb": -8.42,
+   "fileAfterDb": -11.37,
+   "gainBefore": 0.58,
+   "gainAfter": 0.8146,
+   "effectiveBeforeDb": -13.15,
+   "effectiveAfterDb": -13.15,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "session_end",
+   "category": "stinger",
+   "fileBeforeDb": -12.94,
+   "fileAfterDb": -11.44,
+   "gainBefore": 0.66,
+   "gainAfter": 0.5553,
+   "effectiveBeforeDb": -16.55,
+   "effectiveAfterDb": -16.55,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "prestige",
+   "category": "stinger",
+   "fileBeforeDb": -12.23,
+   "fileAfterDb": -11.41,
+   "gainBefore": 0.68,
+   "gainAfter": 0.6187,
+   "effectiveBeforeDb": -15.58,
+   "effectiveAfterDb": -15.58,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "duck_rare",
+   "category": "stinger",
+   "fileBeforeDb": -8.42,
+   "fileAfterDb": -11.57,
+   "gainBefore": 0.58,
+   "gainAfter": 0.8335,
+   "effectiveBeforeDb": -13.15,
+   "effectiveAfterDb": -13.15,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "player_join",
+   "category": "stinger",
+   "fileBeforeDb": -4.01,
+   "fileAfterDb": -11.41,
+   "gainBefore": 0.48,
+   "gainAfter": 1.0,
+   "effectiveBeforeDb": -10.39,
+   "effectiveAfterDb": -11.41,
+   "effectiveDeltaDb": -1.02,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "machine_loop",
+   "category": "loop",
+   "fileBeforeDb": -43.48,
+   "fileAfterDb": -22.73,
+   "gainBefore": 1.29,
+   "gainAfter": 0.1183,
+   "effectiveBeforeDb": -41.27,
+   "effectiveAfterDb": -41.27,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "fan_loop",
+   "category": "loop",
+   "fileBeforeDb": -13.42,
+   "fileAfterDb": -23.01,
+   "gainBefore": 0.06,
+   "gainAfter": 0.181,
+   "effectiveBeforeDb": -37.86,
+   "effectiveAfterDb": -37.86,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "conveyor_loop",
+   "category": "loop",
+   "fileBeforeDb": -21.67,
+   "fileAfterDb": -22.9,
+   "gainBefore": 0.065,
+   "gainAfter": 0.0749,
+   "effectiveBeforeDb": -45.41,
+   "effectiveAfterDb": -45.41,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "vacuum_loop",
+   "category": "loop",
+   "fileBeforeDb": -17.38,
+   "fileAfterDb": -23.0,
+   "gainBefore": 0.1,
+   "gainAfter": 0.191,
+   "effectiveBeforeDb": -37.38,
+   "effectiveAfterDb": -37.38,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "cart_loop",
+   "category": "loop",
+   "fileBeforeDb": -21.81,
+   "fileAfterDb": -23.03,
+   "gainBefore": 0.1,
+   "gainAfter": 0.1151,
+   "effectiveBeforeDb": -41.81,
+   "effectiveAfterDb": -41.81,
+   "effectiveDeltaDb": 0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "world_ambient",
+   "category": "loop",
+   "fileBeforeDb": -31.9,
+   "fileAfterDb": -23.03,
+   "gainBefore": 0.05,
+   "gainAfter": 0.018,
+   "effectiveBeforeDb": -57.92,
+   "effectiveAfterDb": -57.92,
+   "effectiveDeltaDb": -0.0,
+   "wasDefaulted": false
+  },
+  {
+   "clip": "pit_ambient",
+   "category": "loop",
+   "fileBeforeDb": -31.29,
+   "fileAfterDb": -22.99,
+   "gainBefore": 0.12,
+   "gainAfter": 0.0462,
+   "effectiveBeforeDb": -49.71,
+   "effectiveAfterDb": -49.7,
+   "effectiveDeltaDb": 0.01,
+   "wasDefaulted": false
+  }
+ ],
+ "maxEffectiveDeltaDb": 1.08,
+ "maxGainAfter": 1.0,
+ "spreadsBefore": {
+  "ui": {
+   "n": 10,
+   "minDb": -14.83,
+   "maxDb": -2.03,
+   "spreadDb": 12.8,
+   "medianDb": -5.68,
+   "withinTolerance": false
+  },
+  "world": {
+   "n": 16,
+   "minDb": -26.75,
+   "maxDb": -3.57,
+   "spreadDb": 23.18,
+   "medianDb": -9.89,
+   "withinTolerance": false
+  },
+  "stinger": {
+   "n": 5,
+   "minDb": -12.94,
+   "maxDb": -4.01,
+   "spreadDb": 8.93,
+   "medianDb": -8.42,
+   "withinTolerance": false
+  },
+  "loop": {
+   "n": 7,
+   "minDb": -43.48,
+   "maxDb": -13.42,
+   "spreadDb": 30.06,
+   "medianDb": -21.81,
+   "withinTolerance": false
+  }
+ },
+ "spreadsAfter": {
+  "ui": {
+   "n": 10,
+   "minDb": -13.17,
+   "maxDb": -10.18,
+   "spreadDb": 2.99,
+   "medianDb": -10.22,
+   "withinTolerance": true
+  },
+  "world": {
+   "n": 16,
+   "minDb": -12.51,
+   "maxDb": -10.17,
+   "spreadDb": 2.34,
+   "medianDb": -10.21,
+   "withinTolerance": true
+  },
+  "stinger": {
+   "n": 5,
+   "minDb": -11.57,
+   "maxDb": -11.37,
+   "spreadDb": 0.2,
+   "medianDb": -11.41,
+   "withinTolerance": true
+  },
+  "loop": {
+   "n": 7,
+   "minDb": -23.03,
+   "maxDb": -22.73,
+   "spreadDb": 0.3,
+   "medianDb": -23.0,
+   "withinTolerance": true
+  }
+ }
+}

@@ -302,11 +302,18 @@ function money(n) {
 // in the same column need different decimals or one of them is a lie and the
 // other is unreadable. Never more than four significant characters, so the
 // column stays a column.
+// ONE DECIMAL, never two. A row's description states the cadence in the unit
+// the machine actually has ("a duck every nine seconds"); this column states the
+// same fact per minute so that rows with different cadences can be compared in
+// one glance. Both are wanted -- the column cannot express a geyser and the
+// description cannot be ranked -- but the column was printing 6.67 against
+// "every nine seconds", and two decimal places on a count of ducks reads as a
+// third, more precise number rather than as a rounding of the same one. 6.7.
 function rate(n) {
   const v = Number(n) || 0;
   if (v >= 100) return Math.round(v).toLocaleString('en-US');
   if (v >= 10) return v.toFixed(1);
-  return v.toFixed(2);
+  return v.toFixed(1);
 }
 
 // m:ss. The countdown is the only clock in this interface and it has to be
@@ -414,7 +421,15 @@ export function createShopUI({
   foot.id = 'shop-foot';
   const msg = el('div', null, foot, '');
   msg.id = 'shop-msg';
-  el('div', null, foot, 'ESC or X close  ·  1-9 hotbar  ·  MMB rotate  ·  G reset  ·  X demolish');
+  // "ESC or X close ... X demolish" used ONE LETTER FOR TWO THINGS in one line:
+  // the first X was the panel's ✕ button, the second was the demolish key. A
+  // player reading left to right learns X closes the shop and then, four items
+  // later, that X demolishes -- and only one of those is a key at all. The ✕ is
+  // a button you click and needs no keyboard name in a keyboard list, so it does
+  // not get one; X now means the demolish key here and nowhere else.
+  // MMB is listed with R because they turn the same way -- see KEY_ROWS in
+  // src/ui/controls.js, which is the table this line is a short quotation of.
+  el('div', null, foot, 'Esc closes  ·  1-9 hotbar  ·  R or MMB rotate  ·  G reset the angle  ·  X demolish');
 
   // --- the prestige panel ----------------------------------------------------
   // Losing your factory must never be a surprise, so this is two clicks with the
@@ -536,7 +551,7 @@ export function createShopUI({
     presNow.textContent =
       'Ducks pay x' + q.multiplier.toFixed(2)
       + '  ·  taken ' + q.count + (q.count === 1 ? ' time' : ' times')
-      + '  ·  lifetime earnings $' + Math.round(q.totalEarned).toLocaleString('en-US');
+      + '  ·  money earned $' + Math.round(q.totalEarned).toLocaleString('en-US');
     const armed = q.available && allow.ok;
     presArmed = armed;
     presReason = allow.reason || q.reason || 'Prestige is not available yet';
@@ -554,7 +569,7 @@ export function createShopUI({
       + '  (' + q.gain.toFixed(2) + 'x better), forever, for the rest of the session.';
     bullets(loseList, q.lose.concat(
       q.placedLost ? [{ name: q.placedLost + ' object(s) standing on the plate', level: 1 }] : [],
-      q.money > 0 ? [{ name: '$' + Math.round(q.money).toLocaleString('en-US') + ' in the bank', level: 1 }] : []
+      q.money > 0 ? [{ name: '$' + Math.round(q.money).toLocaleString('en-US') + ' - all the money you have', level: 1 }] : []
     ), 'nothing yet');
     bullets(keepList, q.keep.concat(
       q.placedKept ? [{ name: q.placedKept + ' object(s) standing on the plate', level: 1 }] : []
@@ -579,7 +594,7 @@ export function createShopUI({
     // refusal is spoken by reroll() through the message row.
     rerollBtn.disabled = false;
     rerollBtn.classList.toggle('off', !can);
-    rerollBtn.title = can ? 'Roll a new shelf immediately' : 'Not enough funds';
+    rerollBtn.title = can ? 'Roll a new shelf immediately' : 'Not enough money';
   }
 
   // One row per catalog entry, in the order shop.listTab() returned them --

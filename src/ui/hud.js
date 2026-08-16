@@ -107,13 +107,34 @@ const CSS = `
 // same frame the duck lands, so a step waiting on the money would complete
 // before it could ever be read -- MEASURED: it advanced in the same batch as
 // `score`. The fact belongs on the step that causes it instead, which is why
-// step 3 says what the drop is FOR rather than only what to do.
+// the `score` step says what the drop is FOR rather than only what to do.
+//
+// `input` NAMES THE BUTTON THE STEP IS ASKING FOR, and it is the whole fix for
+// the defect where standing at the wheel put "Hold left click to carry a duck"
+// (this list) and "Hold left click to crank" (the crosshair prompt) on screen at
+// the same time -- two orders for one button, three centimetres apart. The
+// crosshair prompt is CONTEXTUAL and always right about what the button will do
+// right now; this list is a plan. So the plan yields: setPromptInput() tells the
+// HUD which button the prompt has claimed, and a step asking for that same
+// button hides itself while it is claimed. Never the other way round, and never
+// by hiding both -- exactly one instruction for a given input is on screen.
+//
+// The first step used to be "Walk to the workbench and crank out a duck" and it
+// completed on ARRIVING, so it ticked itself off having taught half of what it
+// said. One step, one verb, one trigger: walking is `walk`, cranking is `crank`.
+//
+// The list ends at `place`, not at `buy`. The purchase is not the end of the
+// loop the tutorial exists to teach -- a bought machine arrives through the
+// chute, goes into the hotbar and does nothing at all until it is put on the
+// ground, which was the one thing the player was never told.
 const STEPS = [
-  { id: 'walk', text: 'Walk to the workbench and crank out a duck' },
-  { id: 'grab', text: 'Hold left click to carry a duck' },
-  { id: 'score', text: 'Let go over the pit - every duck in it pays you' },
-  { id: 'shop', text: 'Money buys machines. The shop is the booth under the chute - press E at it' },
-  { id: 'buy', text: 'Buy a machine: it makes ducks without you, and that is the whole game' },
+  { id: 'walk', input: null, text: 'Walk to the workbench at the far end of the plate' },
+  { id: 'crank', input: 'lmb', text: 'Hold left click on the wheel until a duck pops out' },
+  { id: 'grab', input: 'lmb', text: 'Hold left click on a duck to carry it' },
+  { id: 'score', input: 'lmb', text: 'Let go over the pit - every duck in it pays you' },
+  { id: 'shop', input: 'e', text: 'Money buys machines. Press E at the booth under the chute' },
+  { id: 'buy', input: null, text: 'Buy a machine: it makes ducks without you, and that is the whole game' },
+  { id: 'place', input: 'lmb', text: 'It lands in the hotbar: press its number, R turns it, left click puts it down' },
 ];
 
 function el(tag, id, parent, html) {
@@ -165,13 +186,37 @@ export function createHUD(container) {
   let capTimer = 0;
   let lastMoney = null;
 
+  // Which input the crosshair prompt has claimed this frame, or null. Written
+  // by setPrompt() from the caller's own description of the prompt, never
+  // guessed by matching on the prompt's words.
+  let promptInput = null;
+
   function renderStep() {
     if (shown >= STEPS.length) {
       step.style.display = 'none';
       return;
     }
+    const s = STEPS[shown];
+    // The yield rule. A step asking for the same button the contextual prompt
+    // is currently talking about goes away until the prompt does: the prompt is
+    // right about NOW, the step is only right in general, and two instructions
+    // for one button is the contradiction this exists to make impossible.
+    if (s.input && promptInput && s.input === promptInput) {
+      step.style.display = 'none';
+      return;
+    }
     step.style.display = 'block';
-    step.textContent = STEPS[shown].text;
+    step.textContent = s.text;
+  }
+
+  // Called every frame from setPrompt(). Cheap: it only re-renders when the
+  // claim actually changed.
+  function setPromptInput(input) {
+    const next = input || null;
+    if (next === promptInput) return promptInput;
+    promptInput = next;
+    renderStep();
+    return promptInput;
   }
 
   // Exactly one hint is on screen at a time, and it only advances when the
@@ -220,14 +265,19 @@ export function createHUD(container) {
   // `bad` is the refusal state: the same box, said in red, with the crosshair
   // matching it instead of going green. Without it a refused placement lit the
   // crosshair as if the click were about to work.
-  function setPrompt(label, percent, bad) {
+  // `input` is the button this prompt is about ('lmb', 'e', ...), and it is what
+  // lets the onboarding line stand down rather than argue with it. A prompt with
+  // no input named claims nothing and the step keeps talking.
+  function setPrompt(label, percent, bad, input) {
     if (!label) {
+      setPromptInput(null);
       prompt.classList.remove('show');
       prompt.classList.remove('bad');
       cross.classList.remove('use');
       cross.classList.remove('warn');
       return;
     }
+    setPromptInput(input);
     prompt.innerHTML = percent === undefined || percent === null
       ? label
       : label + ' <b>' + Math.round(percent) + '%</b>';
@@ -275,12 +325,18 @@ export function createHUD(container) {
     completeStep,
     promptText: () => (prompt.classList.contains('show') ? prompt.textContent : ''),
     promptVisible: () => prompt.classList.contains('show'),
+    promptInput: () => promptInput,
     stepIndex: () => shown,
+    // What is ACTUALLY on screen, which is not the same question as which step
+    // is current: a step that has yielded the button to the prompt is still the
+    // current step and is showing nothing. The verification surface asks this
+    // one when it wants to count the instructions a player can read.
+    stepVisible: () => step.style.display !== 'none' && shown < STEPS.length,
     stepText: () => (shown < STEPS.length ? STEPS[shown].text : ''),
     stepsDone: () => ({ ...doneSteps }),
+    stepInputs: () => STEPS.map((s) => ({ id: s.id, input: s.input || null })),
     capVisible: () => cap.classList.contains('show'),
     moneyText: () => moneyVal.textContent,
-    keyBar: null,
     dispose() {
       clearTimeout(bumpTimer);
       clearTimeout(capTimer);

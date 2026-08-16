@@ -306,6 +306,13 @@ export function createGameAudio(deps) {
     // twelve notes going up, which is exactly the case the sample limiter exists
     // to collapse. pitsynth has its own voice cap and spaces the notes out.
     pitSynth.duck(simClock, { attenuation: sfx.attenuation(pitAt.x, pitAt.y, pitAt.z) });
+    // Dip the FACTORY under it. Every machine, fan, conveyor and cart the
+    // player bought runs on the loop bus, and the sound they bought them for
+    // was arriving on top of that rather than through it -- the better the
+    // automation, the more thoroughly the payoff was buried by it. The dip is
+    // scheduled on a node after the loop bus, so it never touches the ambience
+    // slider's own value; see bus.duckLoops().
+    bus.duckLoops();
     if ((tier || 0) >= A.rareTier) sfx.play('duck_rare', pitAt);
     scoredSinceBurp++;
   }
@@ -704,6 +711,8 @@ export function createGameAudio(deps) {
         pitSynth: pitSynth.state(simClock),
         gambleSynth: gambleSynth.state(),
         limiter: bus.limiter(),
+        reverb: bus.reverb(),
+        duck: bus.duckState(),
         cashPending: Math.round(cashPending * 100) / 100,
       };
     },
@@ -779,6 +788,20 @@ export function createGameAudio(deps) {
     },
     // The master chain, including how much the limiter is pulling down now.
     debugAudioLimiter: () => bus.limiter(),
+    // The room, as it exists in the graph: the convolver, the impulse response
+    // that was generated for it, and the send curve as numbers at fixed
+    // distances. Nothing here is read back off config.
+    debugAudioReverb: () => bus.reverb(),
+    debugAudioSend: (meters) => bus.reverbSendFor(meters),
+    // The loop bus duck: what the gain node is RIGHT NOW, how many times it has
+    // been triggered, and the lowest value seen since boot. Sample it across a
+    // pit run and the dip is a measurement rather than a claim.
+    debugAudioDuck: () => bus.duckState(),
+    // Trigger one directly, through the same call the payoff makes. Only for
+    // measuring; the game never calls this.
+    debugAudioDuckNow: (opts) => bus.duckLoops(opts || {}),
+    // Where every loop's seam actually is, in seconds into its buffer.
+    debugAudioLoopPoints: () => bus.loopPoints(),
     // Where a world position lands in the stereo image from where the player is
     // currently looking. -1 hard left, +1 hard right.
     debugAudioPan: (x, y, z) => sfx.panFor(x, y === undefined ? 0 : y, z),

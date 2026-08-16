@@ -349,6 +349,136 @@ export function decalTexture() {
   return decalTex;
 }
 
+// --- contact shadow ---------------------------------------------------------
+//
+// THE ONE THING THAT SEPARATES A PLACED OBJECT FROM THE CONCRETE.
+//
+// The defect this exists to fix, measured in the real 480 px backbuffer with a
+// Duck Press and a Machine standing on clean plate at 10 m: the floor around
+// the object read luminance 88 and the machine's own grey body read 80. That is
+// a contrast ratio of 1.10:1 across the boundary the eye is supposed to use to
+// find the object's edge -- so the only thing doing the separating was the thin
+// amber trim, which at this resolution is ONE pixel. A critic put it exactly
+// that way ("my placed Duck Press separated from the floor only by its edging")
+// and the number agrees with him.
+//
+// Why a fake contact shadow rather than more hue, a brighter trim, or a value
+// shift on the plate:
+//
+//   * More hue does not help. The failure is a VALUE failure, and two colours
+//     of equal value do not separate at 480 px however different their hue.
+//   * A brighter trim is still one pixel wide. Silhouette separation has to
+//     come from area, not from an outline the resolution cannot draw.
+//   * Shifting the plate's value alone cannot finish the job. Machine bodies
+//     measure 53 to 76 in the backbuffer, so ANY single plate value merges with
+//     something at one end of that band. The plate did move -- see
+//     config.world.plateColor for the numbers and for the known cost -- but it
+//     is the other half of the fix, not this one.
+//
+// A contact darkening under the object is the lever that is INDEPENDENT of the
+// body's own value: it darkens the FLOOR, right at the boundary, so a light body
+// and a dark body both gain the same separation, and it costs the same whichever
+// it is. The two levers do different jobs and both are needed: the plate
+// separates the silhouette from the floor BEHIND it, and this separates the
+// object from the floor it is STANDING on.
+//
+// That second job is the half nothing else was doing. Placed objects had no
+// grounding at all -- the real shadow map throws its shadow off to one side
+// (sunDir 0.45, 1.0, 0.3), so the lit side of every object met the concrete with
+// nothing in between and read as pasted on.
+//
+// This is NOT the shadow map and does not pretend to be. It is an ambient
+// occlusion patch: the darkening that belongs under anything sitting on
+// anything, which a single directional light plus a hemisphere cannot produce.
+// It neither casts nor receives.
+
+let contactTex = null;
+
+// A soft-edged rounded rectangle in alpha. Square texture, mapped onto a quad
+// that gets scaled to the object's footprint, so a long conveyor and a square
+// press both get a patch of their own shape.
+//
+// The falloff is on the distance to an inset core rather than radial: a radial
+// blob under a 3 m bridge is a circle with two bright ends, which reads as a
+// puddle rather than as contact.
+export function contactTexture() {
+  if (contactTex) return contactTex;
+  const c = config.render.contact;
+  const S = Math.max(8, Math.round(c.textureSize));
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  const d = img.data;
+  // `core` is the fraction of the half-extent that stays at full darkness; the
+  // remainder is the penumbra. At core 0 the patch is all falloff and reads as
+  // a smudge; at core 1 it is a hard rectangle with a visible corner.
+  const core = Math.min(0.999, Math.max(0, c.core));
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      // -1..1 across the quad.
+      const u = (x + 0.5) / S * 2 - 1;
+      const v = (y + 0.5) / S * 2 - 1;
+      // Distance outside the inset core, per axis, normalised to the penumbra.
+      const du = Math.max(0, Math.abs(u) - core) / (1 - core);
+      const dv = Math.max(0, Math.abs(v) - core) / (1 - core);
+      const t = Math.min(1, Math.hypot(du, dv));
+      // smoothstep, then squared: the darkening is strongest hard against the
+      // object and gives up quickly, which is what contact looks like.
+      const s = 1 - (t * t * (3 - 2 * t));
+      const a = Math.round(255 * s * s);
+      const i = (y * S + x) * 4;
+      // THE RAMP GOES IN THE COLOUR CHANNELS, NOT IN ALPHA, and this is not a
+      // style choice -- THREE.alphaMap samples the texture's GREEN channel and
+      // ignores its alpha entirely. Written the obvious way round (RGB 0, alpha
+      // = ramp) the map is green 0 everywhere, so every fragment comes out
+      // fully transparent and the patch is invisible with no error anywhere.
+      d[i] = a; d[i + 1] = a; d[i + 2] = a; d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  // LINEAR, and it is the one texture in the game that is allowed to be. The
+  // PSX rule is nearest everywhere, but this is a gradient, not an image: at
+  // nearest the penumbra comes out as four or five visible steps and reads as a
+  // stack of rectangles, which is worse than no shadow at all.
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = config.render.floorAnisotropy;
+  tex.needsUpdate = true;
+  contactTex = tex;
+  return contactTex;
+}
+
+let contactMat = null;
+
+export function contactMaterial() {
+  if (contactMat) return contactMat;
+  const c = config.render.contact;
+  contactMat = new THREE.MeshBasicMaterial({
+    // BASIC, not Lambert. This is occlusion -- light that never arrived. Lighting
+    // it would make the patch brightest where the sun is strongest, which is
+    // exactly backwards.
+    color: 0x000000,
+    alphaMap: contactTexture(),
+    transparent: true,
+    opacity: c.opacity,
+    depthWrite: false,
+    // Same belt and braces as the markings: a lift in metres AND a polygon
+    // offset. Either alone still z-fights against the plate at a grazing angle.
+    polygonOffset: true,
+    polygonOffsetFactor: c.polygonOffsetFactor,
+    polygonOffsetUnits: c.polygonOffsetUnits,
+    side: THREE.FrontSide,
+    fog: true,
+  });
+  return contactMat;
+}
+
 let decalMat = null;
 
 // Decals sit 2 cm above the plate AND carry a polygon offset: either alone can
@@ -434,4 +564,6 @@ export function disposeMaterials() {
   if (floorTex) { floorTex.dispose(); floorTex = null; }
   if (decalMat) { decalMat.dispose(); decalMat = null; }
   if (decalTex) { decalTex.dispose(); decalTex = null; }
+  if (contactMat) { contactMat.dispose(); contactMat = null; }
+  if (contactTex) { contactTex.dispose(); contactTex = null; }
 }

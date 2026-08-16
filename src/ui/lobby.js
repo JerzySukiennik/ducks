@@ -319,7 +319,12 @@ export function createLobbyUI(opts) {
   const startNote = el('div', null, startLine, '');
   startNote.id = 'lobby-startnote';
   const leaveLine = el('div', 'lobby-line', sessionSec);
-  const leaveBtn = el('button', 'lobby-btn stop', leaveLine, 'End session');
+  // NOT 'End session'. The menu's End pane already owns that label, and it does
+  // a different thing: it stops the SESSION and shows everyone the summary.
+  // This button closes the ROOM -- the networking -- and the game carries on
+  // single player afterwards. Two buttons on two screens under one name, with
+  // two outcomes, is a coin toss for anyone who has read both.
+  const leaveBtn = el('button', 'lobby-btn stop', leaveLine, 'Close room');
 
   const foot = el('div', null, panel);
   foot.id = 'lobby-foot';
@@ -531,7 +536,7 @@ export function createLobbyUI(opts) {
       ? (session.isPublic ? 'Hosting - public' : 'Hosting - private')
       : 'Joined';
     linkBox.textContent = sessionLink();
-    leaveBtn.textContent = session.isHost ? 'End session' : 'Leave';
+    leaveBtn.textContent = session.isHost ? 'Close room' : 'Leave room';
     renderPlayers();
   }
 
@@ -681,7 +686,7 @@ export function createLobbyUI(opts) {
     if (!session) return false;
     const s = session;
     const wasHost = s.isHost;
-    clearSession(wasHost ? 'Session ended.' : 'Left the room.');
+    clearSession(wasHost ? 'Room closed.' : 'Left the room.');
     if (o.onLeave) o.onLeave(s, wasHost);
     try {
       await s.close();

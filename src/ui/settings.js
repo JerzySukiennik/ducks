@@ -140,8 +140,22 @@ export function fields() {
       hint: 'vertical, degrees', kind: 'range',
       min: S.fovMin, max: S.fovMax, step: S.fovStep,
       def: S.fov, format: (v) => Math.round(v) + ' deg' },
-    { key: 'bufferWidth', group: 'Display', label: 'Render width',
-      hint: 'the PSX pixelation knob -- lower is chunkier and faster', kind: 'range',
+    // ONE NAME. This setting was called three different things in three places:
+    // "Render width" here, "Pixel size" in the menu's Settings summary, and
+    // "buffer 480 px" in the value that summary printed. Three names for one
+    // slider, and the reader has to work out that they are the same knob. It is
+    // "Pixel size" everywhere now -- the menu row, this label, and the wording
+    // of the hint.
+    //
+    // The hint also has to say the thing the panel was silently lying about: the
+    // number here is where the buffer STARTS. src/core/perf.js moves it up and
+    // down to hold the frame rate, so a panel reading 480 while the game ran at
+    // 560 was not a stale widget, it was the panel reporting a setting as if it
+    // were a measurement. The row shows the live width beside it (see the range
+    // control below) and this line explains why the two can differ.
+    { key: 'bufferWidth', group: 'Display', label: 'Pixel size',
+      hint: 'width of the pixel buffer; lower is chunkier and faster. The game moves it to hold the frame rate',
+      kind: 'range',
       min: config.render.bufferWidthMin, max: config.render.bufferWidthMax,
       step: S.bufferWidthStep, def: S.bufferWidth,
       format: (v) => Math.round(v) + ' px' },
@@ -362,6 +376,19 @@ export function createSettingsUI(opts) {
   let flashTimer = 0;
   const controls = [];
 
+  // What a setting is ACTUALLY running at, when that is a different question
+  // from what the player asked for. `o.live` is a map of key -> function, handed
+  // in by main.js from the live objects (renderer.bufferWidth, today the only
+  // one), because this file must not learn that a renderer exists. A key with no
+  // entry here has no gap to report and prints exactly what it always did.
+  const live = o.live || {};
+  function liveValue(key) {
+    const fn = live[key];
+    if (typeof fn !== 'function') return null;
+    const v = Number(fn());
+    return isFinite(v) ? v : null;
+  }
+
   function say(text) {
     msg.textContent = text || '';
     clearTimeout(flashTimer);
@@ -396,19 +423,32 @@ export function createSettingsUI(opts) {
       input.step = String(f.step);
       input.value = String(settings.get(f.key));
       row.appendChild(input);
-      const out = el('div', 'vl', row, f.format(Number(input.value)));
+      // The value cell says what the slider is set to, and -- only when the two
+      // disagree -- what the game is running at right now. Both, never one
+      // standing in for the other: the slider position has to match the number
+      // beside it, and the panel must not claim a width the renderer is not
+      // using. This is the fix for "Settings shows 480 px while the applied
+      // buffer is 560": neither number was wrong, the panel was showing one of
+      // them and letting the reader assume it was the other.
+      function valueText() {
+        const v = Number(settings.get(f.key));
+        const now = liveValue(f.key);
+        if (now === null || Math.round(now) === Math.round(v)) return f.format(v);
+        return f.format(v) + '  (now ' + f.format(now) + ')';
+      }
+      const out = el('div', 'vl', row, valueText());
       // Dragging applies live and does NOT hit localStorage on every pixel;
       // the commit on release is what is written.
       input.addEventListener('input', () => {
-        const v = settings.set(f.key, input.value, { transient: true });
-        out.textContent = f.format(v);
+        settings.set(f.key, input.value, { transient: true });
+        out.textContent = valueText();
       });
       input.addEventListener('change', () => {
         settings.set(f.key, input.value);
         ui('click');
         say('Saved');
       });
-      controls.push({ f, sync() { input.value = String(settings.get(f.key)); out.textContent = f.format(settings.get(f.key)); } });
+      controls.push({ f, sync() { input.value = String(settings.get(f.key)); out.textContent = valueText(); } });
     } else if (f.kind === 'text') {
       const input = document.createElement('input');
       input.type = 'text';

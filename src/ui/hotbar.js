@@ -33,9 +33,30 @@ const REASON_TEXT = {
   [REASONS.NOT_PLACEABLE]: 'Not placeable',
 };
 
+// Every refusal in the game comes out of here, and it comes out as a SENTENCE.
+//
+// Two kinds of string arrive. A build.js REASONS code maps to a written line
+// above. Everything else is a reason a sim or net action wrote in passing --
+// 'nothing there', 'you do not have one', 'too far from the workbench' -- and
+// those were reaching the message box exactly as typed: lower case, no stop,
+// sitting under a HUD where every other string is sentence-cased. They read as
+// something that leaked out of the code rather than something the game said.
+//
+// So an unmapped reason is not passed through raw any more, it is DRESSED: first
+// letter capitalised, a full stop added if it has no terminator of its own. That
+// is the whole treatment -- it deliberately does not rewrite the words, because
+// the words are written where the refusal is decided and that is where they
+// should stay. Doing it here means one implementation covers the solo path
+// (main.js) and the client path (net/game.js onReject, which is handed this same
+// function as deps.reasonText).
 export function reasonText(code) {
   if (!code) return '';
-  return REASON_TEXT[code] || code;
+  const mapped = REASON_TEXT[code];
+  if (mapped) return mapped;
+  const s = String(code).trim();
+  if (!s) return '';
+  const cased = s.charAt(0).toUpperCase() + s.slice(1);
+  return /[.!?]$/.test(cased) ? cased : cased + '.';
 }
 
 // Nine cells have to fit a 1280 px screen without becoming the screen. 64 px
@@ -64,9 +85,12 @@ const CSS = `
     background-color ${CRT.fast} ${CRT.ease}, box-shadow ${CRT.fast} ${CRT.ease}; }
 .bar-slot.sel { border-color: ${CRT.bright}; background: ${CRT.bgRaised};
   box-shadow: 0 0 0 1px ${CRT.bright} inset, ${CRT.glowSoft}; }
-/* An emptied slot keeps its label and dims -- it is still that item's slot. */
+/* An emptied slot keeps its label and dims -- it is still that item's slot --
+   and it prints x0 rather than blanking the count, so "reserved and empty" and
+   "holding one" cannot look the same. The count dims with the name. */
 .bar-slot.empty { border-color: ${CRT.faint}; }
 .bar-slot.empty .n { color: ${CRT.faint}; }
+.bar-slot.empty .c { color: ${CRT.faint}; }
 .bar-slot .k { position: absolute; top: 2px; left: 4px;
   font-size: ${CRT.type.dataSm.size}; letter-spacing: ${CRT.type.dataSm.track};
   color: ${CRT.dim}; }
@@ -125,7 +149,13 @@ export function createHotbar({ container }) {
       node.classList.toggle('empty', !s || s.count <= 0);
       node.classList.toggle('sel', i === selected);
       node.querySelector('.n').textContent = s ? s.name : '';
-      node.querySelector('.c').textContent = s && s.count > 0 ? 'x' + s.count : '';
+      // AN EMPTIED SLOT SAYS x0. It keeps its label on purpose -- it is still
+      // that item's slot and putting the next one back there is the point -- but
+      // it used to keep the label and blank the count, so a slot reading
+      // "Conveyor" with nothing beside it was indistinguishable from a slot
+      // holding one. Every slot with a name now has a number, and the number is
+      // the honest one.
+      node.querySelector('.c').textContent = s ? 'x' + s.count : '';
     }
     // Always on once the game screen exists. A hotbar that appears the moment
     // you buy something is a second thing to learn; nine empty slots are the

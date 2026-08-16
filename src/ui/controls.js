@@ -45,10 +45,19 @@ export const KEY_ROWS = [
     src: 'input.js onMouseDown(): config.input.throwButton -> REQ.HURL' },
   { key: 'mouse wheel', what: 'how far away you hold a duck',
     src: 'input.js onWheel() -> actions.scroll -> REQ.HOLD_DIST' },
-  { key: 'middle click · T', what: 'rotate one step (Shift on the button reverses it)',
-    src: 'input.js onMouseDown() e.button === 1; main.js handleKeys KeyT -> rotation.step(-1)' },
-  { key: 'R', what: 'pour out the container you are pointing at - otherwise rotates',
-    src: 'main.js handleKeys KeyR: doPour(pourTarget()) else rotation.step(1)' },
+  // R and the middle button turn the SAME WAY (+1); T turns the other way (-1).
+  // The old pair of rows had it as "middle click · T" for +1 and R for
+  // "otherwise rotates", which put T with the button whose direction it is the
+  // opposite of -- so a player following the table to nudge a belt round got the
+  // turn they were told they would get exactly half the time. Read straight off
+  // input.js onMouseDown (e.button === 1 -> actions.rotate += 1) and main.js
+  // handleKeys (KeyR -> rotation.step(1), KeyT -> rotation.step(-1)).
+  { key: 'R · middle click', what: 'rotate one step forward',
+    src: 'main.js handleKeys KeyR -> rotation.step(1); input.js onMouseDown() e.button === 1 -> actions.rotate += 1' },
+  { key: 'T · Shift + middle click', what: 'rotate one step back',
+    src: 'main.js handleKeys KeyT -> rotation.step(-1); input.js onMouseDown() e.shiftKey -> actions.rotate -= 1' },
+  { key: 'R (at a container)', what: 'pour it out instead of rotating',
+    src: 'main.js handleKeys KeyR: doPour(pourTarget()) wins when the crosshair is on a full container' },
   { key: '[  ]', what: 'fine angle, both ways',
     src: 'main.js handleKeys BracketLeft/BracketRight -> rotation.nudge(FINE)' },
   { key: 'G', what: 'reset the angle',
@@ -57,7 +66,7 @@ export const KEY_ROWS = [
     src: 'main.js handleKeys KeyE: shopUI.close / pickUp / doGamble / shopUI.open' },
   { key: 'Q', what: 'throw whatever is in your hands',
     src: 'main.js handleKeys KeyQ -> throwItem()' },
-  { key: 'X', what: 'demolish mode - then hold left click',
+  { key: 'X', what: 'demolish mode on and off - then hold left click on the thing',
     src: 'main.js handleKeys KeyX -> demolishing = !demolishing' },
   { key: '1 - 9', what: 'hotbar slot - the same key puts it away',
     src: 'input.js EDGE_KEYS Digit1..Digit9; main.js handleKeys -> selectSlot(n)' },
@@ -122,9 +131,16 @@ export function createControlsPanel(opts) {
   });
   if (mount) mount.appendChild(list);
 
+  // NOT "Keys cannot be remapped yet.". That sentence shipped as a statement of
+  // an unimplemented feature -- it announced a thing the game does not have and
+  // then apologised for it, which tells a player nothing they can act on and
+  // promises something nobody agreed to build. What this line has to answer is
+  // the question a player actually arrives with, which is "is this list the
+  // whole truth", and the answer is yes: KEY_ROWS is the only key table left in
+  // the game.
   const note = document.createElement('div');
   note.className = 'ctrl-note';
-  note.textContent = 'Keys cannot be remapped yet.';
+  note.textContent = 'This is every key the game listens to. They are fixed.';
   if (mount) mount.appendChild(note);
 
   return {

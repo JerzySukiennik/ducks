@@ -13,6 +13,18 @@ import config from '../config.js';
 import CRT, { injectCRT } from './theme.js';
 
 const CSS = `
+/* THE GAME'S CHROME COMES OFF WHEN THE SESSION IS OVER.
+   The panel used to open over a live HUD: the money counter, the hotbar and --
+   worst of it -- the onboarding line, so a player reading "Session over" also
+   had a tutorial underneath telling them to walk to the workbench. The session
+   has ended; there is nothing left to instruct. This is the same device
+   src/cutscene.js uses for the intro (a class on the root element rather than
+   panel-by-panel hiding), for the same reason: a screen that has to be told
+   about every new panel will be wrong the first time somebody adds one.
+   Named elements only, not a blanket, because the summary itself and the menu
+   Escape can still reach have to survive. */
+html.session-over #hud,
+html.session-over #bar { display: none !important; }
 #summary { position: fixed; inset: 0; z-index: 30; display: none;
   align-items: center; justify-content: center; pointer-events: none;
   font: 400 ${CRT.type.body.size}/${CRT.type.body.line} ${CRT.display};
@@ -249,8 +261,13 @@ export function createSummaryUI(opts) {
 
   function render(data) {
     last = data;
-    reason.textContent = (data.reason || 'Session ended.')
-      + '  -  ' + duration(data.durationSeconds);
+    // "Session ended.  -  0m 03s" -- a full stop, then two spaces, a hyphen and
+    // two more. The sentence had already ended and then a dash carried on from
+    // it, and the doubled gaps read as a layout accident rather than a
+    // separator. The stop is dropped when a dash follows it, and one space each
+    // side is a separator: "Session ended - 0m 03s".
+    const why = String(data.reason || 'Session ended.').trim().replace(/\.$/, '');
+    reason.textContent = why + ' - ' + duration(data.durationSeconds);
 
     grid.textContent = '';
     stat(grid, num(data.ducksThrown), 'Ducks thrown', true);
@@ -308,6 +325,7 @@ export function createSummaryUI(opts) {
     if (!open) {
       open = true;
       root.classList.add('open');
+      document.documentElement.classList.add('session-over');
       if (document.exitPointerLock) document.exitPointerLock();
       if (o.onShow) o.onShow(last);
     }
@@ -318,6 +336,7 @@ export function createSummaryUI(opts) {
     if (!open) return false;
     open = false;
     root.classList.remove('open');
+    document.documentElement.classList.remove('session-over');
     if (o.onClose) o.onClose();
     return true;
   }
@@ -332,6 +351,9 @@ export function createSummaryUI(opts) {
     data: () => last,
     state: () => ({
       open,
+      // Whether the game's own chrome is hidden behind this screen. Asked by the
+      // check that this panel does not open over a live tutorial line.
+      chromeHidden: document.documentElement.classList.contains('session-over'),
       reason: reason.textContent,
       stats: Array.from(grid.children).map((c) => ({
         key: c.querySelector('.k').textContent,

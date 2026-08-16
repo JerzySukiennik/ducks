@@ -20,16 +20,43 @@ export const CRT = {
   // A phosphor ramp, dimmest to brightest. Anything interactive lives at `on`
   // or above; anything structural stays at `dim` or below, so brightness alone
   // tells you what responds.
+  // THE BOTTOM OF THIS RAMP WAS UNREADABLE, AND IT IS MEASURED, NOT judged.
+  //
+  // Every ratio below is against the actual composited panel background, which
+  // is bgPanel rgba(30,19,4,0.60) over bg #0b0906 = #160f05 (L 0.00527) -- not
+  // against pure black, which is what makes these look better on paper than
+  // they are on screen.
+  //
+  //             was          now
+  //   faint   1.96:1  -->  3.00:1
+  //   dim     3.41:1  -->  4.80:1
+  //   border  2.36:1  -->  3.00:1
+  //
+  // faint at 1.96:1 is the defect a critic named as "shop body text is dim
+  // brown on dark brown", and the name was accurate: faint is the MOST USED
+  // token in src/ui/shop.js (16 uses, more than `on` and `bright` combined), so
+  // the shop's body copy was running at a contrast ratio that fails even the
+  // 3:1 large-text floor. dim at 3.41:1 carries "labels, secondary data" and
+  // was missing the 4.5:1 body-text floor. border at 2.36:1 was under the 3:1
+  // threshold for a UI component boundary.
+  //
+  // Only the VALUE moved. The hue is the same amber phosphor at the same R:G:B
+  // proportions the ramp already had (G ~= 0.70R, B ~= 0.15R), because the
+  // colour system is settled and the defect was never hue -- it was that the
+  // whole key sat too low. `on`, `bright`, `hot` and `borderHot` already
+  // cleared their thresholds (6.73, 10.37, 12.68, 4.79) and are untouched, so
+  // the ramp still reads dimmest-to-brightest with the gaps intact:
+  //   3.00 -> 4.80 -> 6.73 -> 10.37 -> 12.68
   bg:        '#0b0906',   // the tube with nothing on it
   bgPanel:   'rgba(30, 19, 4, 0.60)',
   bgRaised:  'rgba(44, 28, 6, 0.72)',
-  faint:     '#5b3f0d',   // rules, disabled text
-  dim:       '#8a6015',   // labels, secondary data
-  on:        '#c98f22',   // body text, idle interactive
-  bright:    '#ffb000',   // headings, focused interactive
+  faint:     '#7f5812',   // rules, disabled text            3.00:1
+  dim:       '#aa761a',   // labels, secondary data          4.80:1
+  on:        '#c98f22',   // body text, idle interactive     6.73:1
+  bright:    '#ffb000',   // headings, focused interactive  10.37:1
   hot:       '#ffcc55',   // hover/active, the only thing brighter than a heading
-  border:    '#6b4a12',
-  borderHot: '#a9761c',
+  border:    '#7e5915',   //                                 3.00:1
+  borderHot: '#a9761c',   //                                 4.79:1, untouched
 
   // Reserved meanings. Kept few on purpose: on a monochrome tube, colour is
   // expensive and should only ever mean something.

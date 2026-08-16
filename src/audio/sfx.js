@@ -29,10 +29,24 @@ export function createSfx({ bus, config, listener, facing }) {
   function ear() {
     try {
       const p = typeof listener === 'function' ? listener() : null;
-      return p && isFinite(p.x) ? p : null;
+      // All three axes, not just x. A builder measured player.position() coming
+      // back with y = NaN after a failed boot; the distance maths then produced
+      // a NaN gain for every positional sound and the ENTIRE world went silent
+      // with nothing in the console. Checking one axis let exactly that through.
+      return (p && isFinite(p.x) && isFinite(p.y) && isFinite(p.z)) ? p : null;
     } catch (_) {
       return null;
     }
+  }
+
+  // How far away the event is, or null when it has no position (a menu click is
+  // not anywhere). The reverb send needs the metres, not just the attenuation
+  // they produce -- two different distances can attenuate the same after the
+  // curve flattens and they are not the same amount of room.
+  function distanceTo(x, y, z) {
+    const e = ear();
+    if (!e || x === undefined) return null;
+    return Math.hypot(x - e.x, (y === undefined ? 0 : y) - e.y, z - e.z);
   }
 
   // Inverse-distance with a hard cut. Returns 0 past maxDistance so a far-away
@@ -112,8 +126,12 @@ export function createSfx({ bus, config, listener, facing }) {
       if (att <= 0) { dropped++; return null; }
       const scale = att * (typeof o.gain === 'number' ? o.gain : 1);
       const pan = o.x === undefined ? 0 : panFor(o.x, o.y === undefined ? 0 : o.y, o.z);
+      // Metres to the ear, handed to the bus so it can decide how much of this
+      // voice goes to the room. Undefined for a sound with no position, which
+      // the bus reads as "not in the room" rather than as "zero metres away".
+      const distance = o.x === undefined ? undefined : distanceTo(o.x, o.y, o.z);
 
-      const voice = bus.start(name, scale, { loop: false, pan });
+      const voice = bus.start(name, scale, { loop: false, pan, distance });
       if (!voice) return null;
 
       const rec = { clip: name, voice, done: false, at: now };
@@ -132,6 +150,7 @@ export function createSfx({ bus, config, listener, facing }) {
   return {
     play,
     attenuation,
+    distanceTo,
     panFor,
     // Called once a frame so ended voices are released even when nothing is
     // firing: onended is not guaranteed to run in a backgrounded tab.

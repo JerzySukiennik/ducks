@@ -23,7 +23,13 @@ import config from '../config.js';
 export const MACHINES = [
   {
     id: 'crank', netId: 1, name: 'Manual Duck Workbench',
-    desc: 'Ten turns of the wheel, one duck. The only duck source you start with.',
+    // NOT "ten turns of the wheel" any more. Cranking stopped being a count of
+    // clicks and became a HELD charge (config.machine.holdSecondsPerDuck, 2.5 s
+    // a duck) some time ago, and this line went on describing the mechanic it
+    // replaced -- so the shop was teaching a player to click ten times at a
+    // thing that only answers to a hold. clicksPerTurn survives in the sim, but
+    // only as the wheel's gear-click grain for the sound; it is not a quota.
+    desc: 'Hold the wheel and it fills; a duck drops out every few seconds. The only duck source you start with.',
     // 10, not 0. You are GIVEN one at spawn; this price is for a second bench,
     // and a cost of 0 made the shop refuse the row outright as 'not for sale'.
     cost: 10, model: 'crank', footprint: [2.096, 2.256, 2.128], anchor: 'floor',
@@ -154,24 +160,68 @@ export const MACHINES = [
   },
   {
     id: 'conveyor_slope', netId: 12, name: 'Conveyor Ramp',
-    desc: 'Carries ducks up or down two thirds of a metre. Turn it to choose.',
+    desc: 'Runs ducks down seven tenths of a metre. Turn it to aim the descent.',
     cost: 150, model: 'conveyor_slope', footprint: [1.00, 1.555, 2.00], anchor: 'floor',
     kind: 'conveyor',
     repeat: { times: 8, curve: 1.05 },
-    // rise MEASURED off the mesh, not taken from the footprint height: the belt
-    // surface sits at y 1.55 at the -Z end and 0.86 at +Z, so it climbs 0.69 m
-    // across the piece, not the 1.55 previously authored here. 1.55 is how tall
-    // the whole housing is, which is a different number that happens to look
-    // like a plausible one.
+    // THE NUMBERS BELOW ARE MEASURED OFF assets/models/conveyor_slope.glb, off
+    // the belt band itself (the primitive with the `dark` material) rather than
+    // off the model's overall bounding box. The band is a straight slab spanning
+    // the full length, and its TOP face runs:
     //
-    // The sign is placement-dependent and therefore CANNOT live in this row:
-    // driving along local +Z on this mesh goes DOWNhill, and rotating the piece
-    // 180 degrees makes the same drive direction go up. A scalar here is right
-    // half the time. The belt's climb has to be read off the collider's own
-    // tilt. Tracked as an open G3 defect; until then this piece moves ducks
-    // along but does not change their height.
-    belt: { speed: 1.4, turn: 0, rise: 0.69 },
-    collider: { shape: 'cuboid', half: [0.50, 0.7775, 1.00], blockDucks: true },
+    //     z = -1.00   y = 1.192          (the high end, under the tall pillar)
+    //     z = +1.00   y = 0.474          (the low end)
+    //
+    // so: drop 0.718 m over 2.00 m, gradient 0.359, pitch 19.741 deg, and the
+    // surface passes through y = 0.833 at the piece's centre.
+    //
+    // What was here before, and why all three were wrong:
+    //
+    //   rise: 0.69, POSITIVE. Positive means "climbs along local +Z", and this
+    //   mesh descends along local +Z -- the tall end is at -Z. conveyors.js
+    //   applies the vertical drive UP-ONLY, so a positive rise here meant the
+    //   belt spent its lift fighting the slope it was standing on.
+    //
+    //   The old comment claimed the sign was placement-dependent and could not
+    //   live in a row: "rotating the piece 180 degrees makes the same drive
+    //   direction go up". It does not. Yaw rotates the MESH with the drive
+    //   direction, so the high end travels with local -Z whatever the yaw is;
+    //   which way the descent points in the WORLD changes, which is the thing
+    //   the player turns the piece to choose, and the row's sign is fixed.
+    //
+    //   collider: an upright cuboid, half-height 0.7775 -- a flat lid at y 1.555
+    //   over the whole piece. That is the defect the description was really
+    //   describing: a duck could not reach the belt at all, only stand on an
+    //   invisible shelf 1.08 m above the low end. It looked like a ramp and
+    //   acted like a wall, which is the exact trap src/data/buildings.js already
+    //   documents on the `ramp` row.
+    //
+    // `surface` fixes it the same way the ramp does: the placement box stays
+    // upright (the grid, the overlap test and the model seating all need it) and
+    // the PHYSICS is a thin slab tilted to match the band. half[2] is the slab's
+    // length along its own tilt, hypot(2.00, 0.718) / 2 = 1.0625. offsetY is the
+    // band's centre relative to the placement box's centre (which sits at
+    // 1.555 / 2 = 0.7775 above the floor): 0.833 - 0.7775 = 0.0555.
+    // pitchDegrees is POSITIVE here and negative on the ramp building, for the
+    // one reason that matters: a positive pitch lowers the +Z end, and this
+    // mesh's low end is at +Z while the ramp's is at -Z.
+    belt: {
+      speed: 1.4, turn: 0,
+      // Signed, and it means metres of CLIMB along local +Z, so a descent is
+      // negative. Read by src/sim/conveyors.js for both the drive's vertical
+      // component and -- since this piece's surface is not level -- for where
+      // that surface actually is at each point along the run.
+      rise: -0.718,
+      // Where the belt surface sits at the piece's CENTRE, relative to the
+      // placement box's centre. Every other belt in the game is a flat-topped
+      // box whose surface is the top of that box, which is what conveyors.js
+      // assumes when this is absent; a sloped piece has to say.
+      surfaceOffsetY: 0.0555,
+    },
+    collider: {
+      shape: 'cuboid', half: [0.50, 0.7775, 1.00], blockDucks: true,
+      surface: { half: [0.50, 0.06, 1.0625], pitchDegrees: 19.741, offsetY: 0.0555 },
+    },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
   },
@@ -412,13 +462,16 @@ export const MACHINES = [
   {
     id: 'gamble_box', netId: 29, name: 'Gambling Box',
     desc: 'Pay a fee, watch it rattle itself stupid, and take whatever falls out. Anything in the catalogue can.',
-    // THE PRICE IS THE CONFIG KEY, not a copy of it. config.gamble.cost is
-    // already what a ROLL costs and what the refusal message quotes; a second
-    // literal here would be a number that agrees with it until somebody tunes
-    // one of them. This is the only row in the file that imports config, and it
-    // does so for that single reason -- the balance numbers of every other row
-    // belong to Phase E and live nowhere else.
-    cost: config.gamble.cost, model: 'gamble_box',
+    // THE PRICE IS THE CONFIG KEY, not a copy of it -- but it is the key for
+    // THIS price. It used to read config.gamble.cost, which is what a single
+    // ROLL costs, so the shop price of the box and the fee to pull its handle
+    // were literally the same number: the box paid for itself in one roll, and
+    // retuning the fee silently retuned the machine. There are two facts here,
+    // so there are two keys (config.gamble.boxPrice and .rollCost), and this row
+    // reads the one that is about buying a box. This is the only row in the file
+    // that imports config, and it does so for that single reason -- the balance
+    // numbers of every other row belong to Phase E and live nowhere else.
+    cost: config.gamble.boxPrice, model: 'gamble_box',
     // Measured off assets/models/gamble_box.glb: the body is 0.75 x 0.75 and
     // 0.64 tall, and the LID sits on top of that (its own bbox is 0.21 tall,
     // seated at y = 0.64), so the object a player walks into is 0.85 high. Both

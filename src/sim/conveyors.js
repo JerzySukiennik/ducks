@@ -136,6 +136,22 @@ export function createConveyors({ config, ducks, applyImpulse, list, byId }) {
     const hx = rec.hx + B.marginXZ;
     const hz = rec.hz + B.marginXZ;
     const reach = Math.hypot(hx, hz);
+    const rise = row.belt.rise || 0;
+    // Metres of climb per metre travelled along local +Z. SIGNED: a descending
+    // piece has a negative rise and therefore a negative grade.
+    const grade = rise ? rise / (2 * rec.hz) : 0;
+    // WHERE THE SURFACE IS, and the reason this is not just `rec.y + rec.hy`.
+    //
+    // A flat belt is a box and its surface is the top of that box, which is what
+    // the second half of this expression says and what every straight belt and
+    // corner in the game uses. A SLOPED belt's surface is a tilted plane: it is
+    // 0.36 m above the box's centre at one end of the conveyor ramp and 0.36 m
+    // below it at the other, and testing it against a single flat height
+    // rejected all of it. The row states where its surface sits at the piece's
+    // centre; the grade above says how that height moves along the run.
+    const centreY = rec.y + (typeof row.belt.surfaceOffsetY === 'number'
+      ? row.belt.surfaceOffsetY
+      : rec.hy);
     return {
       key: rec.key,
       id: rec.id,
@@ -146,13 +162,20 @@ export function createConveyors({ config, ducks, applyImpulse, list, byId }) {
       ax: hx, az: hz,
       speed: row.belt.speed,
       turn: (row.belt.turn || 0) * DEG,
-      rise: row.belt.rise || 0,
+      rise,
+      grade,
       // The whole rise is delivered across the piece's own length.
-      slope: row.belt.rise ? (row.belt.rise / (2 * rec.hz)) * B.liftScale : 0,
-      surfaceY: rec.y + rec.hy,
+      slope: grade * B.liftScale,
+      surfaceY: centreY,
       minX: rec.x - reach, maxX: rec.x + reach,
       minZ: rec.z - reach, maxZ: rec.z + reach,
     };
+  }
+
+  // The belt's surface height at local depth v. Flat for everything with no
+  // grade, which is every belt in the game except the ramp.
+  function surfaceAt(b, v) {
+    return b.grade ? b.surfaceY + b.grade * v : b.surfaceY;
   }
 
   // Rebuilt from the live placed-object list. The list is owned by the placer;
@@ -191,13 +214,17 @@ export function createConveyors({ config, ducks, applyImpulse, list, byId }) {
 
   // Where on the belt is this point, in belt-local metres? Returns null when the
   // point is not resting on the belt at all.
+  // The XZ test comes FIRST now, because on a sloped piece the height it is
+  // tested against depends on where along the run the point is -- there is no
+  // single height to reject against before knowing v.
   function contact(b, x, y, z) {
-    if (y > b.surfaceY + B.surfaceAbove || y < b.surfaceY - B.surfaceBelow) return null;
     const dx = x - b.x;
     const dz = z - b.z;
     const u = dx * b.c + dz * b.s;
     const v = -dx * b.s + dz * b.c;
     if (u < -b.ax || u > b.ax || v < -b.az || v > b.az) return null;
+    const sy = surfaceAt(b, v);
+    if (y > sy + B.surfaceAbove || y < sy - B.surfaceBelow) return null;
     return v;
   }
 
@@ -288,12 +315,15 @@ export function createConveyors({ config, ducks, applyImpulse, list, byId }) {
     sync();
     for (let i = 0; i < belts.length; i++) {
       const b = belts[i];
-      if (y > b.surfaceY + B.surfaceAbove) continue;
       const dx = x - b.x;
       const dz = z - b.z;
       const u = dx * b.c + dz * b.s;
       const v = -dx * b.s + dz * b.c;
       if (u < -b.ax || u > b.ax || v < -b.az || v > b.az) continue;
+      // Same reordering as contact(), for the same reason: on a sloped piece the
+      // ceiling of the carrying band is a function of where along the run you
+      // are, so it cannot be tested before v is known.
+      if (y > surfaceAt(b, v) + B.surfaceAbove) continue;
       return b;
     }
     return null;
@@ -315,9 +345,14 @@ export function createConveyors({ config, ducks, applyImpulse, list, byId }) {
         yawDegrees: (b.yaw * 180) / Math.PI,
         half: { x: b.hx, y: b.hy, z: b.hz },
         surfaceY: b.surfaceY,
+        // The surface at both ends, so a check can measure the height a piece
+        // actually delivers instead of trusting the row's `rise`.
+        surfaceEntryY: surfaceAt(b, -b.az),
+        surfaceExitY: surfaceAt(b, b.az),
         speed: b.speed,
         turnDegrees: (b.turn * 180) / Math.PI,
         rise: b.rise,
+        grade: b.grade,
         slope: b.slope,
         driveEntry: entry,
         driveExit: { x: _bv.x, y: _bv.y, z: _bv.z },

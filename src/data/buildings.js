@@ -85,8 +85,16 @@ export const BUILDINGS = [
     tags: [],
   },
   {
-    id: 'chute', netId: 66, name: 'Chute',
-    desc: 'Half-pipe channel. Keeps a stream of ducks on one line.',
+    // The id and the model file stay `chute` (they are wiring, and renaming them
+    // would rename a netId's meaning), but the NAME the player reads does not.
+    // "Chute" was already taken, by the delivery chute over the booth -- the
+    // tube every purchase falls out of, which the onboarding line, the gambling
+    // box's payout message and the shop's own help all point at by that name. A
+    // player told to collect a purchase "from the chute" while a buyable object
+    // called Chute sits in the shop has been given one word for two objects.
+    // This one is a trough, and that is also what it looks like.
+    id: 'chute', netId: 66, name: 'Duck Trough',
+    desc: 'Half-pipe trough. Keeps a stream of ducks on one line.',
     cost: 80, model: 'chute', footprint: [0.75, 0.53, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 2.00 },

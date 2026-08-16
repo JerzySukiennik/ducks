@@ -9,7 +9,7 @@ export const VENDOR_LINES = {
   ok:              'Purchased',
   unknown_item:    'No such item',
   not_for_sale:    'Not for sale',
-  insufficient:    'Not enough funds',
+  insufficient:    'Not enough money',
   already_owned:   'Already owned',
   max_level:       'Max level',
   nothing_owned:   'Nothing to refund',

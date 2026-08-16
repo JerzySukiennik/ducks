@@ -342,7 +342,7 @@ export function createMenuUI(opts) {
   const setSens = kv(setPane.body, 'Mouse sensitivity');
   const setFov = kv(setPane.body, 'Field of view');
   const setBuf = kv(setPane.body, 'Pixel size');
-  const setNick = kv(setPane.body, 'Nickname');
+  const setNick = kv(setPane.body, 'Name');
   const setColor = kv(setPane.body, 'Colour');
   act(acts(setPane.body), null, 'Change settings', () => {
     if (o.onSettings) o.onSettings();
@@ -351,7 +351,7 @@ export function createMenuUI(opts) {
   // --- 05 End session -------------------------------------------------------
   const endPane = pane('End');
   const endThrown = kv(endPane.body, 'In the pit');
-  const endEarned = kv(endPane.body, 'Earned');
+  const endEarned = kv(endPane.body, 'Money earned');
   const endBuilt = kv(endPane.body, 'Built');
   const endWho = kv(endPane.body, 'Session');
   el('div', 'menu-note', endPane.body,
@@ -425,7 +425,16 @@ export function createMenuUI(opts) {
         + ' · ' + pct(settings.get('ambientVolume'));
       setSens.textContent = Number(settings.get('mouseSensitivity')).toFixed(4);
       setFov.textContent = Math.round(Number(settings.get('fov'))) + '°';
-      setBuf.textContent = 'buffer ' + Math.round(Number(settings.get('bufferWidth'))) + ' px';
+      // THE WIDTH IN USE, not the width requested. This row used to print
+      // 'buffer 480 px' straight off the stored setting while the renderer was
+      // running at 560, because src/core/perf.js moves the buffer to hold the
+      // frame rate. A summary row is a statement about the game as it is, so it
+      // asks the renderer; the Settings panel, where the slider lives, is the
+      // place that shows the requested number (and the live one beside it).
+      // The label is 'Pixel size' in both places and in the panel -- it had
+      // three names between these two screens.
+      const liveBuf = typeof o.bufferWidth === 'function' ? Number(o.bufferWidth()) : NaN;
+      setBuf.textContent = Math.round(isFinite(liveBuf) ? liveBuf : Number(settings.get('bufferWidth'))) + ' px';
       setNick.textContent = nickname();
       setColor.textContent = '';
       setColor.appendChild(swatch());

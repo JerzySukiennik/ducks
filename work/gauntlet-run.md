@@ -298,3 +298,24 @@ blowers.js and conveyors.js drive movement off (-sin, cos). They agree at yaw
 0/180 and are MIRRORED IN X everywhere else. Measured on a fan at yaw 90: wind
 and physics both (-1,0,0), model body +Z basis (+1,0,0); a duck on the model's
 face side travelled 0.000 m. Every conveyor at 90/270 carries the same way.
+
+### Container side intake — geometry measured, SIM HALF STILL OPEN
+
+The art pass cut the intake and left the cavity, footprint and height untouched,
+so nothing in src/data/** moves (tools.js half [0.9825, 0.90, 2.1047] verified
+against the rebuild). Numbers, exported Y-up, origin = footprint centre in XZ,
+floor y = 0:
+
+- opening centre (0.000, 0.790, +2.1548); outer plane z=+2.2049, inner z=+2.1047
+- clear span 0.9825 m wide x 0.900 m tall, x -0.4913..+0.4913, y 0.340..1.240
+- belt feed at yaw 0: discharge lip (0, ~0.585, +2.35) travelling -Z; a flat
+  conveyor centres at (0, floor, +3.30), same yaw. Sill 0.245, headroom 0.269.
+- conveyor_slope's HIGH end (duck crown 1.578) does NOT clear the lintel at
+  1.240 -- a slope must feed from its LOW end, or the lintel goes to ~1.62 and
+  eats most of a 1.90 m wall.
+
+WHAT IS LEFT: containers.js capture() still only accepts a duck through the top
+mouth (interior half/offset plus cfg.mouthHeight ABOVE the rim). A duck arriving
+horizontally at belt height is not taken in. Until capture() learns the side
+aperture, the intake is geometry only -- it LOOKS like it should work, which is
+worse than not having it.
