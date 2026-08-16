@@ -282,6 +282,154 @@ export function isBuildableRow(row) {
 export const ANCHORS = ['floor', 'wall', 'none'];
 export const COLLIDER_SHAPES = ['cuboid'];
 
+// --- doorways ----------------------------------------------------------------
+// A row may cut ONE rectangular doorway into a face of its collider box. The
+// container's model has one -- a side intake wide enough for a belt to feed it --
+// and until this existed the mesh was the only thing that knew: the collider was
+// a solid brick across the whole aperture, so a duck aimed at the mouth bounced
+// off a wall the player could see straight through.
+//
+// It is declared here, once, and TWO consumers derive from it so they cannot
+// drift: colliderParts() below turns it into the sill / lintel / jamb boxes that
+// actually get built, and src/sim/containers.js reads the same block to decide
+// that a duck arriving through the hole is a duck that went in. Cutting the hole
+// without teaching capture, or the reverse, is the exact failure this is shaped
+// to prevent -- and because it is data, a second container with a side mouth is
+// a copied block and no new code at all.
+//
+// Frame: the collider box's own, origin at the box CENTRE (the same frame
+// collider.half and storage.interior are written in), axes in the row's model
+// orientation at yaw 0.
+export const APERTURE_FACES = {
+  '+x': { axis: 0, sign: 1, across: 2 },
+  '-x': { axis: 0, sign: -1, across: 2 },
+  '+z': { axis: 2, sign: 1, across: 0 },
+  '-z': { axis: 2, sign: -1, across: 0 },
+};
+
+function checkAperture(where, c) {
+  const a = c.aperture;
+  if (typeof a !== 'object' || a === null || Array.isArray(a)) {
+    throw new DataError(`${where}: collider.aperture must be an object {face, center, half, depth}`);
+  }
+  const face = APERTURE_FACES[a.face];
+  if (!face) {
+    throw new DataError(
+      `${where}: collider.aperture.face ${JSON.stringify(a.face)} is not one of ` +
+      `${Object.keys(APERTURE_FACES).join(', ')}`
+    );
+  }
+  for (const k of ['center', 'half']) {
+    if (!Array.isArray(a[k]) || a[k].length !== 2 || a[k].some((v) => !num(v))) {
+      throw new DataError(`${where}: collider.aperture.${k} must be two finite numbers [across, up]`);
+    }
+  }
+  if (!posNum(a.half[0]) || !posNum(a.half[1])) {
+    throw new DataError(`${where}: collider.aperture.half must be positive [across, up]`);
+  }
+  if (!posNum(a.depth)) {
+    throw new DataError(`${where}: collider.aperture.depth must be a positive number of metres`);
+  }
+  const half = c.half;
+  if (a.depth > 2 * half[face.axis] + 1e-9) {
+    throw new DataError(
+      `${where}: collider.aperture.depth ${a.depth} reaches past the far side of the box ` +
+      `(${2 * half[face.axis]} deep on that axis)`
+    );
+  }
+  // The clear opening has to be a hole in a WALL, not a missing wall: if it
+  // touched an edge the "jamb" or "sill" around it would have zero thickness and
+  // the box would be open along a whole seam instead of through a doorway.
+  const lim = [half[face.across], half[1]];
+  for (let i = 0; i < 2; i++) {
+    if (Math.abs(a.center[i]) + a.half[i] >= lim[i] - 1e-9) {
+      throw new DataError(
+        `${where}: collider.aperture reaches ${(Math.abs(a.center[i]) + a.half[i]).toFixed(4)} on ` +
+        `${i === 0 ? 'the across axis' : 'the up axis'}, which is not inside the face half-extent ` +
+        `${lim[i]}; a doorway must leave a frame around itself`
+      );
+    }
+  }
+  for (const k of Object.keys(a)) {
+    if (['face', 'center', 'half', 'depth'].indexOf(k) < 0) {
+      throw new DataError(`${where}: collider.aperture has unknown field '${k}'`);
+    }
+  }
+}
+
+// The row's doorway, resolved into the numbers both consumers want: which axis
+// the hole is bored along, where the mouth plane and the inner end of the recess
+// sit on it, and the clear rectangle in the other two axes. Null for the 60-odd
+// rows that have no doorway, which is what keeps their colliders one box.
+export function apertureOf(row) {
+  const c = row && row.collider;
+  const a = c && c.aperture;
+  if (!a) return null;
+  const face = APERTURE_FACES[a.face];
+  if (!face) return null;
+  const mouth = face.sign > 0 ? c.half[face.axis] : -c.half[face.axis];
+  return {
+    face: a.face,
+    axis: face.axis,
+    across: face.across,
+    sign: face.sign,
+    center: [a.center[0], a.center[1]],
+    half: [a.half[0], a.half[1]],
+    depth: a.depth,
+    mouth,
+    inner: mouth - face.sign * a.depth,
+  };
+}
+
+// The cuboids a row's collider is actually made of, as {center, half} in the
+// box's own frame. One box for everything without a doorway -- byte for byte the
+// collider those rows have always had -- and five for one with: the slab behind
+// the recess, the sill, the lintel, and the two jambs. Whatever is not the
+// doorway stays solid, so the box is still closed from every other direction.
+export function colliderParts(row) {
+  const c = row && row.collider;
+  if (!c || !Array.isArray(c.half)) return [];
+  const half = c.half;
+  const ap = apertureOf(row);
+  if (!ap) return [{ center: [0, 0, 0], half: [half[0], half[1], half[2]] }];
+
+  const lo = [-half[0], -half[1], -half[2]];
+  const hi = [half[0], half[1], half[2]];
+  const parts = [];
+  const EPS = 1e-6;
+  // `over` is a list of [axis, [min, max]] overrides on the full box bounds.
+  const add = (over) => {
+    const l = lo.slice();
+    const h = hi.slice();
+    for (const [axis, span] of over) { l[axis] = span[0]; h[axis] = span[1]; }
+    for (let i = 0; i < 3; i++) if (h[i] - l[i] <= EPS) return;
+    parts.push({
+      center: [(l[0] + h[0]) / 2, (l[1] + h[1]) / 2, (l[2] + h[2]) / 2],
+      half: [(h[0] - l[0]) / 2, (h[1] - l[1]) / 2, (h[2] - l[2]) / 2],
+    });
+  };
+
+  const A = ap.axis;
+  const K = ap.across;
+  const rLo = Math.min(ap.mouth, ap.inner);   // the recess, along the face normal
+  const rHi = Math.max(ap.mouth, ap.inner);
+  const aLo = ap.center[0] - ap.half[0];      // clear span, across
+  const aHi = ap.center[0] + ap.half[0];
+  const uLo = ap.center[1] - ap.half[1];      // clear span, up
+  const uHi = ap.center[1] + ap.half[1];
+
+  // Everything deeper than the recess: still one solid block.
+  add([[A, [lo[A], rLo]]]);
+  add([[A, [rHi, hi[A]]]]);
+  // Sill and lintel, full width, across the recess.
+  add([[A, [rLo, rHi]], [1, [lo[1], uLo]]]);
+  add([[A, [rLo, rHi]], [1, [uHi, hi[1]]]]);
+  // The two jambs.
+  add([[A, [rLo, rHi]], [1, [uLo, uHi]], [K, [lo[K], aLo]]]);
+  add([[A, [rLo, rHi]], [1, [uLo, uHi]], [K, [aHi, hi[K]]]]);
+  return parts;
+}
+
 const SOURCES = [
   ['machines.js', MACHINES],
   ['buildings.js', BUILDINGS],
@@ -330,6 +478,7 @@ function checkCollider(where, c) {
     throw new DataError(`${where}: collider.shape '${c.shape}' is not one of ${COLLIDER_SHAPES.join(', ')}`);
   }
   checkTriple(where, 'collider.half', c.half);
+  if (c.aperture !== undefined) checkAperture(where, c);
   if (typeof c.blockDucks !== 'boolean') {
     throw new DataError(`${where}: collider.blockDucks must be a boolean (this is how "ducks pass through the fan" is expressed as data), got ${JSON.stringify(c.blockDucks)}`);
   }

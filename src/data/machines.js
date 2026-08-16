@@ -70,7 +70,11 @@ export const MACHINES = [
     produce: { clicksPerDuck: 10, rarityWeights: 'w_basic' },
     collider: { shape: 'cuboid', half: [1.0496, 1.128, 0.736], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
-    tags: ['starter', 'placed'],
+    // noGamble: the box may not award the bench you already own and cannot sell.
+    // src/sim/gamble.js has always filtered on this tag and NO row carried it,
+    // so the only exclusion the gacha had excluded nothing. This is the data
+    // half that was never written.
+    tags: ['starter', 'placed', 'noGamble'],
   },
   {
     id: 'press', netId: 2, name: 'Duck Press',
@@ -108,7 +112,7 @@ export const MACHINES = [
     repeat: { times: 12, curve: 1.4 },
     collider: { shape: 'cuboid', half: [0.375, 0.50, 0.375], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
-    tags: [],
+    tags: ['noGamble'],
   },
   {
     id: 'machine', netId: 3, name: 'Duck Assembler',

@@ -19,6 +19,8 @@
 // was handed. Behaviour is selected by `kind` and by data fields on the row,
 // never by the row's id.
 
+import { apertureOf } from '../data/index.js';
+
 // Tunables. The authoritative copy of every value below now lives in the
 // `containers` block of src/config.js, and every key is in REQUIRED_CONFIG_KEYS,
 // so a deleted key is fatal at boot instead of silently falling back here. This
@@ -189,6 +191,24 @@ export function interiorOf(row, half) {
 
 // A row carries a storage block when its behaviour is storage-shaped. `kind`
 // selects the behaviour; the block carries the numbers.
+// Is this duck inside the row's DOORWAY -- the recess `collider.aperture` cuts
+// through one face, which colliderParts() has already cut out of the physics
+// shape? Both answers come off the same block, so the hole a duck can fly
+// through and the volume this box will accept one from are the same volume by
+// construction. `shrink` is the same margin the top mouth uses: a duck whose
+// centre is within a hair of a jamb is one that is going to bounce off it.
+//
+// `v` is the duck in the container's own frame; `ap` is apertureOf(row).
+export function inAperture(ap, v, shrink) {
+  if (!ap) return false;
+  const p = [v.x, v.y, v.z];
+  if (Math.abs(p[ap.across] - ap.center[0]) > ap.half[0] * shrink) return false;
+  if (Math.abs(p[1] - ap.center[1]) > ap.half[1] * shrink) return false;
+  const lo = Math.min(ap.mouth, ap.inner);
+  const hi = Math.max(ap.mouth, ap.inner);
+  return p[ap.axis] >= lo && p[ap.axis] <= hi;
+}
+
 export function isStorageRow(row) {
   return !!(row && row.storage && typeof row.storage.capacity === 'number');
 }
@@ -394,6 +414,9 @@ export function createContainers({
       body,
       half: [half[0], half[1], half[2]],
       interior,
+      // The doorway, if the row cuts one. Null for every box that is only open
+      // at the top, which is why their capture rule is untouched.
+      aperture: apertureOf(row),
       baseCapacity: row.storage.capacity,
       // Data, not code: a row that says it does not empty when tipped does not.
       tipToEmpty: row.storage.tipToEmpty !== false,
@@ -724,15 +747,34 @@ export function createContainers({
       // past a cart's handles is beside the barrow, not in it.
       const ih = c.interior.half;
       const io = c.interior.offset;
-      if (Math.abs(_v.x - io[0]) > ih[0] * cfg.captureShrink) continue;
-      if (Math.abs(_v.z - io[2]) > ih[2] * cfg.captureShrink) continue;
-      if (_v.y < io[1] - ih[1] || _v.y > io[1] + ih[1] + cfg.mouthHeight) continue;
+      const topMouth = Math.abs(_v.x - io[0]) <= ih[0] * cfg.captureShrink
+        && Math.abs(_v.z - io[2]) <= ih[2] * cfg.captureShrink
+        && _v.y >= io[1] - ih[1] && _v.y <= io[1] + ih[1] + cfg.mouthHeight;
+      // THE SECOND WAY IN. The container's model has a side doorway and its
+      // collider now has a matching recess, but the capture test used to stop at
+      // the cavity: with interior.half 2.1047 and captureShrink 0.92 the limit
+      // was z = 1.936, while the doorway plane is at z = 2.25. A duck delivered
+      // by a belt was refused 0.31 m short of a hole it had already flown
+      // through. `via` says which way it came, so anything downstream can tell a
+      // belt feeding a box from a duck dropped in the top.
+      const via = topMouth ? 'mouth'
+        : (inAperture(c.aperture, _v, cfg.captureShrink) ? 'aperture' : null);
+      if (!via) continue;
       // Full: stop offering ducks to this container for the rest of the step.
       // One refusal per full container per step, not one per duck per step.
-      if (countOf(c) >= cap) { refusedFull++; return; }
+      //
+      // It also SAYS SO now. A duck refused at the top mouth falls back on the
+      // lid where the player can see it; a duck refused at the intake is one a
+      // belt keeps pushing at a doorway, and the only feedback was a counter
+      // nobody is looking at. The event is what the audio layer hears.
+      if (countOf(c) >= cap) {
+        refusedFull++;
+        events.push({ type: 'refuse', key: c.key, id: c.id, duck: d.id, via });
+        return;
+      }
       if (c.physical.length < physLimit) containPhysical(c, d.id);
       else { absorbVirtual(c, d.id); absorbed++; }
-      events.push({ type: 'absorb', key: c.key, id: c.id, duck: d.id });
+      events.push({ type: 'absorb', key: c.key, id: c.id, duck: d.id, via });
       d.taken = true;
     }
   }
@@ -834,6 +876,17 @@ export function createContainers({
       half: [c.half[0], c.half[1], c.half[2]],
       interiorHalf: c.interior.half.slice(),
       interiorOffset: c.interior.offset.slice(),
+      // The doorway as the capture rule sees it, so "is the hole where the mesh
+      // says it is" is a question that can be answered without reading the row.
+      aperture: c.aperture
+        ? {
+          face: c.aperture.face,
+          center: c.aperture.center.slice(),
+          half: c.aperture.half.slice(),
+          mouth: c.aperture.mouth,
+          inner: c.aperture.inner,
+        }
+        : null,
       additionalMass: c.appliedMass,
       bodyMass: typeof c.body.mass === 'function' ? c.body.mass() : null,
       tiltDegrees: c.tiltDegrees,

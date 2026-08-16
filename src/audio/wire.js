@@ -113,6 +113,9 @@ export const SIM_EVENTS = {
     + 'physically fell in; a crate tipped over the pit scores virtually and never '
     + 'reaches pit.consumeEvents()',
   'containers:absorb': 'duck_squeak, trimmed and rate-limited into a texture',
+  'containers:refuse': 'machine_jam, rate-limited -- a full container turning a duck away. '
+    + 'The same sound a jammed machine makes, because it is the same fact: something '
+    + 'upstream is still delivering and this thing cannot take it',
   // tools.onUse()
   'tools:sweep': 'broom, throttled',
   'tools:hose': 'throw',
@@ -348,6 +351,7 @@ export function createGameAudio(deps) {
   }
 
   let lastAbsorbAt = -1e9;
+  let lastRefuseAt = -1e9;
 
   function noteContainerEvents() {
     if (!containers || typeof containers.consumeEvents !== 'function') return 0;
@@ -357,6 +361,7 @@ export function createGameAudio(deps) {
     let leaks = 0;
     let scores = 0;
     let absorbs = 0;
+    let refusals = 0;
     for (let i = 0; i < list.length; i++) {
       const ev = list[i];
       const t = ev.type;
@@ -364,6 +369,16 @@ export function createGameAudio(deps) {
       else if (t === 'leak') leaks++;
       else if (t === 'score') { payoff(ev.tier); scores++; }
       else if (t === 'absorb') absorbs++;
+      else if (t === 'refuse') refusals++;
+    }
+    // A FULL container turning a duck away. It used to be silent: a belt feeding
+    // a full box went on delivering, the ducks piled up at the intake, and the
+    // only record was a counter. Same clip as a jammed machine, on the same
+    // rate limit as absorb, because a belt pushing at a full box emits one of
+    // these every step and it must read as a state rather than a machine gun.
+    if (refusals > 0 && simClock - lastRefuseAt >= A.absorbMinSeconds) {
+      lastRefuseAt = simClock;
+      sfx.play('machine_jam', {});
     }
     // A crate emptied over the pit is now the SAME rising run as the same ducks
     // dropped in by hand, note for note, plus the same burp on the same counter.
@@ -387,7 +402,7 @@ export function createGameAudio(deps) {
     // had dropped. `leak` is a separate event type from `spill` and this branch
     // is the only thing that hears it.
     if (leaks > 0) sfx.play('duck_squeak', {});
-    return spills + leaks + scores + absorbs;
+    return spills + leaks + scores + absorbs + refusals;
   }
 
   // --- duck impacts ----------------------------------------------------------

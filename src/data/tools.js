@@ -44,7 +44,7 @@
 export const TOOLS = [
   {
     id: 'bucket', netId: 100, name: 'Bucket',
-    desc: 'Holds about ten ducks. Tip it into the pit.',
+    desc: 'Holds eight ducks. Tip it into the pit.',
     cost: 25, model: 'bucket', footprint: [0.75, 0.95, 0.75], anchor: 'floor',
     kind: 'storage',
     storage: {
@@ -63,7 +63,7 @@ export const TOOLS = [
   },
   {
     id: 'box', netId: 101, name: 'Crate',
-    desc: 'Holds about twenty five ducks.',
+    desc: 'Holds sixteen ducks.',
     cost: 45, model: 'box', footprint: [1.00, 0.75, 1.00], anchor: 'floor',
     kind: 'storage',
     storage: {
@@ -79,7 +79,7 @@ export const TOOLS = [
   },
   {
     id: 'box_big', netId: 102, name: 'Large Crate',
-    desc: 'Holds about sixty ducks. Heavy.',
+    desc: 'Holds thirty ducks. Heavy.',
     cost: 120, model: 'box_big', footprint: [1.25, 1.10, 1.25], anchor: 'floor',
     kind: 'storage',
     storage: {
@@ -103,7 +103,28 @@ export const TOOLS = [
       capacity: 200, tipToEmpty: false,
       interior: { half: [0.9825, 0.90, 2.1047], offset: [0, 0, 0] },
     },
-    collider: { shape: 'cuboid', half: [1.125, 1.00, 2.25], blockDucks: true },
+    // THE row the aperture block exists for. The model has a doorway cut into
+    // its +Z face and, until this was written, nothing but the mesh knew: the
+    // collider was one solid brick across the whole opening, so a belt aimed at
+    // the mouth pushed ducks into a wall the player could see straight through.
+    //
+    // Every number is measured off the exported GLB, in the collider box's own
+    // frame (origin at the box centre, so 1.00 above the floor):
+    //   clear span   0.9825 wide x 0.900 tall -- x -0.4913..+0.4913,
+    //                floor y 0.340..1.240, i.e. local y -0.660..-0.240+0.450
+    //   centre       (0, 0.790) off the floor -> local up -0.21
+    //   mouth plane  the +Z face of the collider, z = +2.25
+    //
+    // `depth` is how far the recess is bored in, and it is 0.35 rather than the
+    // 0.1002 the wall is actually thick for a measured reason: a duck is 0.146 m
+    // deep, so a recess only as deep as the wall could never hold one clear of
+    // the mouth plane, and a duck the box refuses (because it is full) would be
+    // left half inside a solid face. At 0.35 a refused duck comes to rest on the
+    // sill, in the doorway, where the player can see the box is full.
+    collider: {
+      shape: 'cuboid', half: [1.125, 1.00, 2.25], blockDucks: true,
+      aperture: { face: '+z', center: [0, -0.21], half: [0.49125, 0.45], depth: 0.35 },
+    },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: ['bigticket'],
   },

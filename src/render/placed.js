@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import config from '../config.js';
+import { colliderParts } from '../data/index.js';
 import { propMaterial } from './props.js';
 import { detectRotor } from './rotor.js';
 import { contactMaterial } from './materials.js';
@@ -975,16 +976,27 @@ export function createPlaced({ scene, models, world, groups }) {
         .setAngularDamping(d.angularDamping)
         .setCanSleep(true)
     );
-    raw.createCollider(
-      RAPIER.ColliderDesc.cuboid(half[0], half[1], half[2])
-        .setDensity(d.density)
-        .setFriction(friction)
-        .setRestitution(restitution)
-        .setCollisionGroups(groups.interactionGroups(
-          groups.GROUP_PROP, groups.GROUP_WORLD | groups.GROUP_PROP | groups.GROUP_PLAYER
-        )),
-      body
+    // One cuboid for a row with no doorway -- the collider every prop has always
+    // had -- and the sill / lintel / jamb set for a row that declares
+    // `collider.aperture`. The split is derived in src/data/index.js from the
+    // SAME block src/sim/containers.js reads to decide a duck came in through the
+    // hole, so the shape and the rule cannot drift apart.
+    const parts = colliderParts(item);
+    const propGroups = groups.interactionGroups(
+      groups.GROUP_PROP, groups.GROUP_WORLD | groups.GROUP_PROP | groups.GROUP_PLAYER
     );
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      raw.createCollider(
+        RAPIER.ColliderDesc.cuboid(p.half[0], p.half[1], p.half[2])
+          .setTranslation(p.center[0], p.center[1], p.center[2])
+          .setDensity(d.density)
+          .setFriction(friction)
+          .setRestitution(restitution)
+          .setCollisionGroups(propGroups),
+        body
+      );
+    }
     if (vel) body.setLinvel({ x: vel.x, y: vel.y, z: vel.z }, true);
 
     const rec = {

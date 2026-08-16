@@ -85,15 +85,27 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
 
   function postStep(dt) {
     // Ducks: crossing the sensor plane inside the shaft pays out and recycles.
-    if (scoring) ducks.forEach((id, x, y, z) => {
+    // `scoring` gates the two things that are the HOST'S alone -- paying, and
+    // releasing the body back to the pool. It must NOT gate noticing.
+    //
+    // It used to wrap this whole loop, and that cost a client four systems at
+    // once: no `duck` event meant no rising pit note (the game's signature
+    // sound) and no rare-duck sting, no `scored` counter meant the summary
+    // reported zero and "rarest: none", and main.js's onboarding trigger reads
+    // that same counter -- so a player who JOINED a friend's game had the
+    // tutorial stall on step 3 forever. In a 1-4 player co-op that was up to
+    // three players out of four. A client now sees and hears everything and
+    // simply does not touch the money or the pool.
+    ducks.forEach((id, x, y, z) => {
       if (y > scorePlaneY) return;
       const dx = x - C.x;
       const dz = z - C.z;
       if (dx * dx + dz * dz > captureR2) return;
       const value = ducks.value(id, economy.duckBaseValue, economy.duckValueMul);
-      economy.add(value, 'pit');
       events.push({ type: 'duck', id, value, tier: ducks.tier(id) });
       scored++;
+      if (!scoring) return;
+      economy.add(value, 'pit');
       paid += value;
       ducks.release(id);
     });
