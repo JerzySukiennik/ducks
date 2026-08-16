@@ -1,0 +1,1070 @@
+[
+ {
+  "name": "duck",
+  "group": "Kaczka",
+  "desc": "Gumowa kaczka. Twarz gry, ~25 cm, musi byc czytelna z 20 m.",
+  "tris": 518,
+  "kb": 40,
+  "dim": [
+   0.18,
+   0.27,
+   0.48
+  ]
+ },
+ {
+  "name": "crank",
+  "group": "Maszyny",
+  "desc": "Manual Duck Workbench - kolo z boku, 10 klikniec = kaczka.",
+  "tris": 2928,
+  "kb": 221,
+  "dim": [
+   1.31,
+   1.33,
+   1.41
+  ]
+ },
+ {
+  "name": "machine",
+  "group": "Maszyny",
+  "desc": "Maszyna automatyczna, produkuje bez gracza.",
+  "tris": 232,
+  "kb": 19,
+  "dim": [
+   1.5,
+   1.25,
+   2.1
+  ]
+ },
+ {
+  "name": "press",
+  "group": "Maszyny",
+  "desc": "Prasa wypychajaca kaczke.",
+  "tris": 144,
+  "kb": 14,
+  "dim": [
+   1.0,
+   0.75,
+   1.8
+  ]
+ },
+ {
+  "name": "vacuum_station",
+  "group": "Maszyny",
+  "desc": "Odkurzacz stacjonarny.",
+  "tris": 208,
+  "kb": 17,
+  "dim": [
+   1.0,
+   1.0,
+   1.28
+  ]
+ },
+ {
+  "name": "conveyor",
+  "group": "Automatyzacja",
+  "desc": "Tasmociag prosty, 2 m.",
+  "tris": 240,
+  "kb": 19,
+  "dim": [
+   1.0,
+   2.0,
+   0.65
+  ]
+ },
+ {
+  "name": "conveyor_corner",
+  "group": "Automatyzacja",
+  "desc": "Tasmociag zakrecony 90 stopni.",
+  "tris": 576,
+  "kb": 41,
+  "dim": [
+   1.5,
+   1.5,
+   0.66
+  ]
+ },
+ {
+  "name": "conveyor_slope",
+  "group": "Automatyzacja",
+  "desc": "Tasmociag wznoszacy.",
+  "tris": 216,
+  "kb": 18,
+  "dim": [
+   1.0,
+   2.0,
+   1.55
+  ]
+ },
+ {
+  "name": "fan",
+  "group": "Automatyzacja",
+  "desc": "Wiatrak. Model bez kolizji dla kaczek.",
+  "tris": 360,
+  "kb": 27,
+  "dim": [
+   1.25,
+   0.75,
+   1.63
+  ]
+ },
+ {
+  "name": "wall",
+  "group": "Budowle",
+  "desc": "Sciana podstawowa 2x1 m.",
+  "tris": 60,
+  "kb": 7,
+  "dim": [
+   2.0,
+   0.25,
+   1.06
+  ]
+ },
+ {
+  "name": "wall_high",
+  "group": "Budowle",
+  "desc": "Sciana wysoka 2x2,6 m.",
+  "tris": 132,
+  "kb": 13,
+  "dim": [
+   2.0,
+   0.25,
+   2.66
+  ]
+ },
+ {
+  "name": "rail",
+  "group": "Budowle",
+  "desc": "Niska bandka.",
+  "tris": 60,
+  "kb": 7,
+  "dim": [
+   2.0,
+   0.25,
+   0.35
+  ]
+ },
+ {
+  "name": "corner",
+  "group": "Budowle",
+  "desc": "Naroznik 90 stopni.",
+  "tris": 96,
+  "kb": 9,
+  "dim": [
+   1.0,
+   1.0,
+   1.1
+  ]
+ },
+ {
+  "name": "ramp",
+  "group": "Budowle",
+  "desc": "Rampa.",
+  "tris": 120,
+  "kb": 12,
+  "dim": [
+   1.5,
+   2.0,
+   0.92
+  ]
+ },
+ {
+  "name": "chute",
+  "group": "Budowle",
+  "desc": "Rynna - polokragly kanal.",
+  "tris": 540,
+  "kb": 40,
+  "dim": [
+   0.75,
+   2.0,
+   0.53
+  ]
+ },
+ {
+  "name": "bridge",
+  "group": "Budowle",
+  "desc": "Most nad tunelem.",
+  "tris": 312,
+  "kb": 24,
+  "dim": [
+   1.0,
+   3.0,
+   1.45
+  ]
+ },
+ {
+  "name": "pillar",
+  "group": "Budowle",
+  "desc": "Filar / podpora.",
+  "tris": 96,
+  "kb": 8,
+  "dim": [
+   0.5,
+   0.5,
+   2.46
+  ]
+ },
+ {
+  "name": "box",
+  "group": "Przedmioty",
+  "desc": "Skrzynia podstawowa, ~25 kaczek.",
+  "tris": 588,
+  "kb": 42,
+  "dim": [
+   1.0,
+   1.0,
+   0.75
+  ],
+  "interior": {
+   "half": [
+    0.4333,
+    0.3225,
+    0.4333
+   ],
+   "offset": [
+    0.0,
+    0.0025,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "box_big",
+  "group": "Przedmioty",
+  "desc": "Duza skrzynia.",
+  "tris": 684,
+  "kb": 48,
+  "dim": [
+   1.25,
+   1.25,
+   1.1
+  ],
+  "interior": {
+   "half": [
+    0.5426,
+    0.49,
+    0.5426
+   ],
+   "offset": [
+    0.0,
+    0.01,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "container",
+  "group": "Przedmioty",
+  "desc": "Kontener, 200 kaczek.",
+  "tris": 444,
+  "kb": 33,
+  "dim": [
+   2.25,
+   4.5,
+   2.0
+  ],
+  "interior": {
+   "half": [
+    0.9825,
+    0.9,
+    2.1047
+   ],
+   "offset": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "bucket",
+  "group": "Przedmioty",
+  "desc": "Wiadro, ~10 kaczek.",
+  "tris": 708,
+  "kb": 51,
+  "dim": [
+   0.75,
+   0.75,
+   0.95
+  ],
+  "interior": {
+   "half": [
+    0.2411,
+    0.4225,
+    0.2411
+   ],
+   "offset": [
+    0.0,
+    -0.0075,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "cart",
+  "group": "Przedmioty",
+  "desc": "Taczka - pchasz przed soba.",
+  "tris": 268,
+  "kb": 22,
+  "dim": [
+   1.25,
+   2.25,
+   1.01
+  ],
+  "interior": {
+   "half": [
+    0.4605,
+    0.28,
+    0.7074
+   ],
+   "offset": [
+    0.0,
+    0.225,
+    -0.2131
+   ]
+  }
+ },
+ {
+  "name": "broom",
+  "group": "Przedmioty",
+  "desc": "Miotla - przejmuje LPM.",
+  "tris": 200,
+  "kb": 17,
+  "dim": [
+   0.5,
+   0.25,
+   1.52
+  ]
+ },
+ {
+  "name": "vacuum",
+  "group": "Przedmioty",
+  "desc": "Odkurzacz reczny.",
+  "tris": 180,
+  "kb": 16,
+  "dim": [
+   0.25,
+   1.0,
+   0.73
+  ]
+ },
+ {
+  "name": "tube",
+  "group": "Swiat",
+  "desc": "Wielka rura, z ktorej wypadaja zakupy.",
+  "tris": 1296,
+  "kb": 90,
+  "dim": [
+   4.44,
+   4.4,
+   6.33
+  ]
+ },
+ {
+  "name": "shop",
+  "group": "Swiat",
+  "desc": "Budka sprzedawcy.",
+  "tris": 228,
+  "kb": 22,
+  "dim": [
+   2.9,
+   2.49,
+   2.87
+  ]
+ },
+ {
+  "name": "vendor",
+  "group": "Swiat",
+  "desc": "Sprzedawca stojacy w budce.",
+  "tris": 2572,
+  "kb": 191,
+  "dim": [
+   0.66,
+   0.43,
+   1.88
+  ]
+ },
+ {
+  "name": "floor",
+  "group": "Swiat",
+  "desc": "Kafel posadzki 4x4 m.",
+  "tris": 12,
+  "kb": 25,
+  "dim": [
+   4.0,
+   4.0,
+   0.2
+  ]
+ },
+ {
+  "name": "marking",
+  "group": "Swiat",
+  "desc": "Zolta strzalka na posadzce.",
+  "tris": 2,
+  "kb": 34,
+  "dim": [
+   1.3,
+   1.9,
+   0.0
+  ]
+ },
+ {
+  "name": "lamp",
+  "group": "Swiat",
+  "desc": "Lampa przemyslowa.",
+  "tris": 160,
+  "kb": 13,
+  "dim": [
+   0.68,
+   1.24,
+   3.15
+  ]
+ },
+ {
+  "name": "pit_rim",
+  "group": "Swiat",
+  "desc": "Krawieznik pitu - 32-kat, srednica 3,2 m.",
+  "tris": 960,
+  "kb": 66,
+  "dim": [
+   3.54,
+   3.54,
+   0.28
+  ]
+ },
+ {
+  "name": "avatar",
+  "group": "Gracz",
+  "desc": "Postac gracza - kask, kamizelka, dzinsy.",
+  "tris": 2596,
+  "kb": 193,
+  "dim": [
+   0.66,
+   0.43,
+   1.88
+  ]
+ },
+ {
+  "name": "crank_bot",
+  "group": "Maszyny",
+  "desc": "Automat nakrecajacy kolo warsztatu.",
+  "tris": 944,
+  "kb": 74,
+  "dim": [
+   0.34,
+   0.35,
+   0.43
+  ]
+ },
+ {
+  "name": "gamble_box",
+  "group": "Maszyny",
+  "desc": "Skrzynka hazardowa - korpus.",
+  "tris": 144,
+  "kb": 14,
+  "dim": [
+   0.75,
+   0.75,
+   0.64
+  ]
+ },
+ {
+  "name": "gamble_box_lid",
+  "group": "Maszyny",
+  "desc": "Skrzynka hazardowa - wieko.",
+  "tris": 60,
+  "kb": 8,
+  "dim": [
+   0.75,
+   0.75,
+   0.21
+  ]
+ },
+ {
+  "name": "sack",
+  "group": "Przedmioty",
+  "desc": "Worek.",
+  "tris": 588,
+  "kb": 44,
+  "dim": [
+   0.75,
+   0.75,
+   1.04
+  ]
+ },
+ {
+  "name": "crate_wood",
+  "group": "Przedmioty",
+  "desc": "Skrzynia drewniana - leakPerSecond.",
+  "tris": 276,
+  "kb": 21,
+  "dim": [
+   1.0,
+   1.0,
+   0.7
+  ]
+ },
+ {
+  "name": "bucket_leaky",
+  "group": "Przedmioty",
+  "desc": "Kubel dziurawy - leakPerSecond.",
+  "tris": 556,
+  "kb": 42,
+  "dim": [
+   0.75,
+   0.75,
+   0.86
+  ]
+ },
+ {
+  "name": "dumper",
+  "group": "Przedmioty",
+  "desc": "Wywrotka.",
+  "tris": 408,
+  "kb": 32,
+  "dim": [
+   1.25,
+   1.75,
+   0.98
+  ]
+ },
+ {
+  "name": "pallet_jack",
+  "group": "Przedmioty",
+  "desc": "Wozek paletowy.",
+  "tris": 276,
+  "kb": 22,
+  "dim": [
+   0.75,
+   2.0,
+   1.29
+  ]
+ },
+ {
+  "name": "broom_wide",
+  "group": "Przedmioty",
+  "desc": "Miotla szeroka.",
+  "tris": 360,
+  "kb": 29,
+  "dim": [
+   1.0,
+   0.25,
+   1.57
+  ]
+ },
+ {
+  "name": "vacuum_industrial",
+  "group": "Przedmioty",
+  "desc": "Odkurzacz przemyslowy.",
+  "tris": 500,
+  "kb": 35,
+  "dim": [
+   0.75,
+   0.75,
+   1.23
+  ]
+ },
+ {
+  "name": "leaf_blower",
+  "group": "Przedmioty",
+  "desc": "Dmuchawa do liesci.",
+  "tris": 268,
+  "kb": 21,
+  "dim": [
+   0.25,
+   1.0,
+   0.73
+  ]
+ },
+ {
+  "name": "pusher",
+  "group": "Przedmioty",
+  "desc": "Spychacz.",
+  "tris": 148,
+  "kb": 14,
+  "dim": [
+   1.25,
+   0.5,
+   1.0
+  ]
+ },
+ {
+  "name": "lasso",
+  "group": "Przedmioty",
+  "desc": "Lasso.",
+  "tris": 408,
+  "kb": 31,
+  "dim": [
+   0.5,
+   0.5,
+   0.54
+  ]
+ },
+ {
+  "name": "fire_hose",
+  "group": "Przedmioty",
+  "desc": "Waz strazacki.",
+  "tris": 664,
+  "kb": 48,
+  "dim": [
+   0.75,
+   0.75,
+   0.57
+  ]
+ },
+ {
+  "name": "fan_handheld",
+  "group": "Przedmioty",
+  "desc": "Wentylator reczny.",
+  "tris": 272,
+  "kb": 23,
+  "dim": [
+   0.5,
+   0.25,
+   0.82
+  ]
+ },
+ {
+  "name": "plank",
+  "group": "Przedmioty",
+  "desc": "Deska 2 m.",
+  "tris": 132,
+  "kb": 12,
+  "dim": [
+   0.25,
+   2.0,
+   0.12
+  ]
+ },
+ {
+  "name": "horn",
+  "group": "Przedmioty",
+  "desc": "Trabka.",
+  "tris": 272,
+  "kb": 23,
+  "dim": [
+   0.25,
+   0.5,
+   0.69
+  ]
+ },
+ {
+  "name": "rake",
+  "group": "Przedmioty",
+  "desc": "Grabie - tool.pull.",
+  "tris": 212,
+  "kb": 17,
+  "dim": [
+   0.75,
+   0.25,
+   1.54
+  ]
+ },
+ {
+  "name": "magnet",
+  "group": "Przedmioty",
+  "desc": "Reeczny magnes - tool.pull.",
+  "tris": 180,
+  "kb": 16,
+  "dim": [
+   0.5,
+   0.25,
+   0.85
+  ]
+ },
+ {
+  "name": "dustpan",
+  "group": "Przedmioty",
+  "desc": "Szufelka - nowy tryb.",
+  "tris": 124,
+  "kb": 12,
+  "dim": [
+   0.5,
+   0.75,
+   0.74
+  ]
+ },
+ {
+  "name": "wall_glass",
+  "group": "Budowle",
+  "desc": "Sciana szklana 2 m.",
+  "tris": 96,
+  "kb": 10,
+  "dim": [
+   2.0,
+   0.25,
+   1.06
+  ]
+ },
+ {
+  "name": "wall_soft",
+  "group": "Budowle",
+  "desc": "Miekka sciana - collider.restitution.",
+  "tris": 200,
+  "kb": 16,
+  "dim": [
+   2.0,
+   0.25,
+   1.06
+  ]
+ },
+ {
+  "name": "fence_mesh",
+  "group": "Budowle",
+  "desc": "Plot siatkowy - przepuszcza nadmuch.",
+  "tris": 276,
+  "kb": 22,
+  "dim": [
+   2.0,
+   0.25,
+   1.06
+  ]
+ },
+ {
+  "name": "neon_ducks",
+  "group": "Budowle",
+  "desc": "Neon DUCKS - dekoracja.",
+  "tris": 300,
+  "kb": 25,
+  "dim": [
+   2.0,
+   0.25,
+   1.49
+  ]
+ },
+ {
+  "name": "slide",
+  "group": "Budowle",
+  "desc": "Zjezdzalnia prosta, 3 m.",
+  "tris": 228,
+  "kb": 20,
+  "dim": [
+   1.0,
+   3.0,
+   1.45
+  ]
+ },
+ {
+  "name": "fan_strong",
+  "group": "Budowle",
+  "desc": "Wiatrak mocny.",
+  "tris": 492,
+  "kb": 37,
+  "dim": [
+   1.5,
+   1.0,
+   1.88
+  ]
+ },
+ {
+  "name": "fan_vertical",
+  "group": "Budowle",
+  "desc": "Wiatrak pionowy - blow.pitchDegrees.",
+  "tris": 444,
+  "kb": 34,
+  "dim": [
+   1.0,
+   1.0,
+   0.89
+  ]
+ },
+ {
+  "name": "vibe_floor",
+  "group": "Budowle",
+  "desc": "Wibrator podlogowy - plaski tasmociag.",
+  "tris": 272,
+  "kb": 22,
+  "dim": [
+   1.0,
+   2.0,
+   0.14
+  ]
+ },
+ {
+  "name": "platform",
+  "group": "Budowle",
+  "desc": "Podest 2x2 m.",
+  "tris": 288,
+  "kb": 23,
+  "dim": [
+   2.0,
+   2.0,
+   0.63
+  ]
+ },
+ {
+  "name": "stairs",
+  "group": "Budowle",
+  "desc": "Schody na podest.",
+  "tris": 180,
+  "kb": 15,
+  "dim": [
+   1.0,
+   2.0,
+   0.6
+  ]
+ },
+ {
+  "name": "roof",
+  "group": "Budowle",
+  "desc": "Dach 2x2 m na slupach.",
+  "tris": 216,
+  "kb": 18,
+  "dim": [
+   2.0,
+   2.0,
+   1.8
+  ]
+ },
+ {
+  "name": "ice_slide",
+  "group": "Budowle",
+  "desc": "Slizg lodowy - collider.friction.",
+  "tris": 180,
+  "kb": 16,
+  "dim": [
+   2.0,
+   2.0,
+   0.15
+  ]
+ },
+ {
+  "name": "pit_kerb",
+  "group": "Budowle",
+  "desc": "Krawezniek pitu - prosty odcinek.",
+  "tris": 84,
+  "kb": 9,
+  "dim": [
+   1.0,
+   0.5,
+   0.38
+  ]
+ },
+ {
+  "name": "lamp_post",
+  "group": "Budowle",
+  "desc": "Lampa - niski slupek.",
+  "tris": 176,
+  "kb": 14,
+  "dim": [
+   0.5,
+   0.5,
+   2.17
+  ]
+ },
+ {
+  "name": "sign_dir",
+  "group": "Budowle",
+  "desc": "Znak kierunkowy.",
+  "tris": 136,
+  "kb": 12,
+  "dim": [
+   0.75,
+   0.25,
+   1.38
+  ]
+ },
+ {
+  "name": "bumper",
+  "group": "Budowle",
+  "desc": "Odbijacz - collider.restitution.",
+  "tris": 428,
+  "kb": 31,
+  "dim": [
+   1.0,
+   1.0,
+   0.89
+  ]
+ },
+ {
+  "name": "trampoline",
+  "group": "Budowle",
+  "desc": "Trampolina - wyrzuca w gore.",
+  "tris": 592,
+  "kb": 44,
+  "dim": [
+   1.5,
+   1.5,
+   0.51
+  ]
+ },
+ {
+  "name": "hive",
+  "group": "Maszyny",
+  "desc": "Kaczkowy ul - 3 kaczki na cykl.",
+  "tris": 232,
+  "kb": 21,
+  "dim": [
+   1.0,
+   1.0,
+   1.23
+  ]
+ },
+ {
+  "name": "incubator_double",
+  "group": "Maszyny",
+  "desc": "Podwojna wylegarnia - 2 kaczki.",
+  "tris": 332,
+  "kb": 29,
+  "dim": [
+   1.5,
+   1.0,
+   1.3
+  ]
+ },
+ {
+  "name": "press_belt",
+  "group": "Maszyny",
+  "desc": "Prasa tasmowa - 5 kaczek.",
+  "tris": 404,
+  "kb": 32,
+  "dim": [
+   1.0,
+   2.0,
+   1.5
+  ]
+ },
+ {
+  "name": "feeder_vibe",
+  "group": "Maszyny",
+  "desc": "Wibracyjny podajnik - 5 kaczek.",
+  "tris": 592,
+  "kb": 44,
+  "dim": [
+   1.0,
+   1.5,
+   1.26
+  ]
+ },
+ {
+  "name": "slot_machine",
+  "group": "Maszyny",
+  "desc": "Automat losowy - 1-10 kaczek.",
+  "tris": 452,
+  "kb": 36,
+  "dim": [
+   0.75,
+   0.75,
+   1.52
+  ]
+ },
+ {
+  "name": "factory",
+  "group": "Maszyny",
+  "desc": "Kaczkowa fabryka - 10 kaczek.",
+  "tris": 576,
+  "kb": 44,
+  "dim": [
+   2.5,
+   2.0,
+   2.61
+  ]
+ },
+ {
+  "name": "geyser",
+  "group": "Maszyny",
+  "desc": "Kaczkowy gejzer - 30 kaczek.",
+  "tris": 708,
+  "kb": 53,
+  "dim": [
+   1.5,
+   1.5,
+   1.0
+  ]
+ },
+ {
+  "name": "pipe_endless",
+  "group": "Maszyny",
+  "desc": "Nieskonczona rura - ciagly strumien.",
+  "tris": 516,
+  "kb": 39,
+  "dim": [
+   1.0,
+   1.0,
+   1.42
+  ]
+ },
+ {
+  "name": "machine_slow",
+  "group": "Maszyny",
+  "desc": "Wolny automat - 60 s, kolo zamachowe.",
+  "tris": 320,
+  "kb": 26,
+  "dim": [
+   1.0,
+   1.0,
+   1.31
+  ]
+ },
+ {
+  "name": "condenser",
+  "group": "Maszyny",
+  "desc": "Zbiornik kondensacyjny - 90 s.",
+  "tris": 444,
+  "kb": 35,
+  "dim": [
+   1.0,
+   1.0,
+   1.6
+  ]
+ },
+ {
+  "name": "duckomat",
+  "group": "Maszyny",
+  "desc": "Kaczkomat - automat vendingowy, 30 s.",
+  "tris": 384,
+  "kb": 32,
+  "dim": [
+   1.0,
+   0.75,
+   1.78
+  ]
+ },
+ {
+  "name": "hatchery",
+  "group": "Maszyny",
+  "desc": "Kaczkowa wylegarnia - 20 s.",
+  "tris": 480,
+  "kb": 42,
+  "dim": [
+   1.25,
+   1.0,
+   0.85
+  ]
+ },
+ {
+  "name": "printer3d",
+  "group": "Maszyny",
+  "desc": "Kaczkowa drukarka 3D - 180 s, bez tieru 0.",
+  "tris": 316,
+  "kb": 29,
+  "dim": [
+   1.0,
+   1.0,
+   1.28
+  ]
+ },
+ {
+  "name": "press_gold",
+  "group": "Maszyny",
+  "desc": "Zlota prasa - 40 s, bez tieru 0.",
+  "tris": 216,
+  "kb": 19,
+  "dim": [
+   1.0,
+   0.75,
+   1.64
+  ]
+ },
+ {
+  "name": "reactor",
+  "group": "Maszyny",
+  "desc": "Reaktor rzadkosciowy - tylko najwyzsze tiery.",
+  "tris": 728,
+  "kb": 54,
+  "dim": [
+   1.5,
+   1.5,
+   1.53
+  ]
+ }
+]
