@@ -990,13 +990,22 @@ export const config = {
     clientSpinIdleMs: 260,
     // Wheel hub in model-local metres (before scale/yaw). The wheel turns about
     // the model's local +X axis.
-    wheelLocalX: 0.4685,
-    wheelLocalY: 0.78,
-    wheelLocalZ: -0.225,
+    // Re-measured off the reworked crank export, not estimated. The wheel used
+    // to sit on the machine's SIDE, which is why it read as a toy: from the only
+    // position you can crank from it was edge-on, and the big gold ring you
+    // actually saw on the front was the ejector pipe. It is now on the FRONT
+    // face and turns about local Z -- see setWheelAngle() in render/props.js,
+    // which had to change axis and sign with it.
+    wheelLocalX: 0.2761,
+    wheelLocalY: 1.0200,
+    wheelLocalZ: 0.2800,
     wheelRadius: 0.34,
     // Triangles with centroid x > splitMinX and within splitRadius of the hub in
     // the local YZ plane belong to the wheel and turn with it.
+    // splitMinX is dead with the wheel on the front face; splitMinZ replaces it.
+    // 0.19 measured: the nearest cabinet part sits 0.43 m clear of this plane.
     splitMinX: 0.40,
+    splitMinZ: 0.19,
     splitRadius: 0.42,
     // Aim sphere used to decide "the cursor is on the wheel".
     hitRadiusScale: 1.25,
@@ -2867,6 +2876,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'machine.wheelLocalZ',
   'machine.wheelRadius',
   'machine.splitMinX',
+  'machine.splitMinZ',
   'machine.splitRadius',
   'machine.hitRadiusScale',
   'machine.useRange',

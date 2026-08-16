@@ -83,6 +83,15 @@ export const MACHINES = [
     kind: 'producer_auto',
     repeat: { times: 16, curve: 1.28 },
     produce: { secondsPerDuck: 4.5, rarityWeights: 'w_basic' },
+    // The ram, and it presses when a duck actually comes out rather than on a
+    // clock of its own -- one pulse per emission, so a press that is jammed or
+    // switched off is visibly still. 0.090 m is the gap between the ram's face
+    // and the anvil in assets/models/press_ram.glb: a full stroke touches down
+    // and no further, which is what makes it look like it did the stamping.
+    moving: [{
+      model: 'press_ram', motion: 'slide',
+      axis: [0, -1, 0], travel: 0.090, seconds: 0.45, drive: 'stroke',
+    }],
     collider: { shape: 'cuboid', half: [0.50, 0.90, 0.375], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
@@ -147,6 +156,10 @@ export const MACHINES = [
     kind: 'conveyor',
     repeat: { times: 60, curve: 1.035 },
     belt: { speed: 1.6, turn: 0, rise: 0 },
+    // The cleats. Measured off assets/models/conveyor_belt.glb: eight of them
+    // over the piece's 1.78 m of band, so one eighth of it -- 0.2225 m -- puts
+    // each cleat exactly where its neighbour started and the loop closes.
+    moving: [{ model: 'conveyor_belt', motion: 'slide', axis: [0, 0, 1], period: 0.2225, drive: 'belt' }],
     collider: { shape: 'cuboid', half: [0.50, 0.325, 1.00], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
@@ -158,6 +171,15 @@ export const MACHINES = [
     kind: 'conveyor',
     repeat: { times: 12, curve: 1.05 },
     belt: { speed: 1.6, turn: 90, rise: 0 },
+    // A corner's cleats go round rather than along, about the inner corner at
+    // (-0.75, +0.75) -- and the arc's radius is exactly 1.00 m, which is why
+    // the belt's speed in metres per second is also its rate in radians per
+    // second and no conversion appears anywhere. Eight cleats over the quarter
+    // turn: 90 / 8 = 11.25 degrees per period.
+    moving: [{
+      model: 'conveyor_corner_belt', motion: 'turn',
+      axis: [0, 1, 0], pivot: [-0.75, 0, 0.75], period: 11.25, drive: 'belt',
+    }],
     collider: { shape: 'cuboid', half: [0.75, 0.33, 0.75], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
@@ -222,6 +244,14 @@ export const MACHINES = [
       // assumes when this is absent; a sloped piece has to say.
       surfaceOffsetY: 0.0555,
     },
+    // The cleats run DOWN the slope, not along the floor: normalize(0, -0.718,
+    // 2.00) is the band's own direction, the same two numbers as `rise` and the
+    // piece's length, so the cleats cannot drift out of agreement with the drive
+    // that carries the ducks. Period 0.30 m of that slanted travel.
+    moving: [{
+      model: 'conveyor_slope_belt', motion: 'slide',
+      axis: [0, -0.3376, 0.9413], period: 0.30, drive: 'belt',
+    }],
     collider: {
       shape: 'cuboid', half: [0.50, 0.7775, 1.00], blockDucks: true,
       surface: { half: [0.50, 0.06, 1.0625], pitchDegrees: 19.741, offsetY: 0.0555 },
@@ -377,6 +407,12 @@ export const MACHINES = [
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.33 },
     produce: { secondsPerDuck: 10.0, rarityWeights: 'w_basic', count: 5 },
+    // A shallower stroke (0.040 m) over a belt rather than an anvil, and a
+    // slower one, because this machine stamps five at a time.
+    moving: [{
+      model: 'press_belt_ram', motion: 'slide',
+      axis: [0, -1, 0], travel: 0.040, seconds: 0.60, drive: 'stroke',
+    }],
     collider: { shape: 'cuboid', half: [0.50, 0.75, 1.00], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
@@ -391,6 +427,15 @@ export const MACHINES = [
     // 5.5 per 8 s, priced slightly under the ladder because a machine you
     // cannot plan around is worth less than one you can.
     produce: { secondsPerDuck: 8.0, rarityWeights: 'w_basic', count: [1, 10] },
+    // The reels, turning about their shared X axle at (0, 1.020, -0.195). They
+    // spin steadily rather than stopping on a result: this machine's payout is a
+    // COUNT, not a row of symbols, so a reel coming to rest on something would
+    // be promising a meaning the simulation does not have. One period is one
+    // symbol -- 120 degrees, three to a reel.
+    moving: [{
+      model: 'slot_reels', motion: 'turn', axis: [1, 0, 0], pivot: [0, 1.020, -0.195],
+      period: 120, rate: 1.2, drive: 'spin',
+    }],
     collider: { shape: 'cuboid', half: [0.375, 0.76, 0.375], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],
@@ -417,6 +462,11 @@ export const MACHINES = [
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.40 },
     produce: { secondsPerDuck: 6.0, rarityWeights: 'w_rare' },
+    // Same mechanism as the Duck Press, its own measured gap: 0.075 m.
+    moving: [{
+      model: 'press_gold_ram', motion: 'slide',
+      axis: [0, -1, 0], travel: 0.075, seconds: 0.50, drive: 'stroke',
+    }],
     collider: { shape: 'cuboid', half: [0.50, 0.8225, 0.375], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: ['bigticket'],

@@ -60,6 +60,13 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 const _lidM = new THREE.Matrix4();
 const _hinge = new THREE.Matrix4();
 const _tint = new THREE.Color();
+// The moving parts declared by a row's `moving` block: belt cleats, press rams,
+// slot reels. Same module-scope rule -- a belt run is dozens of objects each
+// rewriting a matrix every frame.
+const _partM = new THREE.Matrix4();
+const _partT = new THREE.Matrix4();
+const _partR = new THREE.Matrix4();
+const _partAxis = new THREE.Vector3();
 
 const BLOWER_KIND = 'blower';
 // Pay it, watch it rattle, take what falls out. Selected by KIND like every
@@ -237,6 +244,7 @@ export function createPlaced({ scene, models, world, groups }) {
   const rotors = [];            // placed objects whose blades turn
   const streams = [];           // placed objects drawing an airstream
   const gambles = [];           // placed objects with a lid that flies open
+  const movers = [];            // placed objects with a `moving` block on the row
   const raw = world._raw || null;
   let nextKey = 1;
   let lastAnimTime = null;
@@ -430,6 +438,8 @@ export function createPlaced({ scene, models, world, groups }) {
       lidSlot: -1,
       lidAngle: 0,
       lid: null,
+      // The row's declared moving parts, or null. See attachMoving.
+      moving: null,
       // The patch of darkened floor this object stands on. See the block above
       // createPool's caller for what it is and the measurement it answers.
       contactPool: null,
@@ -439,6 +449,7 @@ export function createPlaced({ scene, models, world, groups }) {
     attachRotor(rec, item);
     attachStream(rec, item);
     attachLid(rec, item);
+    attachMoving(rec, item);
     attachContact(rec);
     objects.push(rec);
     return rec;
@@ -483,6 +494,135 @@ export function createPlaced({ scene, models, world, groups }) {
     _lidM.multiply(_spin.makeRotationX(rec.lidAngle));
     _lidM.multiply(_hinge.makeTranslation(0, 0, -rec.lid.z));
     rec.lidPool.set(rec.lidSlot, _lidM);
+  }
+
+  // --- moving parts: cleats, rams, reels --------------------------------------
+  //
+  // The general form of the lid above, and the same three rules. The part is a
+  // SEPARATE MODEL, so it goes through poolFor() and a belt run of forty pieces
+  // costs two draw calls, not eighty. Its motion is DECLARED on the row (see
+  // checkMoving in src/data/index.js), so nothing here measures a mesh to work
+  // out which way a cleat travels. And it is exported at origin "raw", so its
+  // pose is the body's own matrix plus exactly one extra transform: a slide
+  // needs no pivot at all, and a turn needs only the pivot the row states.
+  //
+  // The three drives differ only in where the phase comes from:
+  //
+  //   belt    the row's own belt.speed, integrated. It is the SAME number
+  //           src/sim/conveyors.js drives the ducks with, so cleats that appear
+  //           to carry a duck are moving at the speed that actually carries it,
+  //           and a belt that is reversed reverses its cleats for free.
+  //   spin    a constant rate; nothing in the world drives it
+  //   stroke  one pulse per duck emitted, pushed in by strokeAt() from the
+  //           producers' onEmit hook. A press that is jammed, unpowered or at
+  //           the duck cap therefore stands still -- which is the point: the
+  //           stroke is a report of work done, not decoration on a timer.
+  //
+  // Every phase is taken modulo the row's `period`, the travel after which the
+  // part lands on top of its own next tooth. That is what makes an endless belt
+  // one small model with no wrapping logic and no second copy.
+
+  function attachMoving(rec, item) {
+    if (!item || !Array.isArray(item.moving) || item.moving.length === 0) return;
+    const parts = [];
+    for (const spec of item.moving) {
+      // A missing GLB draws NOTHING here, unlike everywhere else in this file.
+      // The procedural stand-in is a box sized from a footprint, and a moving
+      // part has no footprint worth standing in for: a metre cube sliding along
+      // a conveyor would be a worse lie than a belt with no cleats.
+      const m = models[spec.model];
+      if (!m || !m.geometry || m.fallback) continue;
+      const pool = poolFor(spec.model);
+      if (!pool) continue;
+      const slot = pool.alloc();
+      if (slot < 0) continue;
+      parts.push({
+        spec,
+        pool,
+        slot,
+        phase: 0,
+        // 'belt' only, and read once: the row cannot change speed at runtime.
+        speed: spec.drive === 'belt' ? ((item.belt && item.belt.speed) || 0) : 0,
+        // 'stroke' only: seconds left in the current pulse, 0 when at rest.
+        stroke: 0,
+      });
+    }
+    if (!parts.length) return;
+    rec.moving = parts;
+    movers.push(rec);
+    writeMoving(rec);
+  }
+
+  // 0 at rest, 1 fully down, and back. Down in the first third and up over the
+  // remaining two, because a press falls faster than it lifts.
+  function strokeCurve(u) {
+    if (u <= 0 || u >= 1) return 0;
+    return u < 0.3333 ? u / 0.3333 : (1 - u) / 0.6667;
+  }
+
+  function writeMoving(rec) {
+    if (!rec.moving) return;
+    const body = bodyMatrix(rec);
+    for (const p of rec.moving) {
+      const s = p.spec;
+      _partM.copy(body);
+      if (s.motion === 'slide') {
+        let d;
+        if (s.drive === 'stroke') {
+          d = s.travel * strokeCurve(p.stroke > 0 ? 1 - p.stroke / s.seconds : 0);
+        } else {
+          // Modulo the period, and kept positive so a reversed belt's cleats
+          // sit between their neighbours rather than a period away from them.
+          d = ((p.phase % s.period) + s.period) % s.period;
+        }
+        _partM.multiply(_partT.makeTranslation(s.axis[0] * d, s.axis[1] * d, s.axis[2] * d));
+      } else {
+        const deg = ((p.phase % s.period) + s.period) % s.period;
+        _partAxis.set(s.axis[0], s.axis[1], s.axis[2]).normalize();
+        _partM.multiply(_partT.makeTranslation(s.pivot[0], s.pivot[1], s.pivot[2]));
+        _partM.multiply(_partR.makeRotationAxis(_partAxis, deg * DEG));
+        _partM.multiply(_partT.makeTranslation(-s.pivot[0], -s.pivot[1], -s.pivot[2]));
+      }
+      p.pool.set(p.slot, _partM);
+    }
+  }
+
+  function advanceMoving(dt) {
+    for (let i = 0; i < movers.length; i++) {
+      const rec = movers[i];
+      let moved = false;
+      for (const p of rec.moving) {
+        const s = p.spec;
+        if (s.drive === 'stroke') {
+          if (p.stroke > 0) {
+            p.stroke = Math.max(0, p.stroke - dt);
+            moved = true;
+          }
+        } else {
+          const rate = s.drive === 'belt'
+            ? p.speed
+            // 'spin' states its rate in periods per second, so a reel that
+            // shows three symbols reads as three-a-second at rate 3.
+            : s.rate * s.period;
+          if (rate) { p.phase += rate * dt; moved = true; }
+        }
+      }
+      if (moved) writeMoving(rec);
+    }
+  }
+
+  // One duck came out of this machine: press once. Called from the producers'
+  // onEmit hook in main.js, which is the only place that knows a duck was made.
+  function strokeAt(key) {
+    for (let i = 0; i < movers.length; i++) {
+      const rec = movers[i];
+      if (rec.key !== key) continue;
+      for (const p of rec.moving) {
+        if (p.spec.drive === 'stroke') p.stroke = p.spec.seconds;
+      }
+      return true;
+    }
+    return false;
   }
 
   // Per-instance colour, allocated the first time a pool needs one. The pools
@@ -680,6 +820,7 @@ export function createPlaced({ scene, models, world, groups }) {
       rec.rotorAngle = (rec.rotorAngle + rec.rotorSpeed * dt) % (Math.PI * 2);
       writeRotor(rec);
     }
+    advanceMoving(dt);
     air.advance(dt);
     return dt;
   }
@@ -859,6 +1000,14 @@ export function createPlaced({ scene, models, world, groups }) {
       // And its colour goes back to neutral: pool slots are recycled, and a
       // slot left mid-flash would tint whatever is built there next.
       writeTint(rec.pool, rec.slot, 1, 1, 1);
+    }
+    // Same for the moving parts: a demolished conveyor that left its cleats
+    // behind would leave eight teeth floating over an empty patch of floor.
+    if (rec.moving) {
+      for (const p of rec.moving) p.pool.release(p.slot);
+      rec.moving = null;
+      const mi = movers.indexOf(rec);
+      if (mi >= 0) movers.splice(mi, 1);
     }
     if (rec.collider && raw) {
       try { raw.removeCollider(rec.collider, true); } catch (e) { /* already gone */ }
@@ -1151,6 +1300,35 @@ export function createPlaced({ scene, models, world, groups }) {
       };
     }),
     setWheelAngle,
+    // One duck came out of the machine with this key: press its ram once.
+    strokeAt,
+    // What the moving parts are ACTUALLY doing, read back out of the instance
+    // matrices rather than out of the fields that were written into them --
+    // the same rule gambleState() follows, and for the same reason.
+    movingState: () => {
+      const out = [];
+      for (const rec of movers) {
+        for (const p of rec.moving) {
+          p.pool.get(p.slot, _partM);
+          _partM.decompose(_p, _q, _s);
+          const px = _p.x, py = _p.y, pz = _p.z;
+          rec.pool.get(rec.slot, _m);
+          _m.decompose(_p, _q, _s);
+          out.push({
+            key: rec.key,
+            id: rec.id,
+            model: p.spec.model,
+            drive: p.spec.drive,
+            phase: Math.round(p.phase * 1e4) / 1e4,
+            stroke: Math.round(p.stroke * 1e4) / 1e4,
+            // How far the part has been carried away from the body it belongs
+            // to, in world metres. Zero means nothing is moving.
+            offset: Math.round(Math.hypot(px - _p.x, py - _p.y, pz - _p.z) * 1e4) / 1e4,
+          });
+        }
+      }
+      return out;
+    },
     localToWorld,
     crankAim,
     wheelCenter,

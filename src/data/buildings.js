@@ -248,6 +248,10 @@ export const BUILDINGS = [
     // that ducks have to be lifted onto. This is the same two metres of carry
     // at 14 cm: cheaper, slower, and it does not cut the floor in half.
     belt: { speed: 1.0, turn: 0, rise: 0 },
+    // Ten ridges over the two metres, so the tenth of a run -- 0.22 m -- is the
+    // period. Without them a vibrating floor is a painted rectangle and there is
+    // no way to see which way it carries.
+    moving: [{ model: 'vibe_floor_belt', motion: 'slide', axis: [0, 0, 1], period: 0.22, drive: 'belt' }],
     collider: { shape: 'cuboid', half: [0.50, 0.0706, 1.00], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: [],

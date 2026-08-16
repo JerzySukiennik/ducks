@@ -351,8 +351,11 @@ export function createProps({ scene, models, pitCenter }) {
       if (t < 0) t = -b + root;
       return (t >= 0 && t <= m.useRange) ? t : -1;
     },
-    wheelAngle: () => (wheel ? wheel.rotation.x : 0),
-    setWheelAngle(a) { if (wheel) wheel.rotation.x = a; },
+    // Z, not X, and negated: the wheel moved from the machine's side to its
+    // front face, so its axis moved with it. Turning the old axis now spins the
+    // wheel about a line lying IN its own plane, which reads as a wobble.
+    wheelAngle: () => (wheel ? -wheel.rotation.z : 0),
+    setWheelAngle(a) { if (wheel) wheel.rotation.z = -a; },
     machineMouth: () => ({
       x: pipeWorld.x + machineForward.x * m.ejectOffset,
       y: pipeWorld.y,

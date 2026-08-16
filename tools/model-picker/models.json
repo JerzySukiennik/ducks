@@ -51,8 +51,8 @@
   "name": "vacuum_station",
   "group": "Maszyny",
   "desc": "Odkurzacz stacjonarny.",
-  "tris": 208,
-  "kb": 17,
+  "tris": 364,
+  "kb": 30,
   "dim": [
    1.0,
    1.0,
@@ -63,8 +63,8 @@
   "name": "conveyor",
   "group": "Automatyzacja",
   "desc": "Tasmociag prosty, 2 m.",
-  "tris": 240,
-  "kb": 19,
+  "tris": 292,
+  "kb": 24,
   "dim": [
    1.0,
    2.0,
@@ -75,8 +75,8 @@
   "name": "conveyor_corner",
   "group": "Automatyzacja",
   "desc": "Tasmociag zakrecony 90 stopni.",
-  "tris": 576,
-  "kb": 41,
+  "tris": 456,
+  "kb": 33,
   "dim": [
    1.5,
    1.5,
@@ -87,8 +87,8 @@
   "name": "conveyor_slope",
   "group": "Automatyzacja",
   "desc": "Tasmociag wznoszacy.",
-  "tris": 216,
-  "kb": 18,
+  "tris": 336,
+  "kb": 27,
   "dim": [
    1.0,
    2.0,
@@ -99,8 +99,8 @@
   "name": "fan",
   "group": "Automatyzacja",
   "desc": "Wiatrak. Model bez kolizji dla kaczek.",
-  "tris": 360,
-  "kb": 27,
+  "tris": 424,
+  "kb": 32,
   "dim": [
    1.25,
    0.75,
@@ -159,8 +159,8 @@
   "name": "ramp",
   "group": "Budowle",
   "desc": "Rampa.",
-  "tris": 120,
-  "kb": 12,
+  "tris": 144,
+  "kb": 14,
   "dim": [
    1.5,
    2.0,
@@ -171,8 +171,8 @@
   "name": "chute",
   "group": "Budowle",
   "desc": "Rynna - polokragly kanal.",
-  "tris": 540,
-  "kb": 40,
+  "tris": 636,
+  "kb": 46,
   "dim": [
    0.75,
    2.0,
@@ -183,8 +183,8 @@
   "name": "bridge",
   "group": "Budowle",
   "desc": "Most nad tunelem.",
-  "tris": 312,
-  "kb": 24,
+  "tris": 480,
+  "kb": 36,
   "dim": [
    1.0,
    3.0,
@@ -735,8 +735,8 @@
   "name": "slide",
   "group": "Budowle",
   "desc": "Zjezdzalnia prosta, 3 m.",
-  "tris": 228,
-  "kb": 20,
+  "tris": 324,
+  "kb": 25,
   "dim": [
    1.0,
    3.0,
@@ -747,8 +747,8 @@
   "name": "fan_strong",
   "group": "Budowle",
   "desc": "Wiatrak mocny.",
-  "tris": 492,
-  "kb": 37,
+  "tris": 376,
+  "kb": 30,
   "dim": [
    1.5,
    1.0,
@@ -759,8 +759,8 @@
   "name": "fan_vertical",
   "group": "Budowle",
   "desc": "Wiatrak pionowy - blow.pitchDegrees.",
-  "tris": 444,
-  "kb": 34,
+  "tris": 488,
+  "kb": 37,
   "dim": [
    1.0,
    1.0,
@@ -771,8 +771,8 @@
   "name": "vibe_floor",
   "group": "Budowle",
   "desc": "Wibrator podlogowy - plaski tasmociag.",
-  "tris": 272,
-  "kb": 22,
+  "tris": 84,
+  "kb": 9,
   "dim": [
    1.0,
    2.0,
@@ -783,8 +783,8 @@
   "name": "platform",
   "group": "Budowle",
   "desc": "Podest 2x2 m.",
-  "tris": 288,
-  "kb": 23,
+  "tris": 432,
+  "kb": 33,
   "dim": [
    2.0,
    2.0,
@@ -1065,6 +1065,54 @@
    1.5,
    1.5,
    1.53
+  ]
+ },
+ {
+  "name": "conveyor_belt",
+  "group": "Automatyzacja",
+  "desc": "Tasmociag prosty - RUCHOME zebra.",
+  "tris": 96,
+  "kb": 7,
+  "dim": [
+   0.83,
+   1.63,
+   0.03
+  ]
+ },
+ {
+  "name": "conveyor_corner_belt",
+  "group": "Automatyzacja",
+  "desc": "Zakret - RUCHOME zebra.",
+  "tris": 96,
+  "kb": 7,
+  "dim": [
+   1.42,
+   1.36,
+   0.03
+  ]
+ },
+ {
+  "name": "conveyor_slope_belt",
+  "group": "Automatyzacja",
+  "desc": "Pochylnia - RUCHOME zebra.",
+  "tris": 84,
+  "kb": 7,
+  "dim": [
+   0.68,
+   1.79,
+   0.69
+  ]
+ },
+ {
+  "name": "vibe_floor_belt",
+  "group": "Budowle",
+  "desc": "Wibrator podlogowy - RUCHOME zebra.",
+  "tris": 96,
+  "kb": 8,
+  "dim": [
+   0.8,
+   1.63,
+   0.09
   ]
  }
 ]

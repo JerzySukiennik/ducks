@@ -211,12 +211,19 @@ async function boot() {
       parts: {
         // Everything on the right-hand side within splitRadius of the hub, in
         // the local YZ plane, is wheel: rim, spokes, hub and handle.
+        // The wheel moved from the machine's SIDE to its FRONT face, so the
+        // test moved with it: a disc around the hub in the local XY plane,
+        // in front of the cabinet. The old side-face version selected ZERO
+        // triangles against the reworked mesh -- all 3280 welded into the
+        // cabinet and the wheel silently stopped turning, which is the exact
+        // failure mode a hand-written coordinate predicate has whenever the
+        // model under it is reshaped.
         wheel(x, y, z) {
           const m = config.machine;
-          if (x <= m.splitMinX) return false;
+          if (z <= m.splitMinZ) return false;
+          const dx = x - m.wheelLocalX;
           const dy = y - m.wheelLocalY;
-          const dz = z - m.wheelLocalZ;
-          return dy * dy + dz * dz < m.splitRadius * m.splitRadius;
+          return dx * dx + dy * dy < m.splitRadius * m.splitRadius;
         },
       },
     },
@@ -230,6 +237,16 @@ async function boot() {
     // hand-maintained list here.
     if (row.lid && row.lid.model && !modelSpecs[row.lid.model]) {
       modelSpecs[row.lid.model] = { fallbackBox: row.lid.footprint };
+    }
+    // And its MOVING parts -- cleats, rams, reels -- by the same rule. They are
+    // deliberately given NO fallbackBox: a lid that fails to load should still
+    // be a lid-shaped stand-in, but a cleat that fails to load should be
+    // nothing at all rather than a metre cube riding a conveyor. placed.js
+    // checks the `fallback` flag and simply draws the body alone.
+    if (Array.isArray(row.moving)) {
+      for (const p of row.moving) {
+        if (p.model && !modelSpecs[p.model]) modelSpecs[p.model] = null;
+      }
     }
   }
   // Booth scenery. Sizes are the model bounding boxes, used only if the GLB
@@ -474,6 +491,11 @@ async function boot() {
     config,
     statsOf: () => shop.stats(),
   });
+  // A press presses when a duck actually comes out of it. The stroke is driven
+  // from the SAME event the eject sound is (src/audio/wire.js), so a machine
+  // that is jammed or held at the duck cap is visibly and audibly idle -- the
+  // animation reports work done rather than running on a clock beside it.
+  producers.onEmit((ev) => { if (ev && placed.strokeAt) placed.strokeAt(ev.key); });
   const collectors = createCollectors({
     ducks: world.ducks,
     applyImpulse: world.applyImpulse,

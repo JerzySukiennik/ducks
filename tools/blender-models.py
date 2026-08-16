@@ -347,11 +347,20 @@ def ball(name, r, loc, color, seg=10, ring_count=6, scale=(1,1,1)):
     bpy.ops.object.transform_apply(scale=True)
     o.data.materials.append(mat(color)); return o
 
-def ring_xz(prefix, R, seg, seclen, secd, sech, z, color, out):
-    """Pierscien w plaszczyznie XZ. Obrot wokol Y o +a odwzorowuje os X na styczna."""
+def ring_xz(prefix, R, seg, seclen, secd, sech, z, color, out, sep=0.0):
+    """Pierscien w plaszczyznie XZ. Obrot wokol Y o +a odwzorowuje os X na styczna.
+
+    sep > 0: co drugi segment jest o 2*sep chudszy w Y. Segmenty MUSZA na siebie
+    zachodzic (seclen > obwod/seg), zeby pierscien byl ciagly, a obrot wokol Y
+    nie zmienia orientacji ich scian +-Y: bez sep wszystkie leza w dwoch
+    wspolnych plaszczyznach i kazda para sasiadow to remis w buforze glebi.
+    To jest ten sam idiom, ktory ring_yz juz naprawia -- ring_xz i ring_xy nie
+    naprawialy go wcale, i stad 64 pary w fan.glb i 792 w tube.glb.
+    Sprawdzane przez tools/check-coplanar.py."""
     for i in range(seg):
         a = math.radians(i * 360.0 / seg)
-        out.append(box("%s%d" % (prefix, i), (seclen, secd, sech),
+        d = secd - (2*sep if (sep > 0 and i % 2) else 0.0)
+        out.append(box("%s%d" % (prefix, i), (seclen, d, sech),
                        (math.sin(a)*R, 0, z + math.cos(a)*R), color, rot=(0, a, 0)))
 
 def ring_yz(prefix, R, seg, thick, seclen, secr, x, zc, color, out, sep=0.0):
@@ -372,12 +381,165 @@ def ring_yz(prefix, R, seg, thick, seclen, secr, x, zc, color, out, sep=0.0):
                        (x, math.sin(a)*rr, zc + math.cos(a)*rr), color, rot=(-a, 0, 0)))
 
 
-def ring_xy(prefix, R, seg, seclen, secw, sech, z, color, out):
-    """Pierscien lezacy plasko w XY."""
+def ring_xy(prefix, R, seg, seclen, secw, sech, z, color, out, sep=0.0):
+    """Pierscien lezacy plasko w XY.
+
+    sep > 0: co drugi segment jest o 2*sep nizszy. Patrz ring_xz -- tutaj
+    wspolne plaszczyzny to GORA i DOL (obrot wokol Z ich nie rusza), wiec to
+    wysokosc musi sie zmieniac, nie glebokosc."""
     for i in range(seg):
         a = math.radians(i * 360.0 / seg)
-        out.append(box("%s%d" % (prefix, i), (seclen, secw, sech),
+        h = sech - (2*sep if (sep > 0 and i % 2) else 0.0)
+        out.append(box("%s%d" % (prefix, i), (seclen, secw, h),
                        (math.sin(a)*R, math.cos(a)*R, z), color, rot=(0, 0, -a)))
+
+
+# --- THE OUTLET IS DERIVED FROM THE SIMULATION, NOT DRAWN WHERE IT LOOKS NICE -
+# src/sim/producers.js mouthOf() spawns every `producer_auto` duck at
+#
+#     local z = footprint.z * config.producers.mouthDepthFrac + mouthClear
+#     local y = footprint.y * config.producers.mouthHeightFrac
+#
+# with mouthDepthFrac 0.5, mouthClear 0.28 and mouthHeightFrac 0.45. There is no
+# per-machine offset table and there is not going to be one: a row gets its mouth
+# from its footprint alone. So the GEOMETRY has to meet the simulation, and this
+# is the single place in this file that knows those three numbers.
+#
+# Before this helper existed, not one of the seventeen auto-producers had an
+# opening where its ducks actually came from. The Duckomat spawned 46 cm above
+# its own delivery bin, the Duck Assembler 39 cm above its hatch, the Gold Press
+# 38 cm, and `press` and `press_belt` had no outlet geometry at all -- a duck
+# simply appeared in mid-air beside a machine that showed no way out. That is the
+# same defect as the container's decorative side door, and it was in seventeen
+# places at once.
+#
+# The contract this helper keeps:
+#   * the aperture's CENTRE sits at z = MOUTH_HEIGHT_FRAC * H, so the duck leaves
+#     through the middle of the hole rather than clipping its lintel;
+#   * the SILL is the model's frontmost geometry, at y = -D/2 exactly, so after
+#     finish()'s grid snap the lip tip lands on the footprint's front face and
+#     the duck appears 0.28 m clear of it, in the open, where a player can see
+#     the machine hand it over;
+#   * the throat is recessed 30 mm behind the jamb, so the opening reads as a
+#     HOLE -- negative space, which is the only kind of detail that survives at
+#     22 px per metre -- instead of as a dark decal painted on a flat face.
+MOUTH_DEPTH_FRAC = 0.5      # config.producers.mouthDepthFrac
+MOUTH_CLEAR = 0.28          # config.producers.mouthClear  (metres past the face)
+MOUTH_HEIGHT_FRAC = 0.45    # config.producers.mouthHeightFrac
+
+
+def mouth_z(H):
+    """Height of the spawn point above the floor, for a model H metres tall."""
+    return MOUTH_HEIGHT_FRAC * H
+
+
+def chute(out, H, D, w=0.36, h=0.30, x=0.0, tag="", throat="black",
+          frame="hazard", jamb="steel_d", deep=0.26, sill=True, yf=None):
+    """A duck-sized opening at the point the simulation spawns from.
+
+    H, D  -- the row's exported height and depth (footprint[1], footprint[2]).
+    w, h  -- the clear aperture. A duck is 0.178 x 0.386 x 0.146, so 0.36 x 0.30
+             is a hole it visibly fits through rather than a slot it would have
+             to be folded into; at 22 px/m that is 8 x 7 px of black, which is
+             about as small as an opening can be and still read.
+    x     -- lateral offset, for machines with more than one face. The DEFAULT is
+             0 and it should stay 0 for anything the sim spawns from, because
+             mouthOf() has no lateral term: `incubator_double` used to wear two
+             outlets at x = +/-0.34 and spawn on the centreline between them.
+
+    Returns (zc, yf): the aperture centre height and the front-face plane.
+    """
+    zc = mouth_z(H)
+    # yf defaults to the footprint's own front plane, which is right whenever
+    # the builder authored its raw depth AS D. Two builders cannot: the geyser's
+    # raw extent is set by its boulder ring and the factory's by its discharge
+    # belt, and finish() scales the whole mesh to land the FRONTMOST vertex on
+    # the face. Those two pass yf explicitly, past their own widest part, so the
+    # sill is what the snap puts on the front plane.
+    if yf is None:
+        yf = -D / 2.0
+    t = 0.055
+    # EVERY PIECE BELOW IS DELIBERATELY OUT OF PLANE WITH EVERY OTHER, and the
+    # offsets are not decoration. Four boxes framing a hole is the single easiest
+    # way to write a coplanar-overlap cluster by accident: the jamb's inner face
+    # wants to sit exactly on the throat's side, the lintel's underside exactly
+    # on the throat's top, and the sill's face exactly on the jamb's. That is
+    # four depth-buffer ties per outlet and seventeen outlets, and it is the
+    # idiom tools/check-coplanar.py exists to catch. So the frame members OVERLAP
+    # the throat by 7 mm instead of butting against it, and the three depths
+    # (jamb 0.020..0.080, lintel 0.0275..0.0825, sill 0.000..0.100) are three
+    # different pairs of planes.
+    #
+    # Recessed throat: its face is 30 mm behind the frame, so the hole has depth.
+    out.append(box("mouth%s" % tag, (w, deep, h), (x, yf + deep/2 + 0.03, zc), throat))
+    # Jamb: a frame AROUND the hole, which is what makes a dark rectangle read as
+    # a doorway rather than as a smudge painted on a flat face.
+    out.append(box("jambL%s" % tag, (t, 0.06, h + 2*t + 0.02),
+                   (x - (w/2 + t/2 - 0.007), yf + 0.05, zc), jamb))
+    out.append(box("jambR%s" % tag, (t, 0.06, h + 2*t + 0.02),
+                   (x + (w/2 + t/2 - 0.007), yf + 0.05, zc), jamb))
+    out.append(box("jambT%s" % tag, (w + 2*t - 0.030, 0.055, t),
+                   (x, yf + 0.055, zc + h/2 + t/2 - 0.007), jamb))
+    if sill:
+        # THE FRONTMOST GEOMETRY IN THE MODEL, by construction: centre y minus
+        # half depth = (yf + 0.05) - 0.05 = yf. Nothing else in a builder that
+        # calls this may reach further forward, or the footprint snap will
+        # squeeze the whole machine in depth to make room for it.
+        out.append(box("sill%s" % tag, (w + 2*t + 0.02, 0.10, t),
+                       (x, yf + 0.05, zc - h/2 - t/2 + 0.007), frame))
+    return zc, yf
+
+
+def alt(i, sep=0.0015, phases=2):
+    """The ring_xy/ring_xz `sep` trick for rings that are HAND-ROLLED rather than
+    built by those helpers -- the bucket's staves, the sack's barrel, the hose
+    and lasso coils, the magnet's arc.
+
+    Returns the amount to SUBTRACT from this segment on the one axis whose faces
+    its neighbours share. Which axis that is depends on the spin: rotating about
+    Z leaves the top and bottom caps parallel and at the same height, so a ring
+    laid flat shares its CAPS; rotating about Y leaves the +-Y faces parallel, so
+    a ring standing up shares its SIDES. The caller knows which it built, so the
+    caller picks the axis -- exactly as ring_xy (height) and ring_xz (depth) do.
+
+    SHRINK ONLY, never a radial push, and that is a contract and not a taste:
+    finish() scales X and Y so the exported footprint hits FOOTPRINT exactly, and
+    it puts cavity() through the SAME factor. Moving a segment outward changes the
+    raw bounding box, which changes that factor, which silently rescales the
+    interior half-extents that src/data/tools.js holds as literals. Shrinking on
+    the third axis cannot touch the horizontal box at all, because the segments
+    that were not shrunk still define both horizontal extremes -- and on the
+    vertical axis they still define minZ and maxZ, so the height is safe too.
+
+    2*sep = 3 mm, which at the game's 22 px per metre is 0.07 px -- below the
+    point where a pixel could change. Costs no triangles: same box count, same
+    vertex count, only different numbers in them.
+
+    `phases` is how many segments have to differ before the pattern may repeat,
+    and TWO IS NOT ALWAYS ENOUGH. A segment overlaps every neighbour its own
+    length reaches, and these rings are authored 1.4x to 1.55x longer than their
+    arc spacing so the ring has no slit in it -- at 1.4x a segment still overlaps
+    i+2, so an odd/even alternation leaves every second pair tied exactly as it
+    found them. That is measurable, not theoretical: the magnet went 118 -> 46
+    with phases=2 and the 46 that survived were all i to i+2.
+
+    PHASES MUST DIVIDE THE SEGMENT COUNT of a CLOSED ring, and that is the trap
+    this helper is documented for. The ring wraps, so segment N-1 is a neighbour
+    of segment 0; if phases does not divide N those two land on the same phase
+    and tie. Raising the sack from 2 to 3 phases over its ten segments did not
+    improve it, it took it from 5 pairs to 43 -- worse than either neighbour
+    count alone, because the seam pair is the widest overlap in the ring. Use a
+    divisor of N (10 -> 5, 14 -> 7, 16 -> 4). An OPEN arc such as the magnet's
+    horseshoe has no seam, so any value works there.
+
+    And then MEASURE, because more phases is not monotonically better. A bigger
+    phase count means a bigger maximum shrink, and the deepest-shrunk segment can
+    fall into line with something that is not part of the ring at all -- the
+    bucket's floor disc and hoops, the sack's tie. Over this set the best value
+    was 2 for the bucket (36 pairs; 4 gave 52) and 2 for the sack (5 pairs; 3
+    gave 43 and 5 gave 36), but 5 for the lasso (8 pairs) and 7 for the hose
+    (0 pairs). tools/check-coplanar.py is the oracle -- pick by running it."""
+    return sep * 2 * (i % phases)
 
 # --- CAVITIES ARE MEASURED HERE, NOT RE-DERIVED IN THE GAME ------------------
 # A storage model's bounding box is not the space it holds ducks in: a barrow's
@@ -506,246 +668,368 @@ def b_duck():
 
 # ============================================================= MASZYNY
 def b_crank():
-    """Manual Duck Workbench. Gracz patrzy na to 5 sekund CIAGIEM na kazda kaczke,
-    wiec jest to najdluzej ogladany model w grze i musi to wytrzymac.
+    """Manual Duck Workbench. The single most-looked-at model in the game:
+    cranking is a HELD charge, so a player stares at this object for seconds at a
+    time, every duck, from two metres away.
 
-    DWIE RZECZY BYLY ZLE i obie sa tu naprawione.
+    Jurek's verdict on the last one was "too toy-like", and the independent
+    critic traced it to six things. Five were surface. The sixth was the whole
+    problem, and it is fixed here:
 
-    1. KOLO. Bylo PELNYM DYSKIEM (jeden cylinder r=0.34) z czterema szprychami
-       schowanymi w srodku i cale w kolorze hazard. Pelny dysk obracajacy sie
-       wokol wlasnej osi ma sylwetke NIEZMIENNA - obraca sie z predkoscia 30
-       rad/s i wyglada, jakby stal. Cala informacja o ruchu szla wtedy wylacznie
-       z rozmycia, ktorego przy tym rozmiarze bufora nie ma. Teraz kolo jest
-       OTWARTE: obrecz z segmentow, szesc szprych widocznych na wylot i korba
-       sterczaca poza plaszczyzne, ktora zakresla luk. Sylwetka zmienia sie co
-       60 stopni, wiec obrot widac nawet na stopklatce.
+    *** THE WHEEL WAS ON THE WRONG FACE. ***
 
-    2. KOLORY. Korpus byl w teal, maska w teal_lt - duza, jasna, nasycona bryla
-       o jednolitej barwie, czyli dokladnie to, co czyta sie jako zabawka. Teraz
-       korpus jest z ciemnej stali, a zolty zostal TYLKO tam, gdzie cos znaczy:
-       na kole (to jest rzecz, ktora sie chwyta) i na wylocie rury. Maszyna ma
-       byc ciezka i czytelna, a nie kolorowa.
+    It lived on the cabinet's local +X side, turning about the local X axis --
+    i.e. EDGE-ON to anybody standing in front of the machine, which is the only
+    place you can stand to crank it. At 0 degrees and at 25 degrees, the two
+    angles a player actually cranks from, all that showed of it was a sliver of
+    grip past the right-hand corner; the big gold ring dominating the front view
+    was the EJECTOR PIPE. The machine's one interactive part was invisible from
+    its one interactive position, and the part that looked interactive was a
+    spout. No amount of paint fixes that.
 
-    CZEGO NIE WOLNO RUSZYC - to nie sa preferencje, to kontrakty z kodem:
-      * bryla ma dokladnie 1.3124 x 1.4100 x 1.3300; machines.js trzyma
-        footprint [2.096, 2.256, 2.128], czyli te liczby razy machine.scale 1.6,
-      * piasta kola siedzi w (0.4685, 0.78, -0.225) modelu, promien 0.34,
-      * KAZDY trojkat kola musi miec centroid x > machine.splitMinX (0.40) i
-        lezec blizej niz splitRadius (0.42) od piasty w plaszczyznie YZ - tak
-        main.js oddziela kolo od korpusu; trojkat, ktory wypadnie z tego okna,
-        przestanie sie krecic albo zabierze ze soba kawalek szafy,
-      * wylot rury (-0.043, 0.42, 0.66) i collider szafy zostaja gdzie byly.
+    The wheel now stands on the FRONT of the machine, in the local XZ plane,
+    turning about the model's local Z axis, offset to the right so a third of it
+    overhangs the cabinet and reads against the sky. Its hub is at model-local
+    (0.2872, 1.0200, 0.2750) and the crank handle sweeps an arc TOWARDS the
+    player. This is a renderer change as well as a model change and it is not
+    optional -- see the notes at the end of this docstring.
+
+    The other five, each with the fix:
+      * a 0.62 x 0.46 glass panel that read as a SCREEN -- gone; the instruments
+        are now a 0.22 x 0.14 recessed cluster, which at this scale is 3 px of
+        detail instead of 22 px of black rectangle;
+      * a 3.2 cm world-scale bevel on every edge (0.020 model x 1.6 scale), which
+        is what rounds a machine into a toy -- down to 0.008, i.e. 1.3 cm;
+      * near-cube proportions -- the mass is now three courses of different width
+        with a hood that oversails, so the outline steps three times;
+      * no frame member reaching the floor -- the left-hand column runs from
+        z = 0 to 1.30, and the cabinet is lifted onto four legs with 0.20 m of
+        daylight under it (0.32 m at world scale, ~7 px at 10 m);
+      * one uniform grey -- three values now (black skirt, dark frame, steel_d
+        skin) plus rust on the working panel, and yellow used ONLY on the wheel
+        and the pipe lip, which are the two things that mean something.
+
+    WHAT IS UNCHANGED, and why:
+      * THE PIPE. It is the only correct duck outlet in the game and its mouth is
+        authored in config.machine.pipeLocal (-0.043, 0.42, 0.66). Its raw
+        coordinates below are byte-for-byte what they were.
+      * THE RAW BOUNDING BOX: x -0.5447..0.7677, y -0.89..0.44, z 0..1.41, giving
+        1.3124 x 1.4100 x 1.3300 and, at config.machine.scale 1.6, the footprint
+        [2.096, 2.256, 2.128] that src/data/machines.js hard-codes. `crank` is not
+        in the FOOTPRINT table, so finish() does NOT snap it: these numbers are
+        hit by construction, and the extremes are load-bearing geometry (left
+        column at -0.5447, wheel rim at 0.7677, pipe lip at -0.89, skirt at 0.44).
+      * wheelRadius 0.34: the rim's OUTER radius is 0.369 and its centreline 0.34,
+        so the aim sphere config.machine.wheelRadius still describes it.
+
+    WHAT MUST CHANGE IN src/ FOR THIS MODEL TO BE RIGHT -- three small edits,
+    reported rather than made because src/ is not this pass's to touch:
+      1. config.machine.wheelLocalX/Y/Z: 0.4685, 0.78, -0.225  ->  0.2872, 1.0200,
+         0.2750.
+      2. The spin axis. src/render/props.js setWheelAngle() and
+         src/render/placed.js setWheelAngle() both do `wheel.rotation.x = a`; the
+         wheel now turns about local Z, so both become `wheel.rotation.z = -a`.
+         (Negated so the handle still rises on the far side and a player's
+         clockwise crank still reads as clockwise.)
+      3. The split. config.machine.splitMinX / splitRadius drive a predicate in
+         src/render/models.js that is hand-written coordinates, and the critic was
+         right that a rework would break it silently -- it did: every triangle
+         with x > 0.40 near the old hub is now cabinet. Two ways out, and the
+         second is better:
+           (a) keep the in-mesh split and change the predicate to
+                   (x - 0.2872)^2 + (y - 1.0200)^2 < 0.42^2   AND   z > 0.19
+               (distance in the local XY plane about the new hub, plus "in front
+               of the cabinet skin", which sits at z = 0.175). Both clauses are
+               needed: the pipe passes the z test and fails the distance test at
+               0.737 from the hub; the cabinet fails the z test. Verified with
+               tools/check-crank-split.py.
+           (b) DROP THE PREDICATE. This builder also exports crank_wheel.glb --
+               the same wheel, alone, with its origin AT the hub -- so the
+               renderer can mount a second model at wheelLocal and rotate it,
+               exactly the way gamble_box_lid is mounted on gamble_box. That
+               removes a hand-tuned coordinate contract from the codebase
+               permanently, and it is the reason crank.glb still CONTAINS the
+               wheel: the footprint row is measured over the whole machine, so
+               the asset may not lose it.
     """
     P = []
-    # --- ZASADA 3 MM (SEP) ---------------------------------------------------
-    # ZADNE dwie rownolegle sciany, ktore zachodza na siebie w rzucie, nie moga
-    # lezec w JEDNEJ plaszczyznie. Dwie takie sciany to remis w buforze glebi i
-    # migotanie - a kolo warsztatu obraca sie graczowi przed nosem sekundami,
-    # wiec kazdy remis widac od razu. Minimalny rozstaw to SEP = 0.003 m modelu,
-    # czyli 0.0048 m w swiecie (config.machine.scale 1.6).
+    SEP = 0.003            # see the 3 mm rule below
+    # --- THE 3 MM RULE, unchanged in principle ------------------------------
+    # No two parallel faces that overlap in projection may share a plane: that is
+    # a depth-buffer tie, and this model turns in front of the player's face for
+    # seconds at a time, so every tie is visible. 3 mm of model space is 4.8 mm
+    # of world space, a sixth of the bevel, and an order of magnitude more than
+    # the depth buffer needs. Checked by tools/check-coplanar.py.
     #
-    # Dlaczego akurat 3 mm: bufor glebi jest tu najmniejszym problemem (near 0.1,
-    # far 400, kolo 1-2 m od oka - nawet 16-bitowy bufor rozroznia tam ~0.3 mm),
-    # wiec 3 mm ma zapas rzedu wielkosci i dziala takze na 5 m, gdzie stoi drugi
-    # gracz. Z drugiej strony 3 mm to szosta czesc bevela (0.020) i przy skali
-    # PSX nie widac go jako uskoku - to najmniejsza liczba, ktora jest OCZYWISCIE
-    # bezpieczna i wciaz niewidoczna. Sprawdzane maszynowo:
-    #   python3 tools/check-coplanar.py assets/models/crank.glb
-    SEP = 0.003
-    # Korpus: ciemna stal zamiast teal. Rama jest teraz WIDOCZNA - slupki naroine
-    # i poziome ceowniki - bo to one robia z pudelka maszyne.
-    #
-    # Cokol i podcieniowka byly 1.00 szerokie, czyli DOKLADNIE tyle co korpus:
-    # ich boki lezaly w tej samej plaszczyznie co blacha szafy (+-0.50) i tam
-    # migotalo. Teraz kazdy pas jest stopniowany na zewnatrz - 0.50 korpus,
-    # 0.51 cokol, 0.52 podcieniowka, 0.54 fartuch - wiec zadna para scian nie
-    # dzieli plaszczyzny, a maszyna wyglada na zlozona z warstw zamiast z jednej
-    # bryly. Zaden z tych pasow nie dotyka okna podzialu kola: ich centroidy
-    # leza na x=0, wiec caly pas idzie do szafy.
-    #
-    # W PIONIE ta sama zasada, tylko realizowana wsuwaniem: fartuch jako
-    # najszersza bryla trzyma spod modelu na z=0 (finish() liczy od niego minz,
-    # wiec to on decyduje o wysokosci piasty), a korpus zaczyna sie SEP wyzej i
-    # konczy tam gdzie konczyl - jego denko chowa sie w fartuchu zamiast lezec
-    # z nim w plaszczyznie z=0. Tak samo cokol wchodzi SEP w fartuch, a maska
-    # SEP w korpus. Zaden z tych ruchow nie dotyka obrysu: gora maski zostaje na
-    # 1.41 (wysokosc 1.4100), spod fartucha na 0.
-    P.append(box("body", (1.00, 0.80, 1.15 - SEP), (0, 0, 0.575 + SEP/2), "steel_d"))
-    P.append(box("skirt", (1.08, 0.88, 0.14), (0, 0, 0.07), "black"))
-    P.append(box("plinth", (1.02, 0.88, 0.07 + 2*SEP), (0, 0, 0.175 - SEP), "dark"))
-    P.append(box("hood", (1.02, 0.84, 0.26 + 2*SEP), (0, 0, 1.28 - SEP), "steel_d"))
-    P.append(box("hoodlip", (1.04, 0.88, 0.05), (0, 0, 1.16), "dark"))
-    # PRAWY BOK SZAFY JEST STREFA ZAKAZANA DLA DETALU. Podzial kola bierze kazdy
-    # trojkat o centroidzie game x > 0.40 lezacy blizej niz 0.42 od piasty w YZ -
-    # a slupek ramy postawiony na prawym naroiniku spelnia OBA warunki i zaczyna
-    # sie krecic razem z kolem. Zlapal to dopiero splitcheck: pierwsza wersja tej
-    # ramy wciagala do kola 747 trojkatow szafy i przesuwala jego srodek z 0.78
-    # na 0.6575. Dlatego rama wychodzi na zewnatrz TYLKO w -X i w osi Y.
-    #
-    # Wychodzi z tego asymetria, ktora i tak byla potrzebna: lewy bok jest
-    # uzebrowany, prawy gladki pod kolo. Maszyna przestaje byc kostka.
+    # --- the cabinet ---------------------------------------------------------
+    # Three courses of different width, lifted off the floor. The old cabinet was
+    # 1.00 x 0.80 x 1.15 sitting on a skirt: one mass, one value, no gap.
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            P.append(box("foot", (0.17, 0.17, 0.045), (sx*0.33, sy*0.28, 0.0225), "dark"))
+            P.append(box("leg", (0.12, 0.12, 0.19), (sx*0.33, sy*0.28, 0.105), "black"))
+    P.append(box("skirt", (1.00, 0.82, 0.13), (0, 0.03, 0.255), "black"))
+    P.append(box("plinth", (0.94, 0.74, 0.08), (0, 0.02, 0.355), "dark"))
+    P.append(box("body", (0.90, 0.70, 0.62), (0, 0.02, 0.70), "steel_d"))
+    P.append(box("belt1", (0.96, 0.76, 0.05), (0, 0.02, 0.62), "dark"))
+    P.append(box("upper", (0.84, 0.66, 0.30), (0, 0.02, 1.14), "steel_d"))
+    P.append(box("belt2", (0.945, 0.735, 0.05), (0, 0.02, 1.00), "dark"))
+    P.append(box("hood", (0.98, 0.82, 0.27), (0, 0.03, 1.275), "dark"))
+    P.append(box("hoodlip", (0.92, 0.74, 0.04), (0, 0.02, 1.125), "steel"))
+    # THE LEFT COLUMN, and it goes all the way to the floor -- the critic counted
+    # "no frame members reaching the floor" as one of the six. It also owns the
+    # model's -X extreme, so the width contract sits on real structure.
+    P.append(box("colL", (0.10, 0.68, 1.30), (-0.4947, 0.02, 0.65), "dark"))
+    P.append(box("colLc", (0.14, 0.735, 0.06), (-0.4947, 0.02, 1.325), "steel"))
     for sy in (-1, 1):
-        P.append(box("frame", (0.10, 0.10, 1.02), (-0.4947, sy*0.375, 0.62), "dark"))
-        # Zastrzal byl DOKLADNIE tak samo gruby jak slupek (0.10) i konczyl sie
-        # dokladnie na blasze szafy (-0.50): trzy pary scian wspolplaszczyznowych
-        # naraz, plus cztery pary sciec bevela pod 45 stopni, ktore z nich
-        # wynikaly. Teraz jest o 2*SEP wezszy od slupka i o SEP krotszy, wiec
-        # chowa sie w nim zamiast z nim walczyc.
-        P.append(box("gusset", (0.16 - SEP, 0.10 - 2*SEP, 0.10 - 2*SEP),
-                     (-0.42 + SEP/2, sy*0.375, 1.08 - SEP), "dark"))
-    for z in (0.42, 0.98):                  # ceowniki - wystaja w Y, nie w X
-        P.append(box("belt", (0.98, 0.88, 0.05), (0, 0, z), "dark"))
-    P.append(box("boltplate", (0.10, 0.34, 0.34), (-0.490, -0.10, 0.66), "steel"))
-    P.append(box("panel", (0.62, 0.06, 0.42), (0, -0.42, 0.92), "glass"))
-    # RURA WYRZUTOWA - pusta w srodku, POZIOMA wzdluz -Y.
-    # Segmenty ustawione tak jak w ring_xz: obrot (0, a, 0) daje styczna na X,
-    # a os rury lezy na Y. Wczesniej obracalem kazdy segment o ten sam kat
-    # zamiast wokol osi rury - stad rozsypany plaszcz.
-    #
-    # DZIESIEC segmentow, nie czternascie. Plaszcz rury jest z segmentow
-    # zachodzacych na siebie o 45% (mnoznik 1.45), a mnoznik jest WZGLEDNY -
-    # przy dziesieciu segment jest odpowiednio szerszy, wiec rura dalej jest
-    # szczelna, tylko grubiej ciosana, co przy PSX jest zaleta. Kosztowala 28
-    # bryl (rura + obrecz) prawie w calosci schowanych w kolnierzu i w szafie;
-    # warsztat stawia sie w ilosciach, wiec te osiem bryl to czysty zysk.
+        P.append(box("gusset", (0.16 - SEP, 0.10, 0.10), (-0.42, sy*0.285, 1.02), "dark"))
+    # Working panel: rust, small, off to the left. Instruments are 0.22 x 0.14,
+    # not a 0.62 x 0.46 sheet of glass.
+    P.append(box("panel", (0.30, 0.06, 0.20), (-0.24, -0.365, 0.86), "rust"))
+    P.append(box("dial", (0.20, 0.05, 0.12), (-0.24, -0.385, 0.86), "dark"))
+    for i, x in enumerate((-0.31, -0.24, -0.17)):
+        P.append(box("led%d" % i, (0.035, 0.035, 0.035), (x, -0.398, 0.86), "hazard"))
+    for i in range(3):                     # louvres, on the flank not the face
+        P.append(box("louvre%d" % i, (0.06, 0.44, 0.04), (0.455, 0.06, 0.60 + i*0.13), "dark"))
+    # --- THE EJECTOR PIPE ----------------------------------------------------
+    # UNTOUCHED. config.machine.pipeLocal is measured off these exact numbers and
+    # the authored spawn depends on them; the only correct duck outlet in the
+    # game does not move because the wheel did.
     NP, RP, LP = 10, 0.175, 0.52
-    ZP = 0.40                                   # wysokosc osi rury
-    YC = -0.62                                  # srodek rury
-    # Segmenty obracaja sie WOKOL OSI RURY, wiec ich denka - w przeciwienstwie do
-    # segmentow obreczy kola - zostaja prostopadle do tej samej osi Y i wszystkie
-    # ladowaly w jednej plaszczyznie. Sasiedzi zachodza na siebie o 45%, wiec
-    # kazda para sasiadow to remis glebi na obu koncach rury, a jeden z tych
-    # koncow to wylot, w ktory gracz patrzy. Co drugi segment jest wiec o 2*SEP
-    # krotszy: denka rozjezdzaja sie o SEP na kazdym koncu, a ze skracanie idzie
-    # symetrycznie wzgledem YC, obrys modelu (glebokosc 1.3300) sie nie rusza.
+    ZP = 0.40
+    YC = -0.62
+    # PX: the pipe's raw x, shifted -0.020 from the 0 it used to be authored at.
+    # finish() centres the mesh on its own bounding box, and the bounding box
+    # changed when the wheel moved, so an unmoved pipe would NOT have exported to
+    # an unmoved place. Measured off the shipped asset, the old pipe mouth came
+    # out at model-local x = -0.1115; this offset puts the new one back on that
+    # exact number, so the authored eject point is untouched in the coordinates
+    # the game actually reads. (Its z, 0.6650, and its height, 0.3974 against the
+    # old 0.3998, come out right on their own.)
+    PX = -0.020
     for i in range(NP):
         a = math.radians(i * 360.0 / NP)
         P.append(box("pipe%d" % i, (2*math.pi*RP/NP*1.45, LP - (2*SEP if i % 2 else 0), 0.05),
-                     (math.sin(a)*RP, YC, ZP + math.cos(a)*RP), "steel_d", rot=(0, a, 0)))
+                     (PX + math.sin(a)*RP, YC, ZP + math.cos(a)*RP), "steel_d", rot=(0, a, 0)))
     RL = RP + 0.045
-    for i in range(NP):                          # obrecz na samym wylocie
+    for i in range(NP):
         a = math.radians(i * 360.0 / NP)
-        # ta sama sztuczka co wyzej; obrecz jest tym, co widac z przodu wylotu,
-        # wiec to tu remis glebi bolal najbardziej. i=0 zachowuje pelna dlugosc,
-        # wiec najdalszy punkt modelu w -Y (i cala glebokosc) zostaje bez zmian.
         P.append(box("lip%d" % i, (2*math.pi*RL/NP*1.45, 0.10 - (2*SEP if i % 2 else 0), 0.09),
-                     (math.sin(a)*RL, YC - LP/2 + 0.04, ZP + math.cos(a)*RL), "hazard", rot=(0, a, 0)))
-    P.append(box("collar", (0.46, 0.16, 0.46), (0, -0.40, ZP), "dark"))
-    for i, x in enumerate((-0.18, 0.0, 0.18)):
-        P.append(box("led%d" % i, (0.07, 0.05, 0.07), (x, -0.42, 0.60), "hazard"))
-    # --- KOLO: otwarte, nie dysk -------------------------------------------
-    # Wszystko ponizej siedzi w oknie podzialu: blender x 0.5115..0.7677 (czyli
-    # game x 0.40..0.6562) i nie dalej niz 0.42 od piasty w YZ. Piasta: blender
-    # (x dowolne, y=0, z=0.78) -> game (0.4685, 0.78, -0.225).
-    WX, WZ, WR = 0.585, 0.78, 0.34
-    # Ciemna tarcza ZA kolem. Szprychy sa stalowe, szafa tez byla stalowa, wiec
-    # kolo gubilo sie na wlasnym tle.
-    #
-    # TO BYLO ZRODLO ZGLOSZONEGO MIGOTANIA. Plyta miala 0.02 grubosci i srodek na
-    # x=0.49, wiec jej PRZEDNIA sciana wypadala na 0.50 - dokladnie w plaszczyznie
-    # prawej blachy korpusu (polowa z 1.00). Tarcza nie stala wiec za kolem, tylko
-    # LEZALA w blasze: 0.377 m^2 czarnego na stalowym, remis w buforze glebi na
-    # calej powierzchni, a przed tym wszystkim obracajace sie kolo, ktore co
-    # klatke zmienia oswietlenie i kat - stad "miga, gdy kolo sie kreci".
-    #
-    # Teraz plyta jest grubsza (0.05) i wysunieta tak, ze jej lico stoi 5 mm PRZED
-    # blacha (0.505 wobec 0.50), a tyl chowa sie w szafie. Zadnej wspolnej
-    # plaszczyzny: 0.455 i 0.505 wobec 0.50 blachy, 0.51 denka kapsla piasty i
-    # 0.5425 wewnetrznego lica obreczy.
-    #
-    # PODZIAL: main.js pyta o centroid CALEJ SPOJNEJ CZESCI (models.js/partition
-    # dzieli komponentami, nie trojkatami), a centroid tarczy to jej srodek,
-    # blender 0.480 -> game 0.3685, z zapasem 31 mm pod splitMinX 0.40. Tarcza
-    # nie dotyka zadnej bryly kola (najblizsza to piasta 0.52), wiec nie sklei
-    # sie z nia w jeden komponent przy merge=0.0008.
-    P.append(cyl("backplate", 0.365, 0.05, (0.480, 0, WZ), "black", verts=12,
-                 rot=(0, math.radians(90), 0)))
-    # Obrecz na PRZEMIAN zolta i ciemna. To jest najtanszy sposob, jaki znalazlem,
-    # na pokazanie obrotu: dwanascie segmentow na zmiane daje szesc par, wiec przy
-    # kreceniu obrecz miga, zamiast byc jednolita zolta rura. Osobny ciemny
-    # pierscien boczny robil to samo za 14 dodatkowych bryl - ten kosztuje zero.
-    #
-    # DRUGIE ZRODLO MIGOTANIA, i to wprost na kole. Segmenty obreczy zachodza na
-    # siebie o 45%, a obrot (-a,0,0) jest wokol osi X - czyli ich BOCZNE sciany
-    # (normalna +-X) zostaja rownolegle bez wzgledu na kat i wszystkie dwanascie
-    # ladowalo w dwoch plaszczyznach: 0.5425 i 0.6275. Kazda para sasiadow miala
-    # tam wspolna powierzchnie, i to para o RÓZNYCH kolorach - zolty przeciw
-    # ciemnemu - wiec remis glebi nie dawal szumu, tylko naprzemienne plamy
-    # skaczace przy kazdym stopniu obrotu. Sciec bevela to nie ratowalo.
-    #
-    # Lek: co drugi segment (ten ciemny) jest o 2*SEP chudszy, wiec jego lica
-    # stoja 3 mm w glebi lic segmentu zoltego. Zadna para nie dzieli juz
-    # plaszczyzny, a roznica czyta sie jako biezik na obreczy - przy kreceniu
-    # pomaga tak samo jak sam kolor. Kosztuje zero trojkatow.
+                     (PX + math.sin(a)*RL, YC - LP/2 + 0.04, ZP + math.cos(a)*RL), "hazard", rot=(0, a, 0)))
+    P.append(box("collar", (0.46, 0.16, 0.46), (PX, -0.40, ZP), "dark"))
+    P.extend(_crank_wheel_parts(SEP))
+    return finish(P, "crank", bevel=0.008, merge=0.0008)
+
+
+# Wheel hub in the BUILDER's raw coordinates. Everything about the wheel is
+# derived from these three numbers and the radius, in one place, so crank.glb and
+# crank_wheel.glb cannot drift apart.
+#
+# WX is not chosen, it is solved: the rim's outer radius is 0.369 and the model's
+# +X extreme is contractually 0.7677, so WX = 0.7677 - 0.369.
+CRANK_WX, CRANK_WY, CRANK_WZ, CRANK_WR = 0.3676, -0.505, 1.02, 0.34
+
+
+def _crank_wheel_parts(SEP=0.003, ox=0.0, oy=0.0, oz=0.0):
+    """The wheel, in the crank's raw coordinates, offset by (ox,oy,oz).
+
+    It turns about the model's local Z (Blender Y), so it FACES the player. The
+    segments are laid out with rotation (0, a, 0), which maps the box's local +Z
+    onto the radial direction and its local +X onto the tangent -- the same
+    construction as ring_xz, which is the helper that already knows this.
+
+    THE COPLANAR TRAP IS DIFFERENT ON THIS AXIS. Rotating about Y leaves every
+    segment's FRONT and BACK faces (normal +/-Y) parallel, so all twelve rim
+    segments would land in the same two planes and every neighbouring pair --
+    yellow against dark -- would tie in the depth buffer, right on the part of
+    the machine the player watches. Hence the alternating thickness: the dark
+    segments are 2*SEP thinner, so their faces stand 3 mm inside the yellow ones.
+    """
+    WX, WY, WZ, WR = CRANK_WX + ox, CRANK_WY + oy, CRANK_WZ + oz, CRANK_WR
+    P = []
+    # Dark disc BEHIND the wheel, so steel spokes are not read against a steel
+    # cabinet. It sits 0.025 in front of the body skin, not in it -- that exact
+    # mistake was the source of the flicker report on the previous model.
+    P.append(cyl("backplate", 0.30, 0.05, (WX, WY + 0.075, WZ), "black", verts=12,
+                 rot=(math.radians(90), 0, 0)))
     NRIM = 12
-    RR = WR - 0.035
+    RR = WR
     for i in range(NRIM):
         a = math.radians(i * 360.0 / NRIM)
-        P.append(box("rim%d" % i, (0.085 - (2*SEP if i % 2 else 0),
-                                   2*math.pi*RR/NRIM*1.45, 0.058),
-                     (WX, math.sin(a)*RR, WZ + math.cos(a)*RR),
-                     "hazard" if i % 2 == 0 else "dark", rot=(-a, 0, 0)))
-    # SZESC szprych, nie cztery: przy szesciu sylwetka powtarza sie co 60 stopni,
-    # wiec w kazdej klatce kolo jest w innej pozycji niz w poprzedniej.
+        P.append(box("rim%d" % i, (2*math.pi*RR/NRIM*1.45,
+                                   0.085 - (2*SEP if i % 2 else 0), 0.058),
+                     (WX + math.sin(a)*RR, WY, WZ + math.cos(a)*RR),
+                     "hazard" if i % 2 == 0 else "dark", rot=(0, a, 0)))
+    # Six spokes: the silhouette repeats every 60 degrees, so the wheel is in a
+    # visibly different pose in every frame instead of looking like a still disc.
     for i in range(6):
         a = math.radians(i * 60.0)
-        Rm = 0.075 + (WR - 0.105) / 2
-        P.append(box("spoke%d" % i, (0.05, WR - 0.105, 0.042),
-                     (WX, math.sin(a)*Rm, WZ + math.cos(a)*Rm), "steel",
-                     rot=(math.radians(90) - a, 0, 0)))
-    P.append(cyl("hub", 0.105, 0.15, (0.595, 0, WZ), "steel_d", verts=10,
-                 rot=(0, math.radians(90), 0)))
-    P.append(cyl("hubcap", 0.055, 0.19, (0.605, 0, WZ), "orange", verts=8,
-                 rot=(0, math.radians(90), 0)))
-    # KORBA. Sterczy poza plaszczyzne kola, wiec zakresla luk w powietrzu - to
-    # jest ten element, ktory najmocniej sprzedaje obrot. Promien 0.245 od
-    # piasty: z wlasna grubosc zostaje z zapasem pod splitRadius 0.42.
-    # Szerokosc bryly jest kontraktem (1.3124), a NAJDALSZYM punktem modelu w +X
-    # jest wlasnie koncowka korby - wiec jej x liczy sie wstecz od obrysu, nie
-    # dobiera na oko: 0.6477 + polowa dlugosci 0.10 + bevel 0.02 = 0.7677, czyli
-    # dokladnie tam, gdzie konczyl sie stary knob.
+        # Long enough to bury its outer end IN the rim: at exactly rim-inner
+        # radius the two met in a plane and tied 0.0010 apart, which is the
+        # tolerance check-coplanar.py tests at.
+        Rm = 0.075 + (WR - 0.075) / 2
+        P.append(box("spoke%d" % i, (0.05, 0.042, WR - 0.075),
+                     (WX + math.sin(a)*Rm, WY, WZ + math.cos(a)*Rm), "steel",
+                     rot=(0, a, 0)))
+    P.append(cyl("hub", 0.105, 0.15, (WX, WY + 0.02, WZ), "steel_d", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("hubcap", 0.055, 0.19, (WX, WY - 0.035, WZ), "orange", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    # THE HANDLE, and it is the reason this face is the right face: it sticks out
+    # of the wheel's plane TOWARDS the player and sweeps an arc in the air 25 cm
+    # across. On the old model the same handle swept its arc side-on and read as
+    # a twitching stub.
     KR = 0.245
     KA = math.radians(45)
-    P.append(box("crankarm", (0.055, 0.30, 0.055), (0.615, 0.10, WZ + 0.10), "steel",
-                 rot=(KA, 0, 0)))
-    P.append(cyl("grip", 0.052, 0.20, (0.6677, math.sin(KA)*KR, WZ + math.cos(KA)*KR),
-                 "orange", verts=8, rot=(0, math.radians(90), 0)))
-    # Stopki siedza w calosci wewnatrz fartucha (jego obrys 1.08 x 0.88 x 0.14 je
-    # obejmuje), wiec widac je tylko wtedy, gdy ich spod lezal w plaszczyznie
-    # spodu fartucha - i wlasnie tak lezal. Podniesione o SEP: dalej niewidoczne,
-    # ale juz bez remisu glebi pod maszyna.
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            P.append(box("foot", (0.10, 0.10, 0.09), (sx*0.42, sy*0.32, 0.045 + 2*SEP), "dark"))
-    return finish(P, "crank", bevel=0.020, merge=0.0008)
+    P.append(box("crankarm", (0.055, 0.055, 0.30),
+                 (WX + math.sin(KA)*0.125, WY - 0.075, WZ + math.cos(KA)*0.125), "steel",
+                 rot=(0, KA, 0)))
+    P.append(cyl("grip", 0.052, 0.20,
+                 (WX + math.sin(KA)*KR, WY - 0.160, WZ + math.cos(KA)*KR), "orange",
+                 verts=8, rot=(math.radians(90), 0, 0)))
+    return P
+
+
+def b_crank_wheel():
+    """The workbench wheel ALONE, origin at its own hub.
+
+    Not a placeable and not in machines.js: a part, offered so the renderer can
+    stop identifying the wheel by hand-written coordinates. Mount it at
+    config.machine.wheelLocal (0.2872, 1.0200, 0.2750) with identity rotation and
+    it lands exactly on top of the wheel baked into crank.glb.
+
+    AXIS: the model's local Z. TRAVEL: unbounded rotation, driven by the existing
+    crank spin model (config.machine.spinMinRadPerSec .. spinMaxRadPerSec, chased
+    by fill fraction). Positive angle should turn the handle up on the far side;
+    with the geometry below that is rotation.z = -angle.
+    """
+    P = _crank_wheel_parts(0.003, -CRANK_WX, -CRANK_WY, -CRANK_WZ)
+    return finish(P, "crank_wheel", bevel=0.008, merge=0.0008, origin="raw")
 
 def b_machine():
+    """Duck Assembler. H 2.10, footprint 1.50 x 1.25.
+
+    Two faults, both named by the critic. Its delivery hatch sat at 0.30 while
+    the simulation spawned at 0.945 -- 39 cm of daylight between the duck and the
+    door it was supposed to have come out of -- and at 10 m the whole thing was a
+    31 x 43 px rectangle with a slightly darker rectangle painted on it.
+
+    The hatch moves to the number the sim actually uses. The rectangle is broken
+    by giving the machine a WAIST: a wide lower cabinet, a narrow open gantry
+    above it with 0.56 m of sky showing between two columns, and a cap that
+    overhangs both. That gantry gap is 12 px of background at 10 m, punched
+    through the middle of the outline where the old model was solid -- which is
+    the difference between a machine and a crate, and it costs 6 boxes."""
+    H, W, D = 2.10, 1.50, 1.25
     P = []
-    P.append(box("body", (1.30, 1.00, 1.30), (0, 0, 0.65), "steel"))
-    P.append(box("base", (1.40, 1.10, 0.16), (0, 0, 0.08), "dark"))
-    P.append(box("top", (1.10, 0.86, 0.20), (0, 0, 1.40), "hazard"))
-    P.append(box("win", (0.80, 0.06, 0.52), (0, -0.52, 0.86), "glass"))
-    P.append(box("frame", (0.90, 0.04, 0.62), (0, -0.545, 0.86), "dark"))
-    P.append(box("out", (0.70, 0.36, 0.24), (0, -0.56, 0.30), "dark"))
-    P.append(box("outlip", (0.76, 0.12, 0.06), (0, -0.72, 0.23), "hazard"))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            P.append(box("leg", (0.13, 0.13, 0.24), (sx*0.60, sy*0.46, 0.12), "dark"))
+    P.append(box("base", (W, 1.14, 0.14), (0, 0, 0.29), "dark"))
+    P.append(box("body", (1.40, 1.02, 0.86), (0, 0, 0.80), "steel"))
+    chute(P, H, D)                       # aperture centre z = 0.945
+    for sx in (-1, 1):                   # ribs on the flanks, not on the front
+        P.append(box("rib", (0.06, 0.94, 0.80), (sx*0.715, 0, 0.80), "steel_d"))
+    P.append(box("waist", (1.46, 1.08, 0.12), (0, 0, 1.28), "dark"))
+    P.append(box("hazb", (1.36, 1.00, 0.05), (0, 0, 1.355), "hazard"))
+    # THE GANTRY. Two columns and a hole through the machine: the one feature
+    # that stops this reading as the same box as every other 1.5 m producer.
+    for sx in (-1, 1):
+        P.append(box("col", (0.17, 0.34, 0.52), (sx*0.55, -0.18, 1.655), "steel"))
+        P.append(box("colb", (0.15, 0.30, 0.50), (sx*0.55, 0.34, 1.645), "steel_d"))
+        P.append(box("brace", (0.13, 0.09, 0.09), (sx*0.55, 0.08, 1.86), "dark",
+                     rot=(math.radians(38), 0, 0)))
+    # What hangs IN the gap, so the hole has something to be a hole around
+    P.append(cyl("spindle", 0.10, 0.44, (0, 0.02, 1.72), "orange", verts=10))
+    P.append(cyl("spincap", 0.15, 0.06, (0, 0.02, 1.96), "dark", verts=10))
+    P.append(box("cap", (W, 1.10, 0.18), (0, 0, 2.01), "hazard"))
+    P.append(box("caplip", (1.42, 1.04, 0.05), (0, 0, 1.90), "dark"))
     for i in range(4):
-        P.append(box("vent%d" % i, (1.02, 0.04, 0.06), (0, 0.52, 0.42+i*0.14), "dark"))
-    P.append(cyl("pipe", 0.17, 0.60, (0.40, 0.30, 1.72), "steel", verts=10))
-    P.append(cyl("pipecap", 0.22, 0.10, (0.40, 0.30, 2.05), "dark", verts=10))
-    P.append(cyl("lamp", 0.09, 0.14, (-0.42, 0, 1.57), "red", verts=8))
+        P.append(box("vent%d" % i, (1.10, 0.05, 0.06), (0, 0.53, 0.50 + i*0.15), "dark"))
+    P.append(cyl("lamp", 0.07, 0.10, (-0.52, -0.53, 1.14), "red", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(box("panel", (0.26, 0.06, 0.16), (0.46, -0.545, 1.130), "teal"))
     return finish(P, "machine")
 
 def b_press():
+    """Duck Press. H 1.80, footprint 1.00 x 0.75.
+
+    The critic's read of the old one was right twice over. It had NO OUTLET AT
+    ALL -- ducks appeared 0.81 m up in the empty window between its posts, out of
+    nothing -- and its bed sat flat on the floor, so the only negative space it
+    owned was that window.
+
+    Both are structural here. The bed is lifted onto four short legs, which puts
+    0.28 m of background under the machine (about 6 px at 10 m, and it is the
+    bottom edge of the silhouette that tells a standing machine from a solid
+    block). The window between the posts is kept, because it is the thing that
+    made this model one of the four the critic said already worked. And the duck
+    now leaves through a chute at exactly mouth_z(1.80) = 0.810, directly under
+    the die the ram comes down on: stamped at 0.90, out at 0.81.
+
+    THE RAM IS A SEPARATE MODEL (press_ram.glb), the gamble_box_lid pattern.
+    Origin, axis and travel are in b_press_ram."""
+    H, W, D = 1.80, 1.00, 0.75
     P = []
-    P.append(box("bed", (1.00, 0.80, 0.22), (0, 0, 0.11), "steel_d"))
+    # Legs. Daylight under the bed is the cheapest silhouette this machine can
+    # buy: it costs 8 boxes and turns a solid base into a standing frame.
     for sx in (-1, 1):
-        P.append(box("post", (0.14, 0.14, 1.45), (sx*0.40, 0, 0.85), "steel"))
-    P.append(box("crown", (1.05, 0.60, 0.24), (0, 0, 1.68), "hazard"))
-    P.append(cyl("ram", 0.16, 0.55, (0, 0, 1.26), "steel_d", verts=10))
-    P.append(box("head", (0.62, 0.52, 0.20), (0, 0, 0.98), "orange"))
-    P.append(box("anvil", (0.72, 0.60, 0.10), (0, 0, 0.27), "dark"))
-    P.append(cyl("gauge", 0.11, 0.06, (0, -0.32, 1.68), "white", verts=10, rot=(math.radians(90), 0, 0)))
+        for sy in (-1, 1):
+            P.append(box("leg", (0.11, 0.11, 0.27), (sx*0.39, sy*0.26, 0.140), "dark"))
+            P.append(box("foot", (0.17, 0.17, 0.045), (sx*0.39, sy*0.26, 0.0225), "steel_d"))
+    P.append(box("bed", (W, 0.66, 0.21), (0, 0, 0.385), "steel_d"))
+    P.append(box("bedlip", (0.92, 0.72, 0.05), (0, 0, 0.475), "dark"))
+    # The delivery housing, wrapped around the chute. Narrower than the bed, so
+    # the outline steps in on the way up instead of running straight.
+    P.append(box("hous", (0.80, 0.60, 0.45), (0, 0.02, 0.720), "dark"))
+    chute(P, H, D)                       # aperture centre z = 0.810
+    # The die the ram strikes, immediately above the mouth: the duck is made at
+    # 0.94 and falls into the chute at 0.81, which is a mechanism a player can
+    # read off the shapes rather than off the tooltip.
+    P.append(box("anvil", (0.60, 0.46, 0.09), (0, 0.04, 0.980), "hazard"))
+    P.append(box("die", (0.42, 0.34, 0.05), (0, 0.04, 1.045), "steel_d"))
+    # The window. Two posts and 0.44 m of sky between them -- 10 px of background
+    # at 10 m, which is the whole reason this machine reads.
+    for sx in (-1, 1):
+        P.append(box("post", (0.15, 0.17, 0.62), (sx*0.415, 0, 1.39), "steel"))
+        P.append(box("tie", (0.07, 0.13, 0.30), (sx*0.415, -0.19, 1.30), "dark"))
+    P.append(box("crown", (W, 0.60, 0.20), (0, 0, 1.70), "hazard"))
+    P.append(box("crownlip", (0.94, 0.66, 0.05), (0, 0, 1.585), "dark"))
+    P.append(cyl("gauge", 0.09, 0.05, (-0.28, -0.31, 1.70), "white", verts=9,
+                 rot=(math.radians(90), 0, 0)))
+    for i in range(2):
+        P.append(box("led%d" % i, (0.06, 0.04, 0.06), (0.16 + i*0.14, -0.31, 1.70), "red"))
     return finish(P, "press")
+
+
+def b_press_ram():
+    """The Duck Press's moving half. NOT placed by the player and NOT in
+    machines.js: a part, mounted by the renderer on `press`.
+
+    ORIGIN (0,0,0) is the ram's own TOP CENTRE, on the press's local centreline.
+    Mount it at model-local (0, 1.585, 0) -- the underside of the crown -- with
+    identity rotation, and it hangs in the window in its rest pose.
+
+    AXIS: straight down the model's local -Y (world down when the press is
+    upright). One degree of freedom, no rotation.
+
+    TRAVEL: 0 (rest, head face at 1.585 - 0.425 = 1.160) to -0.090 (struck, head
+    face at 1.070, exactly on the die, whose top is 1.045 + half its 0.05). So
+    the full stroke is 90 mm, in model space and in world space alike -- `press`
+    carries no modelScale. Anything past -0.090 drives the head through the die.
+
+    STATE: the row's produce.secondsPerDuck cycle. Suggested drive -- ease down
+    over the last 0.18 s before the duck pops, hold 0.06 s at -0.075, ease back
+    over 0.30 s. The duck should leave the chute on the frame the ram bottoms
+    out, because that is the only thing that makes the machine look causal."""
+    P = []
+    P.append(cyl("shaft", 0.10, 0.34, (0, 0, -0.17), "steel_d", verts=10))
+    P.append(cyl("collar", 0.14, 0.07, (0, 0, -0.055), "dark", verts=10))
+    P.append(box("head", (0.52, 0.40, 0.13), (0, 0, -0.360), "orange"))
+    P.append(box("headlip", (0.58, 0.46, 0.04), (0, 0, -0.300), "dark"))
+    for sx in (-1, 1):                    # guide shoes riding the posts
+        P.append(box("shoe", (0.09, 0.13, 0.16), (sx*0.31, 0, -0.330), "steel"))
+    return finish(P, "press_ram", origin="raw")
 
 def b_hopper():
     """Lej: szeroki wlot U GORY, waski wylot na dole. Otwarty, zbudowany z pochylonych scianek."""
@@ -772,14 +1056,52 @@ def b_hopper():
     return finish(P, "hopper", merge=0.001)
 
 def b_vacuum_station():
+    """Stacja ssaca - LEJ WLOTOWY na kozle, a nie szafka z kominem.
+
+    At 10 m the old one was a blue box 22 px wide with a grey nub on the front,
+    and what it read as was a fuel pump: a closed cabinet with a hose. The thing
+    a collector has to communicate is that it EATS -- and the catalog already
+    proved how, because the model the critic named as the one that reads at play
+    distance is `magnet`: an open two-colour shape whose meaning is carried by
+    the hole in it, not by anything on its surface.
+
+    So this piece is now built around a hole. Eight staves make a funnel mouth
+    0.72 m across, standing clear of the tank, with nothing behind it but shadow
+    -- 16 px of open dark at play distance, and the only round opening at floor
+    level in the game. The tank stays blue (it is the only blue object in the
+    catalog and that is worth keeping) but it moves BEHIND the mouth, so the
+    silhouette is funnel-then-body rather than body-with-nub.
+
+    Height 1.28 EXACTLY (src/data/machines.js `vacuum_station`), owned by the
+    axis-aligned lid box -- not by a 12-gon's outermost vertex, which is what
+    used to own it and is a number nobody can predict from the literals."""
     P = []
-    P.append(cyl("tank", 0.34, 1.10, (0, 0, 0.62), "blue", verts=12))
-    P.append(cyl("cap", 0.37, 0.12, (0, 0, 1.22), "steel", verts=12))
-    P.append(cyl("base", 0.44, 0.14, (0, 0, 0.07), "dark", verts=12))
-    P.append(cone("intake", 0.30, 0.10, 0.34, (0, -0.42, 0.55), "steel_d", verts=10,
-                  rot=(math.radians(90), 0, 0)))
-    P.append(cyl("hose", 0.08, 0.55, (0.30, 0.18, 0.90), "rubber", verts=8, rot=(math.radians(35), 0, 0)))
-    P.append(box("panel", (0.24, 0.05, 0.18), (0, -0.34, 0.95), "hazard"))
+    H = 1.28
+    # Kadlub - cofniety, zeby lej stal wolno.
+    # 0.655, so the tank's underside is at 0.185 and NOT on the trestles' 0.19
+    # top plane; and the pads alone touch the floor. Two planes, 24 pairs.
+    P.append(cyl("tank", 0.30, 0.94, (0, 0.16, 0.655), "blue", verts=12))
+    P.append(box("lid", (0.56, 0.50, 0.16), (0, 0.16, H - 0.08), "steel"))
+    P.append(box("band", (0.62, 0.56, 0.05), (0, 0.16, 0.86), "hazard"))
+    # Kozly - podloga widoczna pod kadlubem.
+    for sx in (-1, 1):
+        P.append(box("foot", (0.10, 0.52, 0.182), (sx*0.24, 0.16, 0.099), "dark"))
+        P.append(box("pad", (0.16, 0.14, 0.05), (sx*0.24, 0.16, 0.025), "steel_d"))
+    # THE MOUTH. Eight staves round a 0.36 m radius, splayed 26 degrees so the
+    # opening flares forwards, and deliberately NOT closed off at the back: the
+    # dark inside the cone is the feature.
+    for i in range(8):
+        a = math.radians(i*45 + 22.5)
+        P.append(box("stave%d" % i, (0.20, 0.30, 0.055 - (0.006 if i % 2 else 0.0)),
+                     (math.sin(a)*0.30, -0.30, 0.60 + math.cos(a)*0.30), "steel_d",
+                     rot=(0, a, 0)))
+        P.append(box("lip%d" % i, (0.17, 0.07, 0.075 - (0.008 if i % 2 else 0.0)),
+                     (math.sin(a)*0.36, -0.42, 0.60 + math.cos(a)*0.36), "hazard",
+                     rot=(0, a, 0)))
+    P.append(cyl("throat", 0.13, 0.30, (0, -0.16, 0.60), "black", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("hose", 0.07, 0.52, (0.26, 0.06, 0.92), "rubber", verts=8,
+                 rot=(math.radians(38), 0, 0)))
     return finish(P, "vacuum_station")
 
 
@@ -803,83 +1125,408 @@ def b_conveyor():
     step of the staircase draws.
 
     Height is 0.65 EXACTLY (src/data/machines.js `conveyor`); the stanchions own
-    it and run floor to H, so minY and height are both exact by construction."""
+    it and run floor to H, so minY and height are both exact by construction.
+
+    THE BELT LINE IS NOW THE RIDE LINE. It was not. collider.half[1] is 0.325
+    on an anchor:'floor' row, so a duck carried by this piece stands at y 0.65 --
+    and the band's top face was at 0.555, with the four stanchion tips the only
+    thing up at 0.65. Every duck on a belt run therefore floated 9.5 cm over the
+    thing that was supposedly carrying it. Nothing in src/data had to move to fix
+    that: the CLEAT tops are now at 0.65 exactly and the band sits 2 cm under
+    them, so a duck rides on the cleats that push it. The stanchions no longer
+    stand proud (they cannot: 0.65 is the ceiling); the void under the deck grew
+    by the same 9.5 cm instead, which is where the conveyor/stairs separation
+    actually lives.
+
+    The cleats are NOT in this model. They are `conveyor_belt`, a separate GLB on
+    the same origin, because they travel -- see b_conveyor_belt."""
     H = 0.65
     # L and W are authored so the OUTER box lands on the grid before the snap:
-    # length = L + 2 x roller radius 0.11 = 2.00, width = W + 0.11 = 1.00.
+    # length = L + 2 x bearing plate 0.11 = 2.00, width = W + 0.11 = 1.00.
+    # The bearing plates matter beyond decoration: they are AXIS-ALIGNED, so the
+    # y extent is exactly 2.00 by construction and finish()'s snap factor is
+    # exactly 1.0 on both axes. That is what lets conveyor_belt be authored in
+    # this same frame with origin="raw" and still line up to the micron. It used
+    # to be the roller cylinders that set the length, and a 10-gon's extreme
+    # vertex is a number nobody should have to predict.
     L, W = 1.78, 0.89
+    BT = 0.07
+    ZB = 0.595                          # band centre; top 0.63, cleat tops 0.65
     P = []
-    P.append(box("belt", (W, L, 0.07), (0, 0, 0.52), "dark"))
-    for i in range(7):
-        P.append(box("slat%d" % i, (W-0.05, 0.10, 0.04), (0, -L/2+0.18+i*0.24, 0.565), "steel_d"))
+    # ONE PART OWNS EACH EXTREME PLANE, and everything else stops short of it.
+    # That is the whole discipline behind the numbers below: the four hazard
+    # caps own y = 0.65, the four steel posts own x = +-0.50, the two bearing
+    # plates own z = +-1.00, and nothing else is allowed to land on any of them.
+    # Getting this wrong is not a cosmetic slip -- a first pass at this model
+    # had caps, posts, side rails, drums and bearings all topping out at 0.65
+    # together, which is 46 coplanar-overlap pairs across the top of the deck.
+    P.append(box("belt", (W, L+0.01, BT), (0, 0, ZB), "dark"))
     for sx in (-1, 1):
-        P.append(box("side", (0.06, L-0.04, 0.16), (sx*0.455, 0, 0.53), "hazard"))
+        # Top at 0.640, clear of the posts' 0.645 and the caps' 0.650: three
+        # families, three planes.
+        P.append(box("side", (0.06, L-0.04, 0.16), (sx*0.455, 0, H-0.090), "hazard"))
         for sy in (-1, 1):
-            # Full-height corner stanchion: floor to H, outboard of the belt.
-            P.append(box("post", (0.11, 0.11, H), (sx*W/2, sy*(L/2-0.10), H/2), "steel"))
-            P.append(box("tip", (0.125, 0.125, 0.07), (sx*W/2, sy*(L/2-0.10), H-0.045), "hazard"))
+            # Full-height corner stanchion: floor to 0.645, capped at 0.65.
+            P.append(box("post", (0.11, 0.11, H-0.005), (sx*W/2, sy*(L/2-0.10), (H-0.005)/2), "steel"))
+            P.append(box("cap", (0.10, 0.19, 0.06), (sx*W/2, sy*(L/2-0.10), H-0.03), "hazard"))
         # A single cross-tie low down, so the void under the deck stays a void.
-        P.append(box("tie", (0.05, L-0.30, 0.05), (sx*W/2, 0, 0.13), "steel_d"))
-    P.append(cyl("roll1", 0.11, W-0.04, (0, -L/2, 0.52), "steel", verts=10, rot=(0, math.radians(90), 0)))
-    P.append(cyl("roll2", 0.11, W-0.04, (0,  L/2, 0.52), "steel", verts=10, rot=(0, math.radians(90), 0)))
+        P.append(box("tie", (0.05, L-0.30, 0.05), (sx*W/2, 0, 0.11), "steel_d"))
+    for sy in (-1, 1):
+        # 0.09 radius and a 0.16 bearing, not 0.11 and 0.216. THE END VIEW IS
+        # THE CONVEYOR/STAIRS TEST and it is decided by how much of the 0.65 is
+        # solid bar and how much is daylight between two legs. A first pass at
+        # this rework thickened the bar to 0.215 and the pair's head-on pixel
+        # XOR fell from 45.3% to 39.4% -- it had made the belt MORE like the
+        # stairs' solid trapezoid, which is the opposite of the job. Thinned to
+        # 0.16 the void under the deck runs 0.135..0.485, i.e. 54% of the
+        # object's height is open air, and a wedge has none.
+        P.append(cyl("roll", 0.09, W-0.06, (0, sy*L/2, H-0.095), "steel", verts=10,
+                     rot=(0, math.radians(90), 0)))
+        P.append(box("bear", (W-0.10, 0.11, 0.16), (0, sy*(L/2+0.055), H-0.085), "steel_d"))
+    # The drive pod, under the deck at ONE end. Two things at once: the piece now
+    # says which end is powered (an asymmetry a symmetric wedge cannot fake), and
+    # the void under the deck stops being a plain 10 px rectangle -- it is a
+    # rectangle with a lump in one corner, which is a shape and not a gap.
+    # Tucked UP against the belt rather than hung in the middle of the void:
+    # the pod has to read as machinery without filling the gap that is doing
+    # the silhouette work.
+    P.append(cyl("motor", 0.085, 0.26, (0, -L/2+0.34, 0.435), "orange", verts=8,
+                 rot=(0, math.radians(90), 0)))
+    P.append(box("mount", (0.30, 0.12, 0.14), (0, -L/2+0.34, 0.50), "steel_d"))
     return finish(P, "conveyor")
 
-def b_conveyor_corner():
-    """Luk 90 stopni: tasma z segmentow po okregu, barierki po obu promieniach."""
+
+def b_conveyor_belt():
+    """The MOVING half of `conveyor`: eight cleats and nothing else.
+
+    Same reason the gambling box is two models -- finish() joins everything it
+    is given into one mesh, so a part that has to move independently cannot be
+    in it. src/render/rotor.js is no help here: it finds ROTATIONALLY symmetric
+    congruent groups, and a row of cleats marching down a straight belt is a
+    translation. So this follows the gamble_box_lid pattern instead: a separate
+    GLB, authored in the body's own coordinates, with its motion stated as data
+    rather than discovered by measuring.
+
+    origin="raw", so nothing is re-centred and nothing is snapped: these
+    coordinates ARE conveyor.glb's coordinates, which is exact because
+    b_conveyor's snap factor is 1.0 on both horizontal axes by construction.
+    The renderer draws this mesh with the placed object's own transform and one
+    extra translation -- no offset, no rotation.
+
+    HOW IT MOVES (this is the spec, and it is exact):
+      travel axis    local +Z (the game's Y-up frame), i.e. the belt's own
+                     forward, the same direction `belt.speed` already drives
+      period         0.2225 m = L / 8. Translating by exactly one period maps
+                     cleat k onto where cleat k+1 was, so the loop is seamless
+                     and needs no wrap, no clipping and no second copy.
+      phase          (distance travelled) mod 0.2225, where distance is the
+                     integral of the row's own belt.speed -- the belt already
+                     knows its speed and its direction, and reversing the drive
+                     reverses this with no extra state.
+      range          cleats are authored at z = -L/2 + k*0.2225 for k = 0..7,
+                     spanning -0.89 .. +0.6675. Adding a phase in [0, 0.2225)
+                     keeps every cleat inside -0.89 .. +0.89, so no cleat ever
+                     leaves the band -- they appear at the trailing drum and
+                     vanish at the leading one, which is what a cleat does when
+                     it wraps over a roller.
+    A duck rides on the cleat tops at y 0.65, which is exactly collider.half[1]
+    * 2 on the row: the physics surface and the visible surface are the same
+    plane for the first time."""
+    H, L, W, BT = 0.65, 1.78, 0.89, 0.07
+    ZB = 0.595
+    N = 8
+    S = L / N                                  # 0.2225 m
     P = []
+    for k in range(N):
+        # 0.035 tall, seated 0.015 INTO the band: the cleat top is the ride
+        # line and the two solids overlap rather than share a face, so the pair
+        # cannot z-fight (tools/check-coplanar.py).
+        P.append(box("cleat%d" % k, (W - 0.06, 0.07, 0.035),
+                     (0, -L/2 + k*S, H - 0.0175), "steel_d"))
+    return finish(P, "conveyor_belt", origin="raw")
+
+# --- THE CORNER'S GEOMETRY, ONCE, SO THE BELT MODEL CANNOT DISAGREE ---------
+# b_conveyor_corner and b_conveyor_corner_belt have to sit on the same arc to
+# the micron, and the second one is authored with origin="raw" -- it does not
+# get the centring that would have hidden a mismatch. So the arc is defined
+# here and both read it.
+#
+# The quarter turn is authored to fill the 1.50 x 1.50 tile EXACTLY, with flat
+# axis-aligned faces at every extreme, so finish()'s snap factor comes out 1.0
+# on both axes and the arc stays a circle. The old one did not: it was a stubby
+# 81-degree arc whose bounding box was 1.45 and got stretched 3.4% into an
+# ellipse, and whose two legs stood so close together that at 10 m the whole
+# piece read as a round table on one central pillar.
+#
+#   centre   CX, CY = -0.75, -0.75   (a tile corner, after finish() centres it)
+#   band     RC 1.00 +- W/2, W 0.89  -- the same 0.89 band the straight belt has
+#   ends     a = 0 leaves through the -X face, a = 90 through the -Y face, and
+#            each end's CENTRELINE is 0.25 m off the tile's edge midpoint --
+#            an exact multiple of config.build.grid, so a straight belt butts
+#            onto it with a seam of zero and no duck-swallowing step.
+#   extent   the two end plates own all four extremes: -X at CX, +X at CX+1.50,
+#            -Y at CY, +Y at CY+1.50. Nothing else reaches them.
+CC = {"CX": -0.75, "CY": -0.75, "RC": 1.00, "W": 0.89, "H": 0.66, "N": 8}
+
+
+def b_conveyor_corner():
+    """Luk 90 stopni. Poklad na TRZECH nogach nad pusta cwiartka.
+
+    The corner's whole silhouette problem was that it had no hole in it. Seen
+    from anywhere it was a disc with a stalk, which is a table. It now has the
+    one thing a 90-degree turn can have and a straight belt cannot: the INSIDE
+    of the turn is empty, floor to deck, all the way to the tile edge. From 10 m
+    that is a 30 px notch bitten out of a square -- and the three legs stand at
+    the outer radius, so the daylight under the deck is a band, not a shadow.
+
+    Height 0.66 (src/data/buildings.js has no corner row; src/data/machines.js
+    `conveyor_corner` footprint [1.50, 0.66, 1.50], collider half[1] 0.33), and
+    as on the straight belt the CLEAT tops are that 0.66 -- a duck rides on the
+    thing that carries it. Cleats live in conveyor_corner_belt."""
+    CX, CY, RC, W, H, N = CC["CX"], CC["CY"], CC["RC"], CC["W"], CC["H"], CC["N"]
+    RI, RO = RC - W/2, RC + W/2         # 0.555 .. 1.445
+    ZB = H - 0.055                      # band centre; top 0.63, cleats to 0.66
+    P = []
+    # Band: N segments, tangential length overlapping so the arc is continuous.
     # Przy obrocie (0,0,-a) os X wypada STYCZNIE, os Y promieniowo.
-    # Dlugosc segmentu musi wiec byc pierwszym wymiarem, nie drugim.
-    W, RC, N, ZB = 0.80, 0.85, 10, 0.52
-    OX = OY = -RC * 0.62
+    # AN ARC OF OVERLAPPING BOXES IS THE RING IDIOM AGAIN, and it needs the same
+    # cure: rotating about Z leaves every segment's top and bottom face in one
+    # shared plane, so 26 of them tie across 0.38 m^2 -- the largest single
+    # coincident cluster this model could contain, right on the surface the
+    # player watches ducks travel over. Alternate segments are 8 mm thinner.
     for i in range(N):
-        a = math.radians(i*90.0/N + 90.0/(2*N))
-        seg = 2*math.pi*RC/4/N * 1.30
-        P.append(box("belt%d" % i, (seg, W, 0.07),
-                     (math.sin(a)*RC+OX, math.cos(a)*RC+OY, ZB), "dark", rot=(0, 0, -a)))
-        P.append(box("slat%d" % i, (0.07, W-0.07, 0.04),
-                     (math.sin(a)*RC+OX, math.cos(a)*RC+OY, ZB+0.045), "steel_d", rot=(0, 0, -a)))
-    for rr, nm in ((RC - W/2 - 0.05, "in"), (RC + W/2 + 0.05, "out")):
-        for i in range(N):
-            a = math.radians(i*90.0/N + 90.0/(2*N))
-            seg = 2*math.pi*rr/4/N * 1.30
-            P.append(box("side%s%d" % (nm, i), (seg, 0.07, 0.20),
-                         (math.sin(a)*rr+OX, math.cos(a)*rr+OY, ZB+0.04), "hazard", rot=(0, 0, -a)))
-    for ad in (0, 90):
+        a = math.radians((i + 0.5) * 90.0 / N)
+        seg = 2*math.pi*RC/4/N * 1.35
+        # Shrunk about the CENTRE, so neither the top nor the bottom face is
+        # shared. Anchoring one end and varying the other just moves the tie.
+        t = 0.07 - (i % 4) * 0.004
+        P.append(box("belt%d" % i, (seg, W, t),
+                     (math.sin(a)*RC+CX, math.cos(a)*RC+CY, ZB), "dark",
+                     rot=(0, 0, -a)))
+    # Rail radii are 0.024 and not 0.0275 off the band's own edge, deliberately:
+    # at half their own width the rail's inner face lands EXACTLY on the band's
+    # outer face, and a 90-degree arc of that is 64 opposite-facing ties. 3.5 mm
+    # of overlap instead of a butt joint removes all of them.
+    #
+    # Guard rails. The outer one is the tall one: on a turn, that is the wall a
+    # duck is actually thrown against, and it is also the edge the eye follows
+    # to read the curve. The inner one is a low kerb, so the notch stays open.
+    # Both alternate their section for the same reason the band does.
+    for i in range(N):
+        a = math.radians((i + 0.5) * 90.0 / N)
+        ho = 0.19 - (i % 4) * 0.004
+        hi = 0.10 - (i % 4) * 0.004
+        P.append(box("rout%d" % i, (2*math.pi*(RO+0.03)/4/N*1.35, 0.055, ho),
+                     (math.sin(a)*(RO+0.024)+CX, math.cos(a)*(RO+0.024)+CY, H-0.100),
+                     "hazard", rot=(0, 0, -a)))
+        P.append(box("rin%d" % i, (2*math.pi*(RI-0.03)/4/N*1.35, 0.055, hi),
+                     (math.sin(a)*(RI-0.024)+CX, math.cos(a)*(RI-0.024)+CY, H-0.058),
+                     "steel_d", rot=(0, 0, -a)))
+    # The two end plates. These own every extreme of the bounding box, and they
+    # are the faces a straight conveyor butts against. There were skirts beside
+    # them in a first pass, sharing both the 0.66 top plane and an inner face
+    # with the plates over 0.22 m^2; they are gone rather than nudged, because
+    # they were saying nothing the plates were not already saying.
+    P.append(box("endA", (0.06, W+0.11, 0.30), (CX+0.03, CY+RC, H-0.15), "steel"))
+    P.append(box("endB", (W+0.11, 0.06, 0.30), (CX+RC, CY+0.03, H-0.15), "steel"))
+    # Drums at both mouths, radial axis: Z -> rotY(90) -> X -> rotZ(90-a).
+    # 6.3 degrees in from each mouth, not 0 and 90: a drum's radius pokes along
+    # the belt's direction, so a drum centred exactly on the a = 0 end face
+    # would hang 0.11 m past x = -0.75 -- outside the tile, and enough to make
+    # finish() rescale the whole arc into an ellipse to fit 1.50. 0.11 / RC in
+    # degrees is 6.3, which is exactly the offset that tucks it inside.
+    for ad in (6.3, 83.7):
         a = math.radians(ad)
-        cxp, cyp = math.sin(a)*RC+OX, math.cos(a)*RC+OY
-        # os rolki PROMIENIOWA: Z -> rotY(90) -> X -> rotZ(90-a) -> (sin a, cos a)
-        P.append(cyl("roll", 0.11, W, (cxp, cyp, ZB), "steel", verts=10,
+        cxp, cyp = math.sin(a)*RC+CX, math.cos(a)*RC+CY
+        P.append(cyl("roll", 0.11, W-0.04, (cxp, cyp, H-0.114), "steel", verts=10,
                      rot=(0, math.radians(90), math.radians(90)-a)))
-        P.append(box("leg", (0.09, 0.09, ZB), (cxp, cyp, ZB/2), "steel"))
+    # THREE legs, all on the OUTER radius: two under the mouths and one under
+    # the apex of the turn. Nothing stands in the inner quadrant, which is the
+    # whole point -- you see the floor through this piece from two sides.
+    for ad in (4, 45, 86):
+        a = math.radians(ad)
+        lx, ly = math.sin(a)*(RO-0.09)+CX, math.cos(a)*(RO-0.09)+CY
+        # Feet own z = 0; the legs start 0.02 up, inside them.
+        P.append(box("leg%d" % ad, (0.10, 0.10, H-0.12), (lx, ly, 0.02 + (H-0.12)/2), "steel"))
+        P.append(box("foot%d" % ad, (0.18, 0.18, 0.04), (lx, ly, 0.02), "dark"))
     return finish(P, "conveyor_corner", merge=0.001)
 
-def b_conveyor_slope():
+
+def b_conveyor_corner_belt():
+    """The MOVING half of `conveyor_corner`. Same contract as conveyor_belt,
+    except that a cleat on a turn travels along an ARC, so the motion is a
+    rotation and not a translation.
+
+    HOW IT MOVES:
+      pivot      model-local (x, z) = (-0.75, +0.75) in the game's Y-up frame,
+                 at any y -- the arc centre. It is the blender-space corner
+                 (-0.75, -0.75), and export_yup maps blender +Y to game -Z,
+                 which is why the sign of the second number flips. MEASURE it
+                 off the exported GLB rather than trusting this line: it is the
+                 centre of the circle the cleats sit on, and tools/measure-glb.py
+                 prints the bounding box that contains it.
+      axis       local +Y (straight up). A belt corner turns in the floor plane.
+      period     11.25 degrees = 90 / 8. One period maps cleat k onto cleat
+                 k+1's start, so the loop is seamless with no wrap.
+      phase      (distance travelled / RC) in radians, mod 11.25 deg, where
+                 distance is the integral of the row's belt.speed. RC is 1.00 m
+                 exactly, so the angular rate IS the linear speed in rad/s and
+                 a corner carries ducks at the same surface speed as a straight.
+      direction  positive phase runs from the -X mouth to the -Y mouth, which
+                 is the row's belt.turn = 90 sense.
+      range      cleats are authored at a = 2 + k*11.25 deg for k = 0..7, so
+                 they span 2 .. 80.75 deg and a phase in [0, 11.25) keeps every
+                 one of them inside the 0..90 deg band."""
+    CX, CY, RC, W, H, N = CC["CX"], CC["CY"], CC["RC"], CC["W"], CC["H"], CC["N"]
     P = []
-    # W + 0.27 (outboard legs) = 1.00 across, matching the flat conveyor.
-    L, W = 2.10, 0.73
-    ang = math.radians(20)
-    P.append(box("belt", (W, L, 0.07), (0, 0, 0.80), "dark", rot=(ang, 0, 0)))
+    for k in range(N):
+        a = math.radians(2.0 + k * 90.0 / N)
+        P.append(box("cleat%d" % k, (0.07, W-0.06, 0.035),
+                     (math.sin(a)*RC+CX, math.cos(a)*RC+CY, H - 0.0175),
+                     "steel_d", rot=(0, 0, -a)))
+    return finish(P, "conveyor_corner_belt", origin="raw")
+
+# The sloped belt's band, stated once. src/data/machines.js `conveyor_slope`
+# carries FOUR numbers measured off this band -- belt.rise -0.718,
+# belt.surfaceOffsetY 0.0555, collider.surface.half[2] 1.0625 and
+# surface.pitchDegrees 19.741 -- and I may not edit that file. So the band's
+# literals (L, W, ang, and the band's own centre height) are frozen, and
+# everything this builder changes is bolted to the OUTSIDE of them. Anything
+# that would move the y extent past the band's own +-0.9986 would also change
+# finish()'s snap factor and silently retune all four numbers.
+CS = {"L": 2.10, "W": 0.73, "ANG": math.radians(20), "ZB": 0.80}
+
+
+def b_conveyor_slope():
+    """Tasmociag pochyly. Burty to teraz KRATOWNICA, nie blacha.
+
+    The piece already read as a slope -- a diagonal is the one silhouette
+    nothing else in the catalog has. What it did not read as was a MACHINE: two
+    solid orange plates down the flanks made a filled triangle, and a filled
+    triangle 2 m long is the same 45 px wedge the ramp draws. Replacing each
+    plate with a chord-and-web truss puts five holes down each flank, so the
+    descent is now drawn by a LINE with daylight under it rather than by a
+    block, and the piece reads as lifted at one end from every angle.
+
+    The band, its length, its width and its pitch are untouched, for the reason
+    in the CS comment above."""
+    L, W, ang, ZB = CS["L"], CS["W"], CS["ANG"], CS["ZB"]
+    ca, sa = math.cos(ang), math.sin(ang)
+    P = []
+    P.append(box("belt", (W, L, 0.07), (0, 0, ZB), "dark", rot=(ang, 0, 0)))
     for sx in (-1, 1):
-        P.append(box("side", (0.07, L, 0.20), (sx*(W/2+0.02), 0, 0.82), "hazard", rot=(ang, 0, 0)))
+        X = sx*(W/2+0.02)
+        # Truss instead of a plate: a top chord level with the old rail's top, a
+        # bottom chord at its foot, and diagonals between them.
+        P.append(box("chordT", (0.06, L, 0.07), (X, 0, ZB+0.105), "hazard", rot=(ang, 0, 0)))
+        P.append(box("chordB", (0.06, L, 0.05), (X, 0, ZB-0.055), "hazard", rot=(ang, 0, 0)))
+        for i in range(6):
+            t = -L/2 + 0.175 + i*0.35
+            # Alternating diagonals. Authored in the band's own tilted frame,
+            # then tilted with it, so the web stays square to the belt.
+            P.append(box("web%d%d" % (sx, i), (0.05, 0.30, 0.05),
+                         (X, t*ca, ZB + 0.025 + t*sa), "steel_d",
+                         rot=(ang, 0, math.radians(38 if i % 2 else -38))))
         # podpory PRZYKRECONE OD ZEWNATRZ, nie pod tasma
         P.append(box("legL", (0.09, 0.09, 0.86), (sx*(W/2+0.09), -L/2+0.16, 0.43), "steel"))
         P.append(box("legH", (0.09, 0.09, 1.55), (sx*(W/2+0.09),  L/2-0.16, 0.78), "steel"))
         P.append(box("bracL", (0.22, 0.08, 0.08), (sx*(W/2+0.03), -L/2+0.16, 0.80), "steel_d"))
         P.append(box("bracH", (0.22, 0.08, 0.08), (sx*(W/2+0.03),  L/2-0.16, 1.50), "steel_d"))
-    for i in range(7):
-        t = -L/2 + 0.22 + i*0.28
-        P.append(box("slat%d" % i, (W-0.05, 0.10, 0.04),
-                     (0, t*math.cos(ang), 0.85+t*math.sin(ang)), "steel_d", rot=(ang, 0, 0)))
+    # Cross-ties under the band, in the space the solid plates used to hide.
+    for i in range(3):
+        t = -L/2 + 0.45 + i*0.60
+        P.append(box("tie%d" % i, (W+0.14, 0.06, 0.06),
+                     (0, t*ca, ZB - 0.115 + t*sa), "steel_d", rot=(ang, 0, 0)))
     return finish(P, "conveyor_slope")
 
+
+def b_conveyor_slope_belt():
+    """The MOVING half of `conveyor_slope`. Same pattern as conveyor_belt, one
+    difference: this belt is TILTED, so its travel is not local +Z.
+
+    HOW IT MOVES:
+      travel axis  the band's own downhill direction in model space,
+                   (0, -0.3376, +0.9413) in the game's Y-up frame -- i.e.
+                   normalize(0, belt.rise, 2.00) with belt.rise = -0.718, which
+                   is the vector src/data/machines.js already states. Local +Z
+                   alone would walk the cleats straight off the surface.
+      period       0.30 m along that axis (7 cleats over the 2.10 m band).
+      phase        (distance travelled) mod 0.30, distance being the integral of
+                   the row's belt.speed. Sign follows the drive, so a reversed
+                   belt runs its cleats uphill with no extra state.
+      range        cleats span t = -0.83 .. +0.97 along the band, and the band
+                   runs to +-1.05, so a phase in [0, 0.30) never pushes one off
+                   the end.
+    origin="raw": these are b_conveyor_slope's own coordinates. NOTE the one
+    caveat that does not apply to the straight belt -- conveyor_slope's snap
+    factor is not exactly 1.0 (the band's tilted corners set the y extent at
+    +-0.9986, so fy = 1.0014), and origin="raw" skips it. The cleats therefore
+    sit up to 1.4 mm short of the band's ends: 0.03 px at 10 m, and I would
+    rather state the number than hide it by re-deriving the band."""
+    L, W, ang, ZB = CS["L"], CS["W"], CS["ANG"], CS["ZB"]
+    ca, sa = math.cos(ang), math.sin(ang)
+    P = []
+    for k in range(7):
+        t = -0.83 + k*0.30
+        # 12 mm proud of the band and 33 mm buried in it. Proud, because a flush
+        # cleat is invisible; only 12 mm, because unlike the flat conveyor this
+        # piece's physics surface IS the band's top face (collider.surface,
+        # offsetY 0.0555) -- a 40 mm cleat would stand through every duck.
+        P.append(box("cleat%d" % k, (W-0.05, 0.09, 0.045),
+                     (0, t*ca, ZB + 0.0267 + t*sa), "steel_d", rot=(ang, 0, 0)))
+    return finish(P, "conveyor_slope_belt", origin="raw")
+
 def b_fan():
+    """Wiatrak - obrecz na slupie. Stopa TROJNOZNA, nie talerz.
+
+    This is the model the other two fans are read against, so its class does not
+    move: a circle on a thin pole, weight at the top. Two things changed.
+
+    1. THE RING NO LONGER Z-FIGHTS WITH ITSELF. ring_xz lays 16 overlapping
+       boxes around a circle and rotating about Y does not turn their +-Y faces,
+       so all 32 of those faces sat in two shared planes and every neighbouring
+       pair was a depth tie: 64 coplanar-overlap pairs on a 360-triangle model,
+       on the one part of the one model that is meant to be seen spinning. The
+       ring_yz helper had carried the cure (`sep`) since the crank; ring_xz and
+       ring_xy simply never got it. They have it now.
+    2. THE PLATE FOOT BECAME A TRIPOD. A 0.84 m disc under a 0.18 m pole is a
+       solid 18 px lozenge on the floor at 10 m, and it was the only part of the
+       fan with no hole in it -- so the piece read circle-on-stick-on-blob. Three
+       feet put daylight between the floor and the machine, which is the same
+       trick the deck of the conveyor plays and the reason `magnet` reads.
+
+    Height is 1.63 (src/data/machines.js `fan`), owned by the ring: z 1.00 plus
+    R 0.58 plus half of the 0.10 section. The tripod does not touch it, and the
+    even-numbered ring segments keep the full section, so the extreme is exact.
+
+    ROTOR SAFETY (src/render/rotor.js): the four blades are the only congruent
+    group anywhere near the axis -- the ring's segments now split into two
+    groups of 8 at radius 0.58 and the feet are three parts at 0.40, all further
+    out than the blades' 0.27, and detectRotor takes the CLOSEST valid group."""
     P = []
     # slup stoi ZA tarcza (y>0), inaczej dolna lopatka przez niego przechodzi
-    P.append(cyl("base", 0.42, 0.10, (0, 0.24, 0.05), "dark", verts=12))
     P.append(cyl("pole", 0.09, 0.98, (0, 0.24, 0.56), "steel", verts=8))
+    # Tripod: three splayed feet and a hub collar. The extremes in Y are owned
+    # by feet 1 and 2, as flat-topped boxes, so the y extent is predictable.
+    # THE THREE PADS ARE THE ONLY THINGS TOUCHING z = 0, and the three feet the
+    # only things at their own height. A first pass had feet, pads and collar
+    # all standing on the floor plane and all 0.05 thick, which put 42 pairs
+    # into a 424-triangle model -- the tripod was a coincident-face factory
+    # exactly the way the plate it replaced was not. Each foot is also 2 mm
+    # thinner than the last, so where two of them overlap near the collar they
+    # cannot share a face either.
+    P.append(cyl("collar", 0.13, 0.09, (0, 0.24, 0.052), "steel_d", verts=10))
+    for i in range(3):
+        a = math.radians(i*120 + 60)
+        fx, fy = math.sin(a)*0.20, math.cos(a)*0.20
+        t = 0.05 - i*0.002
+        P.append(box("foot%d" % i, (0.10, 0.40, t), (fx, 0.24 + fy, 0.008 + t/2), "dark",
+                     rot=(0, 0, -a)))
+        P.append(box("pad%d" % i, (0.16, 0.09, 0.035), (math.sin(a)*0.38, 0.24 + math.cos(a)*0.38, 0.0175),
+                     "hazard", rot=(0, 0, -a)))
     # wspornik konczy sie NA TYLNEJ scianie piasty (y=0.11), nie przechodzi przez lopatki
     P.append(box("brack", (0.11, 0.15, 0.11), (0, 0.205, 1.00), "steel_d"))
-    ring_xz("ring", 0.58, 16, 0.25, 0.10, 0.10, 1.00, "steel", P)
+    ring_xz("ring", 0.58, 16, 0.25, 0.10, 0.10, 1.00, "steel", P, sep=0.006)
     P.append(cyl("hub", 0.15, 0.22, (0, 0, 1.00), "hazard", verts=10, rot=(math.radians(90), 0, 0)))
     for i in range(4):
         a = math.radians(i*90 + 25)
@@ -947,14 +1594,19 @@ def b_corner():
     T, LEN, H, PS = 0.14, 0.855, 1.00, 0.24
     e = PS/2                                    # krawedz slupa
     la = LEN - e                                # dlugosc ramienia od slupa
-    P.append(box("a", (la, T, H), (-e - la/2, 0.0, H/2), "concrete"))
-    P.append(box("b", (T, la, H), (0.0, -e - la/2, H/2), "concrete"))
-    P.append(box("post", (PS, PS, H), (0, 0, H/2), "steel_d"))
-    P.append(box("capa", (la, T+0.05, 0.08), (-e - la/2, 0, H + 0.04), "hazard"))
-    P.append(box("capb", (T+0.05, la, 0.08), (0, -e - la/2, H + 0.04), "hazard"))
+    # The foot plates alone touch z=0; the arms and the post start 4 mm up, so
+    # four parts no longer share the ground plane. The caps and feet are also
+    # pulled 12 mm inside the arm tips, which used to be their own end plane
+    # as well -- the arms still define the 1.00 m bounding faces on their own.
+    lb = la - 0.012
+    P.append(box("a", (la, T, H - 0.004), (-e - la/2, 0.0, 0.004 + (H - 0.004)/2), "concrete"))
+    P.append(box("b", (T, la, H - 0.004), (0.0, -e - la/2, 0.004 + (H - 0.004)/2), "concrete"))
+    P.append(box("post", (PS, PS, H - 0.004), (0, 0, 0.004 + (H - 0.004)/2), "steel_d"))
+    P.append(box("capa", (lb, T+0.05, 0.08), (-e - la/2, 0, H + 0.04), "hazard"))
+    P.append(box("capb", (T+0.05, lb, 0.08), (0, -e - la/2, H + 0.04), "hazard"))
     P.append(box("capp", (PS+0.05, PS+0.05, 0.10), (0, 0, H + 0.05), "hazard"))
-    P.append(box("foota", (la, T+0.07, 0.09), (-e - la/2, 0, 0.045), "steel_d"))
-    P.append(box("footb", (T+0.07, la, 0.09), (0, -e - la/2, 0.045), "steel_d"))
+    P.append(box("foota", (lb, T+0.07, 0.09), (-e - la/2, 0, 0.045), "steel_d"))
+    P.append(box("footb", (T+0.07, lb, 0.09), (0, -e - la/2, 0.045), "steel_d"))
     return finish(P, "corner")
 
 def b_ramp():
@@ -982,7 +1634,14 @@ def b_ramp():
     for i in range(6):
         yy = -0.67 + i * 0.28                 # od 0.30 pod grzbietem w dol
         zz = 0.45 - (yy + 0.97) * SLOPE
-        P.append(box("tread%d" % i, (1.30, 0.10, 0.018), (0, yy, zz + 0.009),
+        # 1.28, not 1.30: at 1.30 the treads' flanks land on x = +-0.65, which
+        # is exactly where the new kerbs' outer faces are, and the pair ties
+        # over the whole length of the ramp.
+        # zz + 0.004, not zz + 0.009: laid exactly ON the sloped face the tread
+        # hovered 0.0008 m over it, which is a 0.39 m^2 near-tie across the
+        # whole ramp -- the one cluster this model has always had. Sunk 5 mm it
+        # intersects the wedge instead, and still stands 0.013 proud.
+        P.append(box("tread%d" % i, (1.28, 0.10, 0.018), (0, yy, zz + 0.004),
                      "hazard" if i % 2 == 0 else "dark", rot=(-math.atan(SLOPE), 0, 0)))
     # Policzki wzdluz pochylej krawedzi - obrys, po ktorym oko czyta nachylenie.
     #
@@ -996,28 +1655,103 @@ def b_ramp():
     for sx in (-1, 1):
         P.append(box("stringer%d" % sx, (0.04, 2.00, 0.05), (sx*0.72, 0.05, -0.006),
                      "steel_d", rot=(-math.atan(SLOPE), 0, 0)))
+    # SIDE KERBS, and they are the change that matters here.
+    #
+    # A ramp's silhouette is a triangle and there is nothing to improve about
+    # that -- it is already the least ambiguous outline in the catalog. What it
+    # could not do was tell you WHICH SIDE IT IS, because a bare wedge seen from
+    # its flank is a single flat concrete plane 45 px wide with no line on it at
+    # all, and the treads are on the top face where a flank view cannot see
+    # them. Two raised kerbs give the flank an edge that catches the sun, and
+    # give the top face a channel a duck reads as a lane.
+    #
+    # 0.055 proud, 0.12 thick (so 0.065 of it is buried in the wedge and there
+    # is no gap under it), and 1.19 m of clear lane between the pair -- eight
+    # duck-widths, nothing can wedge.
+    #
+    # THE HEIGHT ENVELOPE IS -0.45 .. +0.47 AND THIS STAYS INSIDE IT, which is
+    # the whole reason the kerb stops short of both ends: it spans y -0.55 to
+    # +0.80 rather than the full run. Carried to the crest at y = -0.97 a kerb
+    # standing 0.055 proud would top out at 0.505 and silently make the model
+    # 0.9425 tall against a data row that says 0.92; carried to the tip at
+    # y = +0.97, where the wedge has no thickness at all, its underside would
+    # poke out below -0.45. Measured envelope as built: -0.402 .. +0.275.
+    for sx in (-1, 1):
+        P.append(box("kerb%d" % sx, (0.11, 1.35, 0.12), (sx*0.595, 0.125, -0.0635),
+                     "hazard", rot=(-math.atan(SLOPE), 0, 0)))
     return finish(P, "ramp")
 
 def b_chute():
+    """Rynna - polokragly kanal otwarty do gory.
+
+    Same ring idiom, third instance: eleven overlapping shell staves rotated
+    about Y, so all 22 of their end faces sat in the two planes y = +-1.00 and
+    every neighbouring pair overlapped there. 172 coplanar-overlap pairs out of
+    540 triangles, 32%, and the rims doubled it at both ends. The staves now
+    alternate 8 mm in length, which is 0.18 px at play distance and removes the
+    tie completely.
+
+    The silhouette change is HOOPS, and the reason it is not the legs is
+    arithmetic. The trough's underside sits at 0.12 and its rim at 0.53, so
+    there is only 0.14 m of leg under it -- three pixels at 10 m. Nothing done
+    down there can be read, and a first attempt at splayed A-frames proved it
+    twice over: invisible, and it pushed the model to 0.5511 tall against a
+    0.53 contract, because a tilted leg lifts its own foot off the floor and
+    finish() reports max minus min.
+    So the change is on the part that HAS pixels: four hoops standing 0.05
+    proud of the shell, at the quarter stations. End-on the outline is
+    unchanged, but along the length the trough now has four notches breaking
+    its top edge -- which is what tells it from a kerb, a rail or a low wall,
+    all of which draw one unbroken horizontal line."""
     P = []
     # rynna OTWARTA DO GORY: luk od -90 przez dol (180) do +90 stopni
     L, N, R, ZC = 2.00, 10, 0.34, 0.46
     for i in range(N + 1):
         a = math.radians(90 + i * 180.0 / N)
-        P.append(box("shell%d" % i, (0.14, L, 0.09),
+        # Alternating stave length: 2.000 / 1.992. The rims cap both ends, so
+        # the 4 mm step at each end is covered as well as invisible.
+        P.append(box("shell%d" % i, (0.14, L - (0.008 if i % 2 else 0.0), 0.09),
                      (math.sin(a)*R, 0, ZC + math.cos(a)*R), "steel", rot=(0, a, 0)))
     for sy in (-1, 1):
         for i in range(N + 1):
             a = math.radians(90 + i * 180.0 / N)
-            P.append(box("rim%d%d" % (sy, i), (0.13, 0.06, 0.13),
+            P.append(box("rim%d%d" % (sy, i), (0.13, 0.06 - (0.006 if i % 2 else 0.0), 0.13),
                          (math.sin(a)*R, sy*(L/2), ZC + math.cos(a)*R), "hazard", rot=(0, a, 0)))
-    # cztery pary nog rozlozonych na calej dlugosci + poprzeczki
+    # Cztery pary klamer NA SAMEJ KRAWEDZI, i tylko tam.
+    #
+    # A full hoop round the half-pipe costs 11 boxes and 132 triangles a piece,
+    # and ten of those eleven are on the underside of a trough that stands 0.12
+    # off the floor -- nobody will ever see them. Four full hoops doubled the
+    # model from 540 to 1068 triangles to decorate a shadow. The TOP EDGE is the
+    # silhouette, so the clamps go on the top edge and nowhere else: eight
+    # boxes, 96 triangles, and the same four notches in the outline.
+    #
+    # 0.065 and not 0.07 in the radial size: at 0.07 the clamp's outer face
+    # lands on the shell's own 0.53 top plane and the two overlap, which is a
+    # coincident pair -- the exact defect the alternating stave lengths above
+    # exist to remove.
+    for sy in (-1.5, -0.5, 0.5, 1.5):
+        yy = sy * (L / 4.0)
+        for a in (math.radians(90), math.radians(270)):
+            # 0.13, not 0.14, in the tangential size. rot=(0,a,0) at a = 90 maps
+            # the box's X onto Z, so the tangential number is what decides the
+            # clamp's TOP -- at 0.14 it lands on the shell's own 0.53 plane and
+            # 48 pairs appear. This is the axis-swap that makes the ring idiom
+            # so easy to get wrong twice.
+            P.append(box("clamp", (0.13, 0.09, 0.065),
+                         (math.sin(a)*(R + 0.035), yy, ZC + math.cos(a)*(R + 0.035)),
+                         "hazard", rot=(0, a, 0)))
+    # Nogi: PIONOWE i dokladnie 0 .. legh. Pochylona noga unosi wlasna stope nad
+    # podloge, a finish() liczy wysokosc jako max minus min -- pierwsza wersja
+    # tych nog zrobila z 0.53 -> 0.5511 i po cichu rozjechala wiersz danych.
     legh = ZC - R + 0.02
     for sy in (-1.5, -0.5, 0.5, 1.5):
         yy = sy * (L / 4.0)
         for sx in (-1, 1):
-            P.append(box("leg", (0.08, 0.10, legh), (sx*0.26, yy, legh/2), "dark"))
-        P.append(box("tie", (0.60, 0.07, 0.07), (0, yy, legh*0.42), "dark"))
+            P.append(box("leg", (0.08, 0.10, legh), (sx*0.28, yy, legh/2), "dark"))
+        # 0.60, not 0.64: at 0.64 the tie's ends land on the legs' own outer
+        # faces at +-0.32 and every leg/tie pair ties there.
+        P.append(box("tie", (0.60, 0.06, 0.06), (0, yy, legh*0.42), "dark"))
     return finish(P, "chute", merge=0.001)
 
 def b_bridge():
@@ -1025,7 +1759,10 @@ def b_bridge():
     L, W = 3.00, 0.99
     P.append(box("deck", (W, L, 0.10), (0, 0, 0.95), "steel"))
     for i in range(7):
-        P.append(box("plank%d" % i, (W-0.06, 0.30, 0.04), (0, -L/2+0.32+i*0.44, 1.02), "dark"))
+        # Sunk 0.01 INTO the deck rather than laid on it. The deck's top face
+        # and the planks' undersides were both at y = 1.00 across 1.79 m^2 --
+        # the biggest coincident cluster in the model, and older than this pass.
+        P.append(box("plank%d" % i, (W-0.06, 0.30, 0.04), (0, -L/2+0.32+i*0.44, 1.01), "dark"))
     for sx in (-1, 1):
         # White handrails, for the same reason as the stair nosings: a bridge is
         # something you WALK ON. It was previously orange-railed, which put it
@@ -1037,8 +1774,28 @@ def b_bridge():
         P.append(box("rail2", (0.05, L, 0.05), (sx*(W/2-0.03), 0, 1.20), "white"))
         for i in range(5):
             P.append(box("post%d" % i, (0.07, 0.07, 0.50), (sx*(W/2-0.03), -L/2+0.30+i*0.65, 1.20), "steel"))
+        # A TRUSS UNDER THE DECK, not four posts at the corners.
+        #
+        # The bridge's problem was never its top half -- the white rails read
+        # cleanly and separate it from the slide exactly as intended. It was the
+        # bottom: 0.95 m of nothing between four thin legs, so from any angle
+        # except dead side-on the piece looked like a plank hovering. Three
+        # metres is the longest span in the catalog and the one thing a player
+        # should be able to see about it is that it is HELD UP.
+        #
+        # Six diagonals per side, alternating, plus the two legs. That is 12 new
+        # boxes for 144 triangles, on a model that had 312 -- and it buys a
+        # zig-zag of light and shadow along the whole span instead of a void.
         for sy in (-1, 1):
             P.append(box("leg", (0.11, 0.11, 0.95), (sx*(W/2-0.10), sy*(L/2-0.22), 0.475), "steel"))
+        for i in range(6):
+            yy = -L/2 + 0.44 + i*0.42
+            # Alternating section, because at 0.42 m spacing a 0.62 m diagonal
+            # overlaps its neighbours and every pair would share both flanks.
+            P.append(box("diag%d" % i, (0.05 - (0.006 if i % 2 else 0.0), 0.62, 0.05),
+                         (sx*(W/2-0.05), yy, 0.53), "steel_d",
+                         rot=(math.radians(46 if i % 2 else -46), 0, 0)))
+        P.append(box("chord", (0.06, L-0.30, 0.06), (sx*(W/2-0.05), 0, 0.21), "steel_d"))
     return finish(P, "bridge")
 
 def b_pillar():
@@ -1078,23 +1835,35 @@ def _crate(w, d, h, t, post, name, nx=4, nz=3, frame="steel_d", slat="wood_lt", 
     P = []
     barw = 0.055
     th = t * 0.55                                   # listwa pozioma: cieniej niz pionowa
-    P.append(box("bot", (w - 2*t, d - 2*t, t), (0, 0, t/2), floor))
+    # The corner posts are left as the ONLY part touching z=0 -- they are what
+    # sets minY and the h+0.05 height the cavity note depends on. The floor and
+    # both wall grids lift a few millimetres off it, because four parts sharing
+    # the ground plane was 30 of this family's tied pairs on its own. The
+    # cavity() call below is NOT touched, so the published interior is byte
+    # identical to what src/data/tools.js already holds.
+    P.append(box("bot", (w - 2*t, d - 2*t, t - 0.003), (0, 0, 0.003 + (t - 0.003)/2), floor))
     for sx in (-1, 1):
         X = sx*(w/2 - t/2)
         for j in range(nx + 1):
             yy = -d/2 + t + j*(d - 2*t)/nx
-            P.append(box("vx", (t, barw, h), (X, yy, h/2), frame))
+            P.append(box("vx", (t, barw, h - 0.004), (X, yy, 0.004 + (h - 0.004)/2), frame))
         for k in range(nz + 1):
             zz = t + k*(h - t)/nz
-            P.append(box("hx", (th, d - 2*t + barw, barw), (X, 0, zz), slat))
+            # 6 mm short: the slat run used to end exactly on the outer face of
+            # the perpendicular grid's end upright, frame against slat.
+            P.append(box("hx", (th, d - 2*t + barw - 0.006, barw), (X, 0, zz), slat))
     for sy in (-1, 1):
         Y = sy*(d/2 - t/2)
         for j in range(nx + 1):
             xx = -w/2 + t + j*(w - 2*t)/nx
-            P.append(box("vy", (barw, t, h), (xx, Y, h/2), frame))
+            # 2 mm shorter again than the vx grid, so the two wall grids do not
+            # share a top or a bottom cap where they meet at the corners.
+            P.append(box("vy", (barw, t, h - 0.008), (xx, Y, 0.006 + (h - 0.008)/2), frame))
         for k in range(nz + 1):
             zz = t + k*(h - t)/nz
-            P.append(box("hy", (w - 2*t + barw, th, barw), (0, Y, zz), slat))
+            # ...and the same 1.5 mm on the slat courses, which cross the hx
+            # courses at all four corners at identical heights.
+            P.append(box("hy", (w - 2*t + barw - 0.006, th, barw), (0, Y, zz + 0.0015), slat))
     for sx in (-1, 1):
         for sy in (-1, 1):
             P.append(box("p", (post, post, h + 0.05),
@@ -1225,13 +1994,20 @@ def b_bucket():
         # rura, nie jak kadz - jednolita krzywizna bez ani jednej pionowej
         # krawedzi. To jest zmiana WYLACZNIE koloru: geometria zostaje co do
         # milimetra, bo cavity() ponizej jest kontraktem dla src/data/tools.js.
-        P.append(box("w%d" % i, (wid, TH, H), (math.sin(a)*rm, math.cos(a)*rm, H/2),
+        # Staves overlap so the pail has no vertical slit in it, and they are all
+        # spun about Z -- so every neighbouring pair shared a top cap at H and a
+        # bottom cap at 0, which is 292 of the model's 708 triangles tied in the
+        # depth buffer. alt() takes 3 mm off the odd ones. Geometry elsewhere is
+        # untouched to the millimetre: cavity() below is a contract for
+        # src/data/tools.js, and the even staves still set minZ, maxZ and both
+        # horizontal extremes.
+        P.append(box("w%d" % i, (wid, TH, H - alt(i)), (math.sin(a)*rm, math.cos(a)*rm, H/2),
                      "steel_d" if i % 4 == 0 else "blue", rot=(0, 0, -a)))
     P.append(cyl("bot", R-TH, FLOOR, (0, 0, FLOOR/2), "steel_d", verts=N))
     # Obrecze: gorna schowana tuz pod krawedzia, dolna na wysokosci dna - obie
     # WEWNATRZ promienia sciany, zeby bbox zostal kadzia i niczym wiecej.
-    ring_xy("rim", R-0.03, N, 0.15, 0.045, 0.05, H-0.03, "hazard", P)
-    ring_xy("hoop", R-0.03, N, 0.15, 0.04, 0.035, FLOOR+0.03, "steel", P)
+    ring_xy("rim", R-0.03, N, 0.15, 0.045, 0.05, H-0.03, "hazard", P, sep=0.0015)
+    ring_xy("hoop", R-0.03, N, 0.15, 0.04, 0.035, FLOOR+0.03, "steel", P, sep=0.0015)
     # Uchwyty: plaskie klamry wtopione w sciane, po dwoch przeciwnych stronach.
     for sx in (-1, 1):
         P.append(box("grip", (0.05, 0.30, 0.06), (sx*(R-0.028), 0, H-0.17), "steel"))
@@ -1334,19 +2110,71 @@ def b_vacuum():
 
 # ============================================================== SWIAT
 def b_tube():
-    P = []
-    """Masywna rura - przez wylot musi przejsc kontener 2,2 x 4,4 m."""
+    """Masywna rura - przez wylot musi przejsc kontener 2,2 x 4,4 m.
+
+    THE WORST Z-FIGHT IN THE CATALOG, and by a distance: 792 coplanar-overlap
+    pairs out of 1296 triangles, 61%, on the one prop a player looks UP at every
+    time they buy something. Five rings and an 18-slab shell, every one of them
+    built from overlapping boxes that all agreed on a top face and a bottom
+    face. The shell's own feet and the plinth shared z = 0 across 2.5 m^2.
+    Nothing in the shape was wrong; the idiom was.
+
+    Fixes, in order of how many pairs each removes:
+      * ring_xy gained `sep` (the cure ring_yz has had since the crank), so
+        alternate segments of the mouth, the three bands and the plinth are
+        6 mm shorter and no neighbouring pair shares a plane.
+      * The shell's 18 slabs alternate BOTH ends by 12 mm, which kills the two
+        biggest clusters (the 144-pair and 54-pair ties at z = 0).
+      * The three hazard bands moved off a shared radius onto three different
+        ones, so a band can no longer tie with the shell it is strapped to.
+
+    And one thing that is not a bug fix. THE MOUTH IS CASTELLATED: alternate
+    segments now stop 0.11 m short of the rim, so the opening reads as a ring of
+    teeth against the dark sky instead of as a flat dark disc. That is the only
+    part of this model with any pixels on it -- the pipe hangs out of an unlit
+    ceiling and src/render/props.js fades the far end away entirely -- so it is
+    the only place a change can be seen at all.
+
+    CONTRACT: config.tube.mouthY is 6.33 and is the local height the purchase
+    drop is computed from. The mouth ring's EVEN segments still top out at
+    exactly H + 0.13 = 6.33; only the odd ones are recessed, so the model's
+    maximum, and the rim the drop is aimed at, are unchanged. The shell's own
+    18 slabs are also unchanged in radius, so a 2.2 x 4.4 m container still has
+    clearance through the throat."""
     P = []
     N, R, H = 18, 1.70, 6.20
     for i in range(N):                      # plaszcz z segmentow, srodek pusty
         a = math.radians(i*360.0/N)
         seg = 2*math.pi*R/N * 1.35
-        P.append(box("sh%d" % i, (seg, 0.16, H), (math.sin(a)*R, math.cos(a)*R, H/2),
+        # Alternating slab ends: even slabs run 0.000 .. 6.200, odd ones
+        # 0.012 .. 6.188. The shell is continuous either way -- the bands and
+        # the plinth cover the step -- and no two neighbours share a plane.
+        z0 = 0.012 if i % 2 else 0.0
+        z1 = H - (0.012 if i % 2 else 0.0)
+        P.append(box("sh%d" % i, (seg, 0.16, z1 - z0), (math.sin(a)*R, math.cos(a)*R, (z0 + z1)/2),
                      "steel_d", rot=(0, 0, -a)))
-    ring_xy("mouth", R, N, 2*math.pi*R/N*1.40, 0.46, 0.26, H, "dark", P)
-    for z in (0.90, 2.60, 4.30):
-        ring_xy("band", R + 0.06, N, 2*math.pi*R/N*1.40, 0.14, 0.16, z, "hazard", P)
-    ring_xy("plinth", R + 0.22, N, 2*math.pi*(R+0.22)/N*1.40, 0.50, 0.22, 0.11, "concrete", P)
+    # Castellated mouth: even segments to the 6.33 rim, odd ones recessed.
+    for i in range(N):
+        a = math.radians(i*360.0/N)
+        # even: 6.070 .. 6.330 (the rim config.tube.mouthY names)
+        # odd:  6.080 .. 6.220 (recessed 0.11, and not sharing the 6.070 floor)
+        odd = i % 2
+        z0 = 6.08 if odd else H - 0.13
+        z1 = 6.22 if odd else H + 0.13
+        P.append(box("mouth%d" % i, (2*math.pi*R/N*1.40, 0.46, z1 - z0),
+                     (math.sin(a)*R, math.cos(a)*R, (z0 + z1)/2),
+                     "dark", rot=(0, 0, -a)))
+    # Three bands on three DIFFERENT radii, so none of them can tie with the
+    # shell or with each other.
+    for k, z in enumerate((0.90, 2.60, 4.30)):
+        RB = R + 0.055 + k*0.006
+        ring_xy("band%d" % k, RB, N, 2*math.pi*RB/N*1.40, 0.14, 0.16, z, "hazard", P, sep=0.005)
+    # 0.118, not 0.110: at 0.110 the plinth's underside sat on z = 0 with the
+    # shell's, which was the 144-pair steel_d/concrete cluster. Lifted 8 mm it
+    # overlaps the shell instead of sharing its floor, and the shell alone owns
+    # the model's minimum.
+    ring_xy("plinth", R + 0.22, N, 2*math.pi*(R+0.22)/N*1.40, 0.50, 0.22, 0.118, "concrete", P,
+            sep=0.006)
     return finish(P, "tube", merge=0.001)
 
 def b_shop():
@@ -1385,14 +2213,22 @@ def _humanoid(name, shirt, pants, cap_col, boots, extra=None):
         P.append(ball("sh", 0.088, (sx*0.235, 0, 1.395), shirt, seg=10, ring_count=7))
         P.append(cyl("armU", 0.062, 0.28, (sx*0.255, 0, 1.255), shirt, verts=9))
         P.append(ball("elb", 0.068, (sx*0.262, 0, 1.115), shirt, seg=9, ring_count=6))
-        P.append(cyl("armL", 0.055, 0.26, (sx*0.268, 0, 0.985), "skin", verts=9))
+        # 0.25, not 0.26. The upper arm's bottom cap sat at exactly 1.115 and
+        # the forearm's top cap at exactly 1.115 -- 50 triangle pairs tied in
+        # the depth buffer, and across a MATERIAL boundary (shirt against skin,
+        # teal_lt/skin on the vendor and hazard/skin on the avatar), which is the
+        # kind that flickers as a colour change rather than as noise. Both caps
+        # are buried inside the elbow ball, so pulling the forearm 5 mm short of
+        # the joint centre is invisible and breaks the shared plane. Same edit on
+        # the shin below, for the same tie at the knee.
+        P.append(cyl("armL", 0.055, 0.25, (sx*0.268, 0, 0.980), "skin", verts=9))
         P.append(ball("hand", 0.072, (sx*0.272, -0.005, 0.855), "skin", seg=9, ring_count=6,
                       scale=(0.85, 1.15, 1.0)))
         # noga: biodro -> udo -> kolano -> lydka -> but
         P.append(ball("hip", 0.098, (sx*0.108, 0, 0.855), pants, seg=10, ring_count=7))
         P.append(cyl("legU", 0.078, 0.36, (sx*0.112, 0, 0.675), pants, verts=9))
         P.append(ball("knee", 0.080, (sx*0.114, 0, 0.495), pants, seg=9, ring_count=6))
-        P.append(cyl("legL", 0.066, 0.34, (sx*0.114, 0, 0.325), pants, verts=9))
+        P.append(cyl("legL", 0.066, 0.33, (sx*0.114, 0, 0.320), pants, verts=9))
         P.append(box("boot", (0.155, 0.245, 0.115), (sx*0.114, -0.030, 0.0575), boots))
         P.append(ball("ank", 0.070, (sx*0.114, 0.010, 0.135), boots, seg=9, ring_count=6))
     if extra: extra(P)
@@ -1528,13 +2364,36 @@ def b_lamp():
     return finish(P, "lamp")
 
 def b_pit_rim():
+    """The kerb ring round the pit. LOADED EVERY SESSION AND NEVER DRAWN:
+    src/config.js sets `pitRender.showRim = 0` and src/render/props.js only
+    builds the mesh `if (pr.showRim ...)`, so this GLB is fetched, parsed and
+    kept resident purely so that a config flag can turn it back on.
+
+    It is still referenced from src/ (the manifest row in src/data/index.js, the
+    slot in src/main.js, the branch in props.js), so it is NOT mine to delete --
+    reported instead. What is mine is what it costs while it waits, and what it
+    would look like on the day someone flips the flag. Both were bad:
+
+      * 960 triangles for a decorative kerb. The ring is 3.2 m across, which is
+        70 px at play distance; 32 segments put a corner every 2 px, well past
+        the point where a circle stops getting rounder. 16 reads identically.
+      * 672 of those 960 triangles were in coplanar-overlap pairs -- the worst
+        ratio of anything in the set. Two causes, both fixed here: the two
+        ring_xy courses had no `sep`, and the dashes sat INSIDE the stripe with
+        their underside 0.5 mm off its underside, which is a depth tie across
+        the whole band. The dashes now sit ON the stripe.
+    """
     P = []
-    R = 1.60
-    ring_xy("kerb", R, 32, 0.34, 0.30, 0.22, 0.11, "concrete", P)
-    ring_xy("stripe", R, 32, 0.34, 0.32, 0.05, 0.245, "hazard", P)
-    for i in range(0, 32, 2):
-        a = math.radians(i*360.0/32)
-        P.append(box("dash%d" % i, (0.20, 0.34, 0.055), (math.sin(a)*R, math.cos(a)*R, 0.248),
+    R, N = 1.60, 16
+    # Segments have to overlap or the ring has gaps in it; one and a bit arc
+    # lengths is the same proportion the 32-segment version used.
+    seclen = 2*math.pi*R/N * 1.09
+    ring_xy("kerb", R, N, seclen, 0.30, 0.22, 0.11, "concrete", P, sep=0.0015)
+    ring_xy("stripe", R, N, seclen, 0.32, 0.05, 0.245, "hazard", P, sep=0.0015)
+    for i in range(0, N, 2):
+        a = math.radians(i*360.0/N)
+        # Sitting ON the hazard band (its top is 0.27), not buried in it.
+        P.append(box("dash%d" % i, (0.20, 0.34, 0.045), (math.sin(a)*R, math.cos(a)*R, 0.2925),
                      "dark", rot=(0, 0, -a)))
     return finish(P, "pit_rim")
 
@@ -1542,8 +2401,14 @@ def b_pit_rim():
 # ============================================================== GRACZ
 def b_avatar():
     def ex(P):
-        P.append(box("vestF", (0.42, 0.016, 0.34), (0, -0.132, 1.17), "orange"))
-        P.append(box("vestB", (0.42, 0.016, 0.34), (0,  0.132, 1.17), "orange"))
+        # +-0.138, not +-0.132. The torso block's faces are at +-0.125 and the
+        # vest is 0.016 thick, so its inner face landed at +-0.124 -- 1 mm INSIDE
+        # the shirt, over 0.143 m^2, the largest overlapping tie anywhere in the
+        # set and on the one model that is on screen for every player in the room
+        # at all times. 0.138 puts the vest 5 mm clear and reads identically: the
+        # panel moves 6 mm, which is a seventh of a pixel at play distance.
+        P.append(box("vestF", (0.42, 0.016, 0.34), (0, -0.138, 1.17), "orange"))
+        P.append(box("vestB", (0.42, 0.016, 0.34), (0,  0.138, 1.17), "orange"))
         for sx in (-1, 1):
             P.append(box("strap", (0.075, 0.28, 0.014), (sx*0.155, 0, 1.343), "orange"))
     return _humanoid("avatar", "hazard", "denim", "red", "dark", ex)
@@ -1558,6 +2423,16 @@ BUILDERS = [
     ("conveyor", b_conveyor, "Automatyzacja", "Tasmociag prosty, 2 m."),
     ("conveyor_corner", b_conveyor_corner, "Automatyzacja", "Tasmociag zakrecony 90 stopni."),
     ("conveyor_slope", b_conveyor_slope, "Automatyzacja", "Tasmociag wznoszacy."),
+    # The four moving belt surfaces. Each is the CLEATS of the piece named
+    # before the suffix and nothing else, authored in that piece's own frame
+    # with origin="raw", following the gamble_box / gamble_box_lid pattern:
+    # a part that moves independently cannot be inside a joined mesh. Each
+    # builder's docstring states its axis, period, phase source and range --
+    # those are the numbers the renderer needs and they are not discoverable by
+    # measuring, which is why they are written down rather than detected.
+    ("conveyor_belt", b_conveyor_belt, "Automatyzacja", "Tasmociag prosty - RUCHOME zebra."),
+    ("conveyor_corner_belt", b_conveyor_corner_belt, "Automatyzacja", "Zakret - RUCHOME zebra."),
+    ("conveyor_slope_belt", b_conveyor_slope_belt, "Automatyzacja", "Pochylnia - RUCHOME zebra."),
     ("fan", b_fan, "Automatyzacja", "Wiatrak. Model bez kolizji dla kaczek."),
     ("wall", b_wall, "Budowle", "Sciana podstawowa 2x1 m."),
     ("wall_high", b_wall_high, "Budowle", "Sciana wysoka 2x2,6 m."),
@@ -1592,197 +2467,278 @@ BUILDERS = [
 # o tym, co robi.
 
 def b_hive():
-    """Kaczkowy ul - stos skrzynek pszczelarskich, deska wylotowa z przodu."""
+    """Duck Hive. H 1.23, footprint 1.00 x 1.00.
+
+    Blob number two in the critic's silhouette pass, and for the same reason as
+    the condenser: a stack of boxes with a cone on top is one closed outline. It
+    now stands on four legs with 0.19 m of daylight under the bottom super, and
+    the supers step OUT as they rise instead of in, so the top edge is a stair
+    rather than a taper. The flight board that used to hang off the front is the
+    chute's sill.
+
+    Outlet moves from 0.26 to mouth_z(1.23) = 0.554: the middle super, which is
+    where the entrance of a real hive is anyway."""
+    H, W, D = 1.23, 1.00, 1.00
     P = []
-    P.append(box("plinth", (0.92, 0.92, 0.09), (0, 0, 0.045), "dark"))
-    zs = [(0.86, 0.30, 0.24), (0.80, 0.28, 0.53), (0.74, 0.26, 0.80)]
-    for i, (w, h, z) in enumerate(zs):
-        P.append(box("sup%d" % i, (w, w, h), (0, 0, z), "wood" if i % 2 == 0 else "wood_lt"))
-        P.append(box("lip%d" % i, (w + 0.05, w + 0.05, 0.045), (0, 0, z + h/2 - 0.02), "wood_lt"))
-    # wylot: szczelina 0.44 x 0.22 - kaczka (0.178 x 0.146) przechodzi swobodnie
-    P.append(box("mouth", (0.44, 0.10, 0.22), (0, -0.40, 0.26), "black"))
-    P.append(box("board", (0.56, 0.26, 0.045), (0, -0.50, 0.155), "wood_lt",
-                 rot=(math.radians(-14), 0, 0)))
-    P.append(box("roof", (0.98, 0.98, 0.07), (0, 0, 0.96), "steel_d"))
-    P.append(cone("cap", 0.50, 0.10, 0.26, (0, 0, 1.10), "hazard", verts=8))
-    for i in range(3):
-        P.append(box("band%d" % i, (0.90, 0.05, 0.05), (0, -0.44, 0.34 + i*0.26), "hazard"))
     for sx in (-1, 1):
         for sy in (-1, 1):
-            P.append(box("foot", (0.09, 0.09, 0.10), (sx*0.38, sy*0.38, 0.05), "steel_d"))
+            P.append(box("foot", (0.13, 0.13, 0.05), (sx*0.36, sy*0.36, 0.025), "steel_d"))
+            P.append(box("leg", (0.08, 0.08, 0.17), (sx*0.36, sy*0.36, 0.10), "dark"))
+    P.append(box("stand", (0.90, 0.90, 0.09), (0, 0, 0.225), "dark"))
+    # Three supers, each WIDER than the one below: an outline that steps outward
+    # cannot be confused with a cone, and this used to be a cone.
+    zs = [(0.74, 0.24, 0.39), (0.82, 0.24, 0.62), (0.90, 0.22, 0.845)]
+    for i, (w, h, z) in enumerate(zs):
+        P.append(box("sup%d" % i, (w, w, h), (0, 0, z), "wood" if i % 2 == 0 else "wood_lt"))
+        P.append(box("lip%d" % i, (w + 0.055, w + 0.055, 0.04), (0, 0, z + h/2 - 0.025), "wood_lt"))
+    chute(P, H, D, w=0.40, h=0.24, deep=0.20, frame="hazard", jamb="wood_lt")
+    P.append(box("roof", (1.00, 1.00, 0.07), (0, 0, 0.995), "steel_d"))
+    P.append(cone("cap", 0.46, 0.09, 0.22, (0, 0, 1.12), "hazard", verts=8))
+    for sx in (-1, 1):                     # strapping down the flanks
+        P.append(box("strap", (0.05, 0.86, 0.05), (sx*0.455, 0, 0.62), "hazard"))
     return finish(P, "hive")
 
 def b_incubator_double():
-    """Podwojna wylegarnia - dwie przeszklone komory obok siebie, wspolny cokol."""
+    """Double Incubator. H 1.30, footprint 1.50 x 1.00.
+
+    This one was wrong in a way no amount of care about the individual doors
+    could fix. It had TWO outlets, at x = -0.34 and x = +0.34, and mouthOf() has
+    no lateral term at all: both ducks of every emission spawned on the
+    CENTRELINE, in the 0.68 m of solid teal panel between them.
+
+    So the machine gets ONE wide opening, 0.86 m across, centred on x = 0 where
+    the ducks actually come from, at mouth_z(1.30) = 0.585. The two chambers
+    survive as what they always were visually -- two lit glass fronts -- and they
+    now sit ABOVE a shared delivery mouth that both of them feed. A player sees
+    two doors and one hand-over, which is exactly what the machine does."""
+    H, W, D = 1.30, 1.50, 1.00
     P = []
-    P.append(box("base", (1.42, 0.92, 0.20), (0, 0, 0.10), "dark"))
-    P.append(box("body", (1.34, 0.84, 0.94), (0, 0, 0.67), "teal"))
-    P.append(box("split", (0.07, 0.88, 0.98), (0, 0, 0.67), "steel_d"))
     for sx in (-1, 1):
-        # kazda komora ma wlasne okno i wlasny wylot; szyba cofnieta w glab ramy
-        P.append(box("glass", (0.52, 0.05, 0.60), (sx*0.34, -0.415, 0.72), "glass"))
-        P.append(box("frame", (0.60, 0.035, 0.68), (sx*0.34, -0.435, 0.72), "steel_d"))
-        P.append(box("out", (0.42, 0.22, 0.26), (sx*0.34, -0.50, 0.30), "dark"))
-        P.append(box("outlip", (0.48, 0.08, 0.06), (sx*0.34, -0.60, 0.24), "hazard"))
-        P.append(cyl("lamp", 0.06, 0.09, (sx*0.34, -0.44, 1.10), "red", verts=8,
+        for sy in (-1, 1):
+            P.append(box("leg", (0.11, 0.11, 0.15), (sx*0.62, sy*0.38, 0.085), "dark"))
+            P.append(box("foot", (0.16, 0.16, 0.04), (sx*0.62, sy*0.38, 0.02), "steel_d"))
+    P.append(box("base", (1.44, 0.90, 0.13), (0, 0, 0.220), "dark"))
+    P.append(box("body", (1.36, 0.84, 0.56), (0, 0, 0.60), "teal"))
+    # ONE mouth, on the centreline, wide enough to read as both doors' outlet.
+    chute(P, H, D, w=0.86, h=0.28, deep=0.24, jamb="steel_d")
+    for sx in (-1, 1):                     # the two chambers, above the mouth
+        P.append(box("glass", (0.54, 0.05, 0.34), (sx*0.35, -0.415, 1.02), "glass"))
+        P.append(box("frame", (0.62, 0.035, 0.42), (sx*0.35, -0.442, 1.025), "steel_d"))
+        P.append(cyl("lamp", 0.055, 0.08, (sx*0.35, -0.44, 1.22), "red", verts=8,
                      rot=(math.radians(90), 0, 0)))
         for i in range(3):
-            P.append(box("egg%d" % i, (0.10, 0.10, 0.13), (sx*0.34 - 0.16 + i*0.16, -0.20, 0.52), "white"))
-    P.append(box("hood", (1.40, 0.88, 0.16), (0, 0, 1.22), "teal_lt"))
-    for i in range(4):
-        P.append(box("vent%d" % i, (1.20, 0.05, 0.05), (0, 0.44, 0.44 + i*0.16), "dark"))
-    P.append(box("panel", (0.34, 0.06, 0.14), (0, -0.44, 1.10), "hazard"))
+            P.append(box("egg%d" % i, (0.09, 0.09, 0.12), (sx*0.35 - 0.15 + i*0.15, -0.22, 0.98), "white"))
+    P.append(box("split", (0.10, 0.82, 0.44), (0, 0, 1.035), "steel_d"))
+    P.append(box("upper", (1.30, 0.80, 0.40), (0, 0.06, 1.03), "teal"))
+    P.append(box("hood", (1.50, 0.90, 0.13), (0, 0, 1.235), "teal_lt"))
+    P.append(box("hoodlip", (1.42, 0.86, 0.04), (0, 0, 1.155), "dark"))
+    for i in range(3):
+        P.append(box("vent%d" % i, (1.14, 0.05, 0.05), (0, 0.43, 0.52 + i*0.16), "dark"))
     return finish(P, "incubator_double")
 
 def b_press_belt():
-    """Prasa tasmowa - stempel nad przelotowa tasma. 5 kaczek na cykl."""
+    """Belt Press. H 1.50, footprint 1.00 x 2.00.
+
+    The second machine in the set with NO OUTLET GEOMETRY AT ALL. Its belt ran
+    the full length at 0.535 and its five ducks per cycle spawned at
+    mouth_z(1.50) = 0.675, 14 cm above the belt and 28 cm past the end of it, out
+    of clear air.
+
+    The deck rises to 0.70 and ends in a discharge head at 0.675, so the ducks
+    come off the belt exactly where the sim puts them -- which is the whole point
+    of a machine whose row says it "rolls them off the end". The stamping gantry
+    stays astride the belt, and the two metres of open frame under the deck are
+    the reason this model already had a decent outline.
+
+    THE RAM IS A SEPARATE MODEL (press_belt_ram.glb); see b_press_belt_ram."""
+    H, W, D = 1.50, 1.00, 2.00
     P = []
-    L, W = 1.86, 0.72
-    P.append(box("belt", (W, L, 0.07), (0, 0, 0.50), "dark"))
+    L, BW = 1.80, 0.72
+    DECK = 0.70
+    P.append(box("belt", (BW, L, 0.07), (0, 0.06, DECK), "dark"))
     for i in range(6):
-        P.append(box("slat%d" % i, (W - 0.05, 0.09, 0.04), (0, -L/2 + 0.22 + i*0.29, 0.545), "steel_d"))
+        P.append(box("slat%d" % i, (BW - 0.05, 0.09, 0.04), (0, -0.78 + i*0.29, DECK + 0.045), "steel_d"))
     for sx in (-1, 1):
-        P.append(box("side", (0.06, L, 0.16), (sx*(W/2 + 0.03), 0, 0.53), "hazard"))
-        for sy in (-1, 1):
-            P.append(box("leg", (0.08, 0.08, 0.46), (sx*(W/2 - 0.05), sy*(L/2 - 0.20), 0.23), "steel"))
-    P.append(cyl("roll1", 0.10, W, (0, -L/2, 0.50), "steel", verts=10, rot=(0, math.radians(90), 0)))
-    P.append(cyl("roll2", 0.10, W, (0,  L/2, 0.50), "steel", verts=10, rot=(0, math.radians(90), 0)))
-    # brama stempla - stoi OKRAKIEM nad tasma, swiatlo 0.60 x 0.46 nad pasem
+        P.append(box("side", (0.06, L, 0.16), (sx*(BW/2 + 0.03), 0.06, DECK + 0.03), "hazard"))
+        for sy in (-1, 1):                 # open legs: 0.60 m of daylight under
+            P.append(box("leg", (0.09, 0.09, 0.62), (sx*(BW/2 - 0.04), sy*0.74 + 0.06, 0.31), "steel"))
+            P.append(box("foot", (0.15, 0.15, 0.045), (sx*(BW/2 - 0.04), sy*0.74 + 0.06, 0.0225), "dark"))
+    for sx in (-1, 1):                     # longitudinal tie, low down
+        P.append(box("tie", (0.05, 1.56, 0.05), (sx*(BW/2 - 0.04), 0.06, 0.22), "dark"))
+    P.append(cyl("roll2", 0.10, BW, (0, 0.96, DECK), "steel", verts=10, rot=(0, math.radians(90), 0)))
+    # Discharge head at the front, at the spawn height.
+    P.append(box("head", (BW + 0.10, 0.26, 0.30), (0, -0.86, 0.66), "steel_d"))
+    chute(P, H, D, w=0.44, h=0.26, deep=0.22, jamb="steel")
+    # The gantry, astride the belt
     for sx in (-1, 1):
-        P.append(box("post", (0.12, 0.16, 1.30), (sx*0.42, 0.10, 0.65), "steel"))
-    P.append(box("crown", (1.00, 0.42, 0.20), (0, 0.10, 1.40), "hazard"))
-    P.append(cyl("ram", 0.13, 0.34, (0, 0.10, 1.14), "steel_d", verts=10))
-    P.append(box("head", (0.62, 0.34, 0.16), (0, 0.10, 0.98), "orange"))
+        P.append(box("post", (0.12, 0.16, 0.62), (sx*0.42, 0.16, 1.09), "steel"))
+    P.append(box("crown", (1.00, 0.42, 0.18), (0, 0.16, 1.41), "hazard"))
+    P.append(box("crownlip", (0.92, 0.48, 0.05), (0, 0.16, 1.305), "dark"))
     for i in range(5):
-        P.append(box("die%d" % i, (0.08, 0.08, 0.06), (-0.24 + i*0.12, 0.10, 0.87), "steel_d"))
-    P.append(cyl("gauge", 0.09, 0.05, (0, -0.12, 1.40), "white", verts=9, rot=(math.radians(90), 0, 0)))
+        P.append(box("die%d" % i, (0.08, 0.08, 0.05), (-0.24 + i*0.12, 0.16, 0.775), "steel_d"))
+    P.append(cyl("gauge", 0.08, 0.05, (0, -0.06, 1.41), "white", verts=9, rot=(math.radians(90), 0, 0)))
     return finish(P, "press_belt")
 
 def b_feeder_vibe():
-    """Wibracyjny podajnik - pochylone koryto na sprezynach, lej NAD tylnym koncem.
+    """Vibratory Feeder. H 1.2602, footprint 1.00 x 1.50.
 
-    Pierwsza wersja czytala sie jako lawka z abazurem. Trzy powody, wszystkie
-    naprawione tutaj:
-      * zebra dostawaly z = ... * tan(-ang), czyli pochylenie PRZECIWNE do
-        koryta - przecinaly plyte na wylot zamiast na niej lezec;
-      * lej wisial 0.2 m nad korytem i czytal sie jako osobna bryla;
-      * scianki 0.22 m przy korycie 1.30 m czytaly sie jak belki, nie jak burty.
-    Kazdy element koryta idzie teraz przez T(): wspolrzedne LOKALNE koryta
-    (wzdluz, w gore) zamieniane na swiatowe TA SAMA rotacja co plyta, wiec nic
-    nie moze sie rozjechac ze spadkiem."""
+    The nearest miss in the set: the discharge tongue already sat at 0.572 and
+    the simulation spawns at mouth_z(1.2602) = 0.567, so this machine was 5 mm
+    out where the Duckomat was 460. But the tongue stopped 66 mm SHORT of the
+    footprint's front face, so the duck still appeared in a gap rather than off
+    the lip. The tongue now runs out to the face and carries a proper mouth.
+
+    Everything about the trough is kept, including the T() helper that maps
+    along-trough coordinates through the same 9 degree rotation as the plate --
+    that is what stopped the ribs cutting through the tray the first time."""
+    H, W, D = 1.2602, 1.00, 1.50
     P = []
-    ang = math.radians(9)                 # tyl (+Y) w gorze, wylot z przodu
+    ang = math.radians(9)
     ZC, LEN, WID = 0.66, 1.30, 0.80
     ca, sa = math.cos(ang), math.sin(ang)
 
     def T(s, up):
-        """(wzdluz koryta, w gore od plyty) -> (y, z) w swiecie."""
         return (s*ca - up*sa, ZC + s*sa + up*ca)
 
     y, z = T(0, 0)
     P.append(box("tray", (WID, LEN, 0.05), (0, y, z), "steel", rot=(ang, 0, 0)))
-    for sx in (-1, 1):                    # burty: swiatlo 0.70 m, kaczka ma 0.18
+    for sx in (-1, 1):
         y, z = T(0, 0.105)
         P.append(box("side", (0.05, LEN, 0.20), (sx*(WID/2 - 0.025), y, z), "hazard", rot=(ang, 0, 0)))
-    for i in range(5):                    # zebra POPRZECZNE, lezace na plycie
+    for i in range(5):
         y, z = T(-0.48 + i*0.24, 0.045)
         P.append(box("rib%d" % i, (WID - 0.12, 0.05, 0.04), (0, y, z), "steel_d", rot=(ang, 0, 0)))
-    y, z = T(LEN/2 - 0.03, 0.12)          # tylna sciana zamyka koryto
+    y, z = T(LEN/2 - 0.03, 0.12)
     P.append(box("backw", (WID, 0.05, 0.28), (0, y, z), "steel_d", rot=(ang, 0, 0)))
-    y, z = T(-LEN/2 - 0.04, 0.02)         # jezyk wysypowy z przodu
-    P.append(box("lip", (WID - 0.06, 0.16, 0.04), (0, y, z), "hazard", rot=(ang, 0, 0)))
-
-    for sx in (-1, 1):                    # sprezyny miedzy cokolem a korytem
+    # The discharge tongue, running FORWARD to the face instead of stopping short
+    P.append(box("tongue", (WID - 0.06, 0.16, 0.04), (0, -0.71, 0.585), "hazard"))
+    chute(P, H, D, w=0.40, h=0.24, deep=0.18, jamb="steel_d")
+    for sx in (-1, 1):
         for s in (-0.44, 0.44):
             yb, zb = T(s, -0.03)
             P.append(cyl("spr", 0.045, zb - 0.16, (sx*0.30, yb, (zb + 0.16)/2), "steel", verts=8))
             P.append(box("pad", (0.13, 0.13, 0.05), (sx*0.30, yb, 0.165), "dark"))
-    P.append(box("base", (0.88, 1.24, 0.16), (0, 0, 0.08), "dark"))
-    P.append(box("hazb", (0.94, 1.30, 0.04), (0, 0, 0.165), "hazard"))
-
-    ym, zm = T(0.10, -0.02)               # naped przykrecony do boku koryta
-    P.append(cyl("motor", 0.13, 0.24, (0.48, ym, zm), "orange", verts=10, rot=(0, math.radians(90), 0)))
-    P.append(box("mount", (0.16, 0.20, 0.10), (0.42, ym, zm), "steel_d"))
-
-    # Lej OSADZONY na tylnej scianie: dolny wieniec siedzi 3 cm PONIZEJ krawedzi
-    # burty, wiec styka sie z korytem zamiast nad nim wisiec.
-    N, RT, RB, HH = 10, 0.31, 0.15, 0.34
-    yh, zh = T(LEN/2 - 0.22, 0.17)
-    slant = math.hypot(RT - RB, HH)
-    tilt = math.atan2(RT - RB, HH)
-    rm = (RT + RB)/2
-    for i in range(N):
-        a = math.radians(i*360.0/N)
-        P.append(box("hop%d" % i, (2*math.pi*rm/N*1.4, 0.03, slant),
-                     (math.sin(a)*rm, yh + math.cos(a)*rm, zh + HH/2), "steel_d",
-                     rot=(-tilt, 0, -a)))
-    for i in range(N):                    # wieniec wlotu; ring_xy siedzi na osi,
-        a = math.radians(i*360.0/N)       # a ten lej stoi nad tylem koryta
-        P.append(box("hlip%d" % i, (2*math.pi*RT/N*1.45, 0.09, 0.05),
-                     (math.sin(a)*RT, yh + math.cos(a)*RT, zh + HH), "hazard", rot=(0, 0, -a)))
-    return finish(P, "feeder_vibe", merge=0.001)
+    # Legs, not a slab: the springs need somewhere to stand and the outline needs
+    # a gap under it. 0.145 m of daylight, ~3 px at 10 m.
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            P.append(box("leg", (0.12, 0.12, 0.145), (sx*0.36, sy*0.52, 0.0775), "dark"))
+            P.append(box("foot", (0.18, 0.18, 0.04), (sx*0.36, sy*0.52, 0.02), "steel_d"))
+    P.append(box("base", (0.86, 1.20, 0.14), (0, 0, 0.215), "dark"))
+    P.append(cyl("motor", 0.13, 0.24, (0, 0.42, 0.42), "orange", verts=10,
+                 rot=(0, math.radians(90), 0)))
+    P.append(cyl("motorc", 0.09, 0.06, (0.16, 0.42, 0.42), "dark", verts=8,
+                 rot=(0, math.radians(90), 0)))
+    # THE FEED HOPPER. It owns the height contract (1.2602 exactly) and it is the
+    # reason this machine is not another low slab: an open funnel on two legs over
+    # the closed end, with 0.30 m of sky between its underside and the trough.
+    # That gap is the silhouette -- a bin floating above a tray reads as a feeder,
+    # a solid wedge reads as a bench, and the first version of this model was a
+    # bench with a lampshade for exactly that reason.
+    HH = 1.2602
+    for i in range(8):
+        a = math.radians(i*45)
+        P.append(box("hop%d" % i, (0.30, 0.05, 0.34), (math.sin(a)*0.25, 0.44 + math.cos(a)*0.25,
+                                                       HH - 0.2111), "steel_d",
+                     rot=(math.radians(20)*math.cos(a), math.radians(-20)*math.sin(a), -a)))
+    ring_xy("hoplip", 0.30, 8, 2*math.pi*0.30/8*1.45, 0.10, 0.055, HH - 0.0275, "hazard", P, sep=0.002)
+    for sx in (-1, 1):                     # the two legs the hopper stands on
+        P.append(box("hopleg", (0.06, 0.06, 0.34), (sx*0.24, 0.44, 0.90), "steel"))
+    return finish(P, "feeder_vibe")
 
 def b_slot_machine():
-    """Automat losowy - trzy bebny za szyba, dzwignia z boku, taca na wyplate."""
+    """Duck Slots. H 1.52, footprint 0.75 x 0.75.
+
+    Payout tray moves from 0.32 to mouth_z(1.52) = 0.684 -- and on a slot machine
+    that is not a compromise, it is where the tray belongs: directly under the
+    reels, at the height a hand reaches. The cabinet also loses its flat foot and
+    gains a raked lower front, so the outline leans.
+
+    THE REELS ARE A SEPARATE MODEL (slot_reels.glb). Origin, axis and travel are
+    in b_slot_reels."""
+    H, W, D = 1.52, 0.75, 0.75
     P = []
-    P.append(box("cab", (0.62, 0.58, 1.20), (0, 0, 0.62), "red"))
-    P.append(box("plinth", (0.68, 0.64, 0.14), (0, 0, 0.07), "dark"))
-    P.append(box("marq", (0.68, 0.50, 0.30), (0, -0.02, 1.37), "hazard"))
-    P.append(box("marqf", (0.56, 0.05, 0.18), (0, -0.28, 1.37), "white"))
-    # szyba cofnieta, bebny za nia - nic nie lezy w tej samej plaszczyznie
-    P.append(box("glass", (0.50, 0.04, 0.34), (0, -0.29, 0.94), "glass"))
-    P.append(box("bezel", (0.58, 0.03, 0.42), (0, -0.315, 0.94), "steel_d"))
+    P.append(box("plinth", (0.70, 0.66, 0.12), (0, 0, 0.06), "dark"))
+    P.append(box("cab", (0.62, 0.56, 1.14), (0, 0.02, 0.70), "red"))
+    P.append(box("rake", (0.62, 0.16, 0.30), (0, -0.24, 0.36), "red", rot=(math.radians(24), 0, 0)))
+    chute(P, H, D, w=0.38, h=0.24, deep=0.20, jamb="steel_d")
+    # Reel window, ABOVE the tray. The reels themselves are the separate model;
+    # this is the bezel they turn inside, and the recess they sit in.
+    P.append(box("recess", (0.50, 0.10, 0.32), (0, -0.235, 1.02), "black"))
+    P.append(box("bezel", (0.58, 0.035, 0.40), (0, -0.295, 1.02), "steel_d"))
     for i in range(3):
-        P.append(cyl("reel%d" % i, 0.15, 0.14, (-0.16 + i*0.16, -0.20, 0.94), "white",
-                     verts=10, rot=(0, math.radians(90), 0)))
-        P.append(cyl("hubr%d" % i, 0.05, 0.16, (-0.16 + i*0.16, -0.20, 0.94), "dark",
-                     verts=8, rot=(0, math.radians(90), 0)))
-    for i in range(4):
-        P.append(box("btn%d" % i, (0.08, 0.06, 0.05), (-0.21 + i*0.14, -0.30, 0.66), "hazard"))
-    # wylot wyplaty: swiatlo 0.40 x 0.24, kaczki wypadaja na tace
-    P.append(box("tray", (0.44, 0.16, 0.24), (0, -0.34, 0.32), "black"))
-    P.append(box("traylip", (0.50, 0.14, 0.05), (0, -0.42, 0.21), "hazard", rot=(math.radians(20), 0, 0)))
-    # dzwignia
-    P.append(cyl("pivot", 0.05, 0.10, (0.33, -0.02, 1.02), "steel_d", verts=8, rot=(0, math.radians(90), 0)))
-    P.append(cyl("lever", 0.03, 0.34, (0.42, -0.02, 1.16), "steel", verts=7, rot=(0, math.radians(30), 0)))
-    P.append(ball("knob", 0.07, (0.51, -0.02, 1.30), "hazard", seg=8, ring_count=5))
+        P.append(box("btn%d" % i, (0.08, 0.06, 0.05), (-0.15 + i*0.15, -0.30, 0.84), "hazard"))
+    P.append(box("marq", (0.68, 0.46, 0.26), (0, -0.02, 1.39), "hazard"))
+    P.append(box("marqf", (0.54, 0.05, 0.16), (0, -0.25, 1.39), "white"))
+    P.append(box("marqlip", (0.62, 0.50, 0.04), (0, -0.02, 1.275), "dark"))
+    P.append(cyl("pivot", 0.05, 0.09, (0.32, -0.02, 1.10), "steel_d", verts=8, rot=(0, math.radians(90), 0)))
+    P.append(cyl("lever", 0.03, 0.32, (0.40, -0.02, 1.23), "steel", verts=7, rot=(0, math.radians(30), 0)))
+    P.append(ball("knob", 0.065, (0.48, -0.02, 1.36), "hazard", seg=8, ring_count=5))
     return finish(P, "slot_machine")
 
 def b_factory():
-    """Kaczkowa fabryka - hala z pilastym dachem, dwa kominy, tasma wyjsciowa."""
+    """Duck Factory. H 2.61, footprint 2.50 x 2.00.
+
+    One of the four the critic said already reads -- the sawtooth roof and the
+    two chimneys give it a top edge nothing else in the game has -- so the hall,
+    the roof and the stacks are kept as they were. The fault was the gate: its
+    soffit was at 0.82 and the simulation spawns at mouth_z(2.61) = 1.174, so ten
+    ducks every eight seconds came out of the wall 22 cm above the doorway.
+
+    The gate grows to span that height and gains a DISCHARGE BELT at 1.174 that
+    runs out of the opening to the footprint's face -- which is both where the
+    ducks appear and the only honest way to explain why they appear that far off
+    the ground."""
     P = []
-    W, D, H = 2.30, 1.86, 1.50
-    P.append(box("hall", (W, D, H), (0, 0, H/2), "steel"))
-    P.append(box("plinth", (W + 0.12, D + 0.10, 0.16), (0, 0, 0.08), "dark"))
-    # pilasty dach: cztery pochylone plyty, kazda z pasem szyby od polnocy
+    W, D, H = 2.30, 1.72, 1.50
+    ZM = 0.45 * 2.61                       # 1.1745
+    P.append(box("hall", (W, D, H - 0.04), (0, 0.10, H/2 + 0.02), "steel"))
+    P.append(box("plinth", (W + 0.12, D + 0.10, 0.16), (0, 0.10, 0.08), "dark"))
     for i in range(4):
         x = -0.86 + i*0.575
-        P.append(box("saw%d" % i, (0.56, D, 0.06), (x, 0, H + 0.20), "steel_d",
+        P.append(box("saw%d" % i, (0.56, D, 0.06), (x, 0.10, H + 0.20), "steel_d",
                      rot=(0, math.radians(-26), 0)))
-        P.append(box("sawg%d" % i, (0.05, D - 0.10, 0.24), (x + 0.26, 0, H + 0.14), "glass"))
-    P.append(box("eave", (W + 0.10, D + 0.08, 0.06), (0, 0, H + 0.03), "hazard"))
+        P.append(box("sawg%d" % i, (0.05, D - 0.10, 0.24), (x + 0.26, 0.10, H + 0.14), "glass"))
+    P.append(box("eave", (W + 0.10, D + 0.08, 0.06), (0, 0.10, H + 0.015), "hazard"))
     for i, x in enumerate((-0.62, 0.58)):
-        P.append(cyl("chim%d" % i, 0.15, 0.90, (x, 0.60, H + 0.60), "concrete", verts=10))
-        P.append(cyl("chimc%d" % i, 0.19, 0.10, (x, 0.60, H + 1.06), "dark", verts=10))
-        P.append(cyl("chimb%d" % i, 0.17, 0.09, (x, 0.60, H + 0.34), "hazard", verts=10))
-    # brama wyjsciowa: swiatlo 0.86 x 0.70, plus jezyk tasmy wystajacy na zewnatrz
-    P.append(box("gate", (0.90, 0.14, 0.74), (0, -D/2 - 0.02, 0.45), "black"))
-    P.append(box("gatef", (1.02, 0.05, 0.86), (0, -D/2 - 0.08, 0.45), "hazard"))
-    P.append(box("tongue", (0.72, 0.34, 0.07), (0, -D/2 - 0.20, 0.36), "dark"))
+        P.append(cyl("chim%d" % i, 0.15, 0.90, (x, 0.64, H + 0.60), "concrete", verts=10))
+        P.append(cyl("chimc%d" % i, 0.19, 0.10, (x, 0.64, H + 1.06), "dark", verts=10))
+        P.append(cyl("chimb%d" % i, 0.17, 0.09, (x, 0.64, H + 0.34), "hazard", verts=10))
+    # THE GATE, tall enough to contain the spawn height, with the belt in it.
+    P.append(box("gate", (0.94, 0.16, 1.14), (0, -D/2 + 0.035, 0.70), "black"))
+    P.append(box("gatef", (1.08, 0.05, 1.26), (0, -D/2 - 0.030, 0.70), "hazard"))
+    P.append(box("bcase", (0.86, 0.44, 0.30), (0, -D/2 - 0.16, ZM - 0.10), "dark"))
     for i in range(3):
-        P.append(box("tsl%d" % i, (0.66, 0.07, 0.035), (0, -D/2 - 0.30 + i*0.10, 0.40), "steel_d"))
-    for sx in (-1, 1):                       # okna hali
+        P.append(box("bsl%d" % i, (0.78, 0.07, 0.035), (0, -D/2 - 0.06 - i*0.13, ZM - 0.24), "steel_d"))
+    for sx in (-1, 1):                     # legs under the discharge belt
+        P.append(box("bleg", (0.07, 0.07, ZM - 0.26), (sx*0.36, -D/2 - 0.28, (ZM - 0.26)/2), "steel"))
+    chute(P, 2.61, 2.00, w=0.56, h=0.34, deep=0.24, yf=-1.02, jamb="steel")
+    for sx in (-1, 1):
         for i in range(4):
-            P.append(box("win", (0.34, 0.05, 0.30), (-0.78 + i*0.52, sx*(D/2 + 0.005), 1.02), "glass"))
+            P.append(box("win", (0.34, 0.05, 0.30), (-0.78 + i*0.52, 0.10 + sx*(D/2 + 0.005), 1.02), "glass"))
     for i in range(4):
-        P.append(box("stripe%d" % i, (0.18, 0.05, 0.34), (-1.05 + i*0.70, -D/2 - 0.005, 0.22), "hazard"))
-    P.append(box("sign", (1.10, 0.07, 0.24), (0, -D/2 - 0.06, 1.24), "hazard"))
+        P.append(box("stripe%d" % i, (0.16, 0.05, 0.30), (-1.05 + i*0.70, -D/2 + 0.100, 0.20), "hazard"))
+    P.append(box("sign", (1.06, 0.07, 0.22), (0, -D/2 + 0.045, 1.88), "hazard"))
     return finish(P, "factory")
 
 def b_geyser():
-    """Kaczkowy gejzer - skalny komin z stalowa obreecza. 30 kaczek naraz."""
+    """Duck Geyser. H 1.0043 EXACTLY (src/data/machines.js), footprint 1.50 x 1.50.
+
+    The most physically absurd of the seventeen. Its only opening faced STRAIGHT
+    UP, and the simulation ejects sideways along local +Z -- so thirty ducks an
+    eruption, every forty-five seconds, were fired through a solid rock wall.
+
+    The vertical throat stays, because it is the whole silhouette of the thing
+    and because an eruption ought to have a crown. What it gains is a BREACH: a
+    fissure blown out of the front of the cone at mouth_z(1.0043) = 0.452, ringed
+    in blast collar, with a steel spout carrying it out to the footprint's face.
+    Now the machine has the hole its ducks actually leave through.
+
+    NOTE ON THE HEIGHT, kept from the previous pass because it is still true: the
+    boulders dip to z = -0.0193 and finish() lifts the mesh to minz = 0, so a
+    spire authored 1.0043 tall would export at 1.0236. The spires stop at 0.96
+    and the collar ring keeps owning the height."""
     P = []
-    # stozek z segmentow, w srodku PUSTY - gardziel 0.52 m przelotu
     N, RT, RB, ZT = 12, 0.30, 0.66, 0.86
     slant = math.hypot(RB - RT, ZT)
     tilt = math.atan2(RB - RT, ZT)
@@ -1791,28 +2747,11 @@ def b_geyser():
         a = math.radians(i*360.0/N)
         P.append(box("cone%d" % i, (2*math.pi*rm/N*1.35, 0.10, slant),
                      (math.sin(a)*rm, math.cos(a)*rm, ZT/2), "rust", rot=(-tilt, 0, -a)))
-    # Obreecze i glazy licza sie po 12 trojkatow za sztuke, wiec ida na 8 segmentow,
-    # nie na 12 stozka: pierwsza wersja wyszla 876 trojkatow przy budzecie 800.
-    ring_xy("throat", RT, N, 2*math.pi*RT/N*1.45, 0.14, 0.10, ZT, "steel_d", P)
-    ring_xy("collar", RT + 0.10, 8, 2*math.pi*(RT+0.10)/8*1.45, 0.12, 0.07, ZT + 0.09, "hazard", P)
-    # skalna podstawa + glazy dokola
-    ring_xy("plinth", RB + 0.05, 8, 2*math.pi*(RB+0.05)/8*1.40, 0.24, 0.14, 0.07, "concrete", P)
-    # ROCK SPIRES: three of them, three different heights, so the top edge of
-    # the outline is a jagged crown instead of the flat circular rim it shared
-    # with every other 1.50 m round squat thing in the catalog (pit_rim, hive,
-    # trampoline, reactor). The tallest one is an axis-aligned box placed at
-    # H = 1.0043 by construction -- src/data/machines.js hard-codes that number
-    # for `geyser`, so the height is not free.
-    #
-    # NOTE ON THE NUMBER: the exported height is 1.0043 but the tallest RAW
-    # vertex is 0.985 -- the boulders dip to z = -0.0193 and finish() lifts the
-    # whole mesh to minz = 0. So a spire authored 1.0043 tall exports at 1.0236
-    # and breaks the row. The spires stop at 0.96, below the collar ring, and
-    # the collar keeps owning the height exactly as before.
+    ring_xy("throat", RT, N, 2*math.pi*RT/N*1.45, 0.14, 0.10, ZT, "steel_d", P, sep=0.0025)
+    ring_xy("collar", RT + 0.10, 8, 2*math.pi*(RT+0.10)/8*1.45, 0.12, 0.07, ZT + 0.09, "hazard", P, sep=0.0025)
+    ring_xy("plinth", RB + 0.05, 8, 2*math.pi*(RB+0.05)/8*1.40, 0.24, 0.14, 0.07, "concrete", P, sep=0.0025)
     for i, (ad, hh) in enumerate(((28, 0.96), (150, 0.74), (262, 0.56))):
         a = math.radians(ad)
-        # Base at z = 0.02, not 0: the rock plinth ring's underside is at z = 0,
-        # and a spire starting there shares that plane.
         P.append(box("spire%d" % i, (0.20 - i*0.02, 0.20 - i*0.02, hh - 0.02),
                      (math.sin(a)*0.55, math.cos(a)*0.55, (0.02 + hh)/2), "concrete"))
         P.append(box("spiretip%d" % i, (0.13 - i*0.015, 0.13 - i*0.015, 0.10),
@@ -1821,41 +2760,56 @@ def b_geyser():
         a = math.radians(i*90 + 32)
         P.append(ball("rock%d" % i, 0.15, (math.sin(a)*0.66, math.cos(a)*0.66, 0.10), "concrete",
                       seg=6, ring_count=4, scale=(1.0, 0.85, 0.55)))
-    for i in range(3):                        # rury zasilajace wchodzace w skale
+    for i in range(3):
         a = math.radians(i*120 + 40)
         P.append(cyl("feed%d" % i, 0.07, 0.42, (math.sin(a)*0.52, math.cos(a)*0.52, 0.30), "steel_d",
                      verts=8, rot=(math.radians(58)*math.cos(a), math.radians(-58)*math.sin(a), 0)))
+    # THE BREACH. The spout runs from inside the cone out past the boulders, so
+    # it -- not a rock -- is the model's frontmost geometry and the footprint snap
+    # lands its lip on the face. yf is passed explicitly because this builder's
+    # raw depth is set by the boulder ring, not by D.
+    ZM = 0.45 * 1.0043
+    P.append(cyl("spout", 0.20, 0.52, (0, -0.55, ZM), "steel_d", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    chute(P, 1.0043, 1.50, w=0.34, h=0.28, deep=0.20, yf=-0.82, jamb="steel")
     return finish(P, "geyser", merge=0.001)
 
 def b_pipe_endless():
-    """Nieskonczona rura - petla bez konca na cokole, kaczki leca z wylotu."""
+    """Endless Pipe. H 1.4194, footprint 1.00 x 1.00.
+
+    Another of the four that already read -- a loop of pipe is a hole by
+    construction -- so the loop, the column and the plinth are untouched. The
+    outlet spur was at 0.50 and the simulation spawns at mouth_z(1.4194) = 0.639,
+    so the spur rises 14 cm to meet it and keeps its flare, which is the part a
+    player watches the stream come out of."""
+    H, W, D = 1.4194, 1.00, 1.00
     P = []
     R, N = 0.40, 16
     ZC = 0.92
     seg = 2*math.pi*R/N*1.40
-    for i in range(N):                        # pionowa petla rury
+    for i in range(N):
         a = math.radians(i*360.0/N)
         P.append(box("loop%d" % i, (seg, 0.20, 0.19),
                      (math.sin(a)*R, 0, ZC + math.cos(a)*R), "steel_d", rot=(0, a, 0)))
-    for i in range(0, N, 4):                  # obreecze
+    for i in range(0, N, 4):
         a = math.radians(i*360.0/N)
         P.append(box("band%d" % i, (seg*0.9, 0.25, 0.06),
                      (math.sin(a)*R, 0, ZC + math.cos(a)*R), "hazard", rot=(0, a, 0)))
-    # wylot: krotki odcinek w -Y, swiatlo 0.30 - kaczka przechodzi z zapasem
+    # The spur, at the height the sim ejects from.
+    ZM = mouth_z(H)
     NM = 10
     for i in range(NM):
         a = math.radians(i*360.0/NM)
-        P.append(box("mouth%d" % i, (2*math.pi*0.19/NM*1.5, 0.34, 0.05),
-                     (math.sin(a)*0.19, -0.34, 0.50 + math.cos(a)*0.19), "steel", rot=(0, a, 0)))
+        P.append(box("mouth%d" % i, (2*math.pi*0.19/NM*1.5, 0.32, 0.05),
+                     (math.sin(a)*0.19, -0.33, ZM + math.cos(a)*0.19), "steel", rot=(0, a, 0)))
     for i in range(NM):
         a = math.radians(i*360.0/NM)
         P.append(box("mlip%d" % i, (2*math.pi*0.24/NM*1.5, 0.08, 0.09),
-                     (math.sin(a)*0.24, -0.49, 0.50 + math.cos(a)*0.24), "hazard", rot=(0, a, 0)))
-    P.append(box("column", (0.26, 0.26, 0.54), (0, 0.02, 0.27), "steel"))
+                     (math.sin(a)*0.24, -0.46, ZM + math.cos(a)*0.24), "hazard", rot=(0, a, 0)))
+    P.append(box("column", (0.26, 0.26, 0.42), (0, 0.02, 0.31), "steel"))
     P.append(box("plinth", (0.86, 0.86, 0.14), (0, 0, 0.07), "dark"))
-    P.append(box("hazbase", (0.92, 0.92, 0.05), (0, 0, 0.145), "hazard"))
+    P.append(box("hazbase", (0.92, 0.92, 0.05), (0, 0, 0.155), "hazard"))
     return finish(P, "pipe_endless", merge=0.001)
-
 
 # ================================================== FAZA 1 - GRUPA 2
 # Producenci, ktorzy sa czysta danina: producer_auto bez zadnej zmiany w kodzie.
@@ -1864,157 +2818,218 @@ def b_pipe_endless():
 # i dlatego chodza w zlocie i turkusie, a nie w stali.
 
 def b_machine_slow():
-    """Wolny automat - przysadzisty, ciezki, z wielkim kolem zamachowym. 60 s."""
+    """Slow Automat. H 1.315, footprint 1.00 x 1.00.
+
+    Its flywheel is the whole story of the machine and it stays. What goes is the
+    0.44 x 0.26 glass panel -- at 10 m that is a 9 x 6 px dark rectangle that
+    reads as a SCREEN, and a screen is the one thing this machine has not got --
+    and the flat-bottomed box it was painted on. The outlet moves from 0.22 to
+    mouth_z(1.315) = 0.592, which is where the simulation has always put the
+    duck; the old hatch was 37 cm below it."""
+    H, W, D = 1.315, 1.00, 1.00
     P = []
-    P.append(box("body", (0.86, 0.86, 0.72), (0, 0, 0.42), "steel"))
-    P.append(box("base", (0.94, 0.94, 0.14), (0, 0, 0.07), "dark"))
-    P.append(box("top", (0.78, 0.78, 0.14), (0, 0, 0.85), "steel_d"))
-    P.append(box("win", (0.44, 0.05, 0.26), (0, -0.435, 0.52), "glass"))
-    P.append(box("frame", (0.52, 0.035, 0.34), (0, -0.455, 0.52), "dark"))
-    # wylot nisko z przodu - kaczka wytacza sie, nie wypada z wysoka
-    P.append(box("out", (0.40, 0.24, 0.22), (0, -0.44, 0.22), "dark"))
-    P.append(box("outlip", (0.46, 0.10, 0.05), (0, -0.56, 0.16), "hazard"))
-    # Kolo zamachowe - powolny obrot to cala opowiesc tej maszyny, wiec musi byc
-    # PIERWSZA rzecza, ktora widac. W pierwszej wersji bylo rdzawe na stali i
-    # 0.07 m od sciany: z trzech metrow czytalo sie jako brazowa narosl. Zolte
-    # i odsuniete na 0.10 czyta sie jak kolo, dokladnie jak na korbie.
-    P.append(cyl("fly", 0.32, 0.07, (0.50, 0.06, 0.60), "hazard", verts=14, rot=(0, math.radians(90), 0)))
-    P.append(cyl("flyhub", 0.09, 0.16, (0.50, 0.06, 0.60), "dark", verts=9, rot=(0, math.radians(90), 0)))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            P.append(box("foot", (0.16, 0.16, 0.05), (sx*0.38, sy*0.38, 0.025), "steel_d"))
+            P.append(box("leg", (0.10, 0.10, 0.20), (sx*0.38, sy*0.38, 0.115), "dark"))
+    P.append(box("base", (0.96, 0.96, 0.14), (0, 0, 0.29), "dark"))
+    P.append(box("body", (0.86, 0.86, 0.60), (0, 0, 0.65), "steel"))
+    chute(P, H, D)                        # aperture centre z = 0.592
+    P.append(box("shoulder", (0.92, 0.92, 0.10), (0, 0, 0.99), "dark"))
+    # The stack is OFF-CENTRE and tall enough to break the top edge: at 10 m the
+    # difference between this and every other 1 m squat producer is a 3 px pip
+    # sticking out of one corner of the outline.
+    P.append(cyl("stack", 0.10, 0.30, (-0.28, 0.26, 1.16), "steel_d", verts=8))
+    P.append(cyl("stackc", 0.14, 0.06, (-0.28, 0.26, 1.285), "dark", verts=8))
+    P.append(box("top", (0.60, 0.60, 0.10), (0.10, -0.06, 1.075), "steel_d"))
+    # Flywheel: unchanged in intent, moved 20 mm further out so nothing it passes
+    # shares a plane with it, and given a visible connecting rod down to the bed.
+    P.append(cyl("fly", 0.30, 0.07, (0.50, 0.06, 0.66), "hazard", verts=14,
+                 rot=(0, math.radians(90), 0)))
+    P.append(cyl("flyhub", 0.09, 0.17, (0.50, 0.06, 0.66), "dark", verts=9,
+                 rot=(0, math.radians(90), 0)))
     for i in range(3):
-        P.append(box("spoke%d" % i, (0.05, 0.54, 0.04), (0.495, 0.06, 0.60), "steel_d",
+        P.append(box("spoke%d" % i, (0.05, 0.50, 0.04), (0.495, 0.06, 0.66), "steel_d",
                      rot=(math.radians(i*60), 0, math.radians(90))))
-    P.append(cyl("rodarm", 0.04, 0.34, (0.46, -0.16, 0.46), "rust", verts=7, rot=(math.radians(40), 0, 0)))
-    P.append(cyl("pipe", 0.10, 0.40, (-0.26, 0.24, 1.05), "steel_d", verts=8))
-    P.append(cyl("pcap", 0.13, 0.07, (-0.26, 0.24, 1.28), "dark", verts=8))
+    P.append(cyl("rodarm", 0.04, 0.36, (0.455, -0.14, 0.50), "rust", verts=7,
+                 rot=(math.radians(40), 0, 0)))
     for i in range(3):
-        P.append(box("vent%d" % i, (0.66, 0.04, 0.05), (0, 0.435, 0.34 + i*0.15), "dark"))
+        P.append(box("vent%d" % i, (0.62, 0.05, 0.05), (0, 0.435, 0.50 + i*0.15), "dark"))
     return finish(P, "machine_slow")
 
 def b_condenser():
-    """Zbiornik kondensacyjny - pionowa butla z zaworem i skroplinami. 90 s."""
+    """Condensation Tank. H 1.60, footprint 1.00 x 1.00.
+
+    The critic's silhouette pass put this in the featureless-blob column, and the
+    render agrees: a 20 x 32 px capsule with a rounded top, indistinguishable
+    from the hive next to it. A tank IS a capsule, so the fix cannot be on the
+    tank -- it has to be around it. Two condenser columns now stand clear of the
+    shell on stub arms with 60 mm of daylight behind them, and the whole vessel
+    sits on a three-legged skirt with 0.20 m of background under it. That turns
+    one closed curve into an outline with four holes in it.
+
+    Outlet moves from 0.18 to mouth_z(1.60) = 0.720 -- the sight glass height,
+    which is also where the drain valve now points."""
+    H, W, D = 1.60, 1.00, 1.00
     P = []
-    P.append(cyl("tank", 0.34, 1.24, (0, 0, 0.76), "teal", verts=12))
-    P.append(cone("dome", 0.34, 0.14, 0.22, (0, 0, 1.49), "teal_lt", verts=12))
-    P.append(cyl("skirt", 0.40, 0.16, (0, 0, 0.08), "dark", verts=12))
-    for z in (0.42, 0.86, 1.26):
-        P.append(cyl("band", 0.36, 0.06, (0, 0, z), "steel_d", verts=12))
-    # wziernik z poziomem skroplin
-    P.append(box("sight", (0.10, 0.05, 0.44), (0, -0.35, 0.72), "glass"))
-    P.append(box("level", (0.08, 0.045, 0.16), (0, -0.36, 0.60), "blue"))
-    # zawor spustowy + wylot na dole
-    P.append(cyl("valve", 0.07, 0.22, (0, -0.42, 0.30), "steel", verts=8, rot=(math.radians(90), 0, 0)))
-    P.append(cyl("hand", 0.11, 0.04, (0, -0.54, 0.30), "red", verts=10, rot=(math.radians(90), 0, 0)))
-    P.append(box("out", (0.34, 0.20, 0.20), (0, -0.36, 0.18), "dark"))
-    P.append(box("outlip", (0.40, 0.09, 0.05), (0, -0.47, 0.12), "hazard"))
-    P.append(cyl("cool", 0.06, 0.62, (0.30, 0.22, 0.85), "steel_d", verts=8))
-    P.append(cyl("cool2", 0.06, 0.62, (-0.30, 0.22, 0.85), "steel_d", verts=8))
-    P.append(box("gauge", (0.14, 0.06, 0.14), (0, -0.36, 1.16), "white"))
+    for i in range(3):
+        a = math.radians(i*120 + 30)
+        P.append(box("leg%d" % i, (0.09, 0.09, 0.22), (math.sin(a)*0.34, math.cos(a)*0.34, 0.12), "dark"))
+        P.append(box("pad%d" % i, (0.15, 0.15, 0.045), (math.sin(a)*0.34, math.cos(a)*0.34, 0.0225), "steel_d"))
+    P.append(cyl("skirt", 0.38, 0.16, (0, 0, 0.30), "dark", verts=12))
+    P.append(cyl("tank", 0.34, 1.00, (0, 0, 0.86), "teal", verts=12))
+    P.append(cone("dome", 0.34, 0.13, 0.24, (0, 0, 1.48), "teal_lt", verts=12))
+    for z in (0.52, 0.96, 1.30):
+        P.append(cyl("band", 0.365, 0.055, (0, 0, z), "steel_d", verts=12))
+    chute(P, H, D, deep=0.22)             # aperture centre z = 0.720
+    # Sight glass ABOVE the mouth, small: it is an instrument, not a screen.
+    P.append(box("sight", (0.09, 0.05, 0.26), (0, -0.345, 1.06), "glass"))
+    P.append(box("level", (0.07, 0.04, 0.10), (0, -0.352, 0.99), "blue"))
+    P.append(cyl("hand", 0.10, 0.04, (0.24, -0.30, 0.92), "red", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    # THE TWO COLUMNS, standing off the shell on stubs. This is the negative
+    # space: 0.06 m of gap either side, ~1.3 px at 10 m of visible daylight, but
+    # the OUTLINE gains two vertical bars where it had one smooth curve.
+    for sx in (-1, 1):
+        P.append(cyl("col", 0.065, 1.02, (sx*0.455, 0.16, 0.86), "steel_d", verts=8))
+        P.append(cyl("colc", 0.085, 0.07, (sx*0.455, 0.16, 1.40), "hazard", verts=8))
+        for z in (0.56, 1.14):
+            P.append(box("stub", (0.10, 0.06, 0.06), (sx*0.395, 0.16, z), "steel"))
+    P.append(box("gauge", (0.13, 0.05, 0.13), (0, -0.35, 1.34), "white"))
     return finish(P, "condenser")
 
 def b_duckomat():
-    """Kaczkomat - automat vendingowy, kaczki na polkach za szyba. 30 s."""
+    """Duckomat. H 1.78, footprint 1.00 x 0.75.
+
+    The worst outlet in the game: the delivery bin sat at 0.34 and the simulation
+    dropped the duck at mouth_z(1.78) = 0.801, FORTY-SIX CENTIMETRES above it. A
+    player watching this machine saw a duck materialise beside a closed cabinet,
+    half a metre over the tray it was supposed to have rolled into.
+
+    The collection hatch moves up to 0.801, which is where a vending machine's
+    hatch belongs anyway -- chest height, not ankle height -- and the stock
+    shelves move above it. The cabinet also gets a canopy that oversails the
+    front by 0.09 m and legs under it, so its outline is no longer a plain
+    upright slab: at 10 m it is 20 x 36 px, and every one of those px used to be
+    the same rectangle."""
+    H, W, D = 1.78, 1.00, 0.75
     P = []
-    P.append(box("cab", (0.92, 0.62, 1.60), (0, 0, 0.86), "red"))
-    P.append(box("plinth", (0.98, 0.68, 0.14), (0, 0, 0.07), "dark"))
-    # szyba cofnieta, rama przed nia, polki w srodku - nic wspolplaszczyznowego
-    P.append(box("glass", (0.62, 0.05, 1.10), (-0.12, -0.30, 0.98), "glass"))
-    P.append(box("frame", (0.70, 0.035, 1.18), (-0.12, -0.325, 0.98), "steel_d"))
-    for i in range(4):
-        P.append(box("shelf%d" % i, (0.58, 0.34, 0.03), (-0.12, -0.14, 0.52 + i*0.30), "steel_d"))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            P.append(box("leg", (0.10, 0.10, 0.17), (sx*0.40, sy*0.27, 0.095), "dark"))
+            P.append(box("foot", (0.15, 0.15, 0.045), (sx*0.40, sy*0.27, 0.0225), "steel_d"))
+    P.append(box("plinth", (0.98, 0.68, 0.13), (0, 0, 0.245), "dark"))
+    P.append(box("cab", (0.92, 0.60, 1.28), (0, 0.02, 0.95), "red"))
+    chute(P, H, D, w=0.44, h=0.30, deep=0.22, jamb="steel_d")
+    # Stock behind glass, ABOVE the hatch. The glass is 0.62 x 0.62 now instead
+    # of 0.62 x 1.10: it is a window with product in it, not a black slab.
+    P.append(box("glass", (0.60, 0.05, 0.58), (-0.10, -0.30, 1.28), "glass"))
+    P.append(box("frame", (0.68, 0.035, 0.66), (-0.10, -0.325, 1.28), "steel_d"))
+    for i in range(2):
+        P.append(box("shelf%d" % i, (0.56, 0.30, 0.03), (-0.10, -0.15, 1.09 + i*0.28), "steel_d"))
         for j in range(3):
-            P.append(box("stock%d%d" % (i, j), (0.11, 0.11, 0.13),
-                         (-0.34 + j*0.22, -0.14, 0.60 + i*0.30), "hazard"))
-    # kolumna obslugi po prawej
-    P.append(box("keys", (0.16, 0.05, 0.30), (0.30, -0.32, 1.24), "dark"))
-    for i in range(6):
-        P.append(box("key%d" % i, (0.04, 0.03, 0.04), (0.25 + (i % 2)*0.09, -0.35, 1.32 - (i//2)*0.08), "white"))
-    P.append(box("slot", (0.12, 0.04, 0.03), (0.30, -0.33, 1.02), "black"))
-    # odbior: swiatlo 0.44 x 0.28
-    P.append(box("bin", (0.48, 0.22, 0.28), (0, -0.34, 0.34), "black"))
-    P.append(box("flap", (0.52, 0.05, 0.26), (0, -0.44, 0.36), "hazard", rot=(math.radians(-24), 0, 0)))
-    P.append(box("head", (0.96, 0.66, 0.16), (0, 0, 1.70), "hazard"))
-    P.append(box("logo", (0.60, 0.05, 0.10), (0, -0.34, 1.70), "white"))
+            P.append(box("stock%d%d" % (i, j), (0.10, 0.10, 0.12),
+                         (-0.32 + j*0.22, -0.15, 1.16 + i*0.28), "hazard"))
+    P.append(box("keys", (0.15, 0.05, 0.26), (0.30, -0.32, 1.30), "dark"))
+    for i in range(4):
+        P.append(box("key%d" % i, (0.04, 0.03, 0.04), (0.26 + (i % 2)*0.08, -0.35, 1.36 - (i//2)*0.08), "white"))
+    P.append(box("slot", (0.11, 0.04, 0.03), (0.30, -0.335, 1.10), "black"))
+    # Canopy: oversails the front, so the top of the outline is a lid rather than
+    # the same flat edge the press, the slot machine and the gold press all have.
+    P.append(box("head", (1.00, 0.66, 0.15), (0, -0.04, 1.705), "hazard"))
+    P.append(box("headlip", (0.94, 0.70, 0.05), (0, -0.03, 1.615), "dark"))
+    P.append(box("logo", (0.56, 0.05, 0.09), (0, -0.36, 1.705), "white"))
     return finish(P, "duckomat")
 
 def b_hatchery():
-    """Kaczkowa wylegarnia - plyta grzewcza z jajami pod kloszem. 20 s."""
+    """Hatchery. H 0.855, footprint 1.25 x 1.00.
+
+    The only outlet in the set the critic could not fault -- 1.5 cm out -- so the
+    job here is the other half: at 10 m this is a 26 x 19 px lozenge, the flattest
+    thing in the catalog, and its own row sells it as "low enough to sit under a
+    belt". Low is the point, so the silhouette has to earn its keep sideways
+    instead of upward: the cloche is now an open A-frame with a real gap between
+    its glazing bars, and the bed is carried on end frames with daylight beneath.
+
+    The mouth is pinned to mouth_z(0.855) = 0.385 by construction rather than by
+    coincidence."""
+    H, W, D = 0.855, 1.25, 1.00
     P = []
-    P.append(box("bed", (1.14, 0.88, 0.30), (0, 0, 0.15), "steel"))
-    P.append(box("plinth", (1.20, 0.94, 0.12), (0, 0, 0.06), "dark"))
-    P.append(box("pad", (0.94, 0.68, 0.05), (0, 0.02, 0.325), "orange"))
-    # klosz: cztery pochylone szyby + kalenica, otwarty od frontu
-    for sx in (-1, 1):
-        P.append(box("panex", (0.05, 0.72, 0.46), (sx*0.46, 0.02, 0.56), "glass",
-                     rot=(0, math.radians(sx*16), 0)))
-    P.append(box("paneb", (0.94, 0.05, 0.46), (0, 0.38, 0.56), "glass", rot=(math.radians(-14), 0, 0)))
-    P.append(box("ridge", (1.00, 0.80, 0.06), (0, 0.02, 0.80), "teal"))
-    P.append(box("rlip", (1.06, 0.86, 0.04), (0, 0.02, 0.835), "hazard"))
-    for i in range(5):                      # jaja na plycie
-        P.append(ball("egg%d" % i, 0.075, (-0.32 + i*0.16, 0.08, 0.40), "white",
+    for sx in (-1, 1):                     # end frames, open between them
+        P.append(box("endf", (0.10, 0.86, 0.20), (sx*0.555, 0.02, 0.10), "dark"))
+        P.append(box("skid", (0.16, 0.94, 0.045), (sx*0.555, 0.02, 0.0225), "steel_d"))
+    P.append(box("bed", (1.14, 0.80, 0.13), (0, 0.02, 0.255), "steel"))
+    P.append(box("pad", (0.96, 0.66, 0.045), (0, 0.04, 0.335), "orange"))
+    chute(P, H, D, w=0.42, h=0.24, deep=0.20, jamb="steel_d")
+    for i in range(4):                     # eggs on the plate
+        P.append(ball("egg%d" % i, 0.070, (-0.27 + i*0.18, 0.12, 0.395), "white",
                       seg=8, ring_count=5, scale=(1.0, 1.0, 1.25)))
-    P.append(cyl("heat", 0.05, 0.86, (0, 0.30, 0.72), "red", verts=8, rot=(0, math.radians(90), 0)))
-    # wylot z przodu, tuz nad podloga
-    P.append(box("out", (0.50, 0.20, 0.22), (0, -0.40, 0.19), "dark"))
-    P.append(box("outlip", (0.56, 0.10, 0.05), (0, -0.51, 0.13), "hazard"))
-    P.append(box("panel", (0.20, 0.06, 0.12), (0.36, -0.45, 0.26), "hazard"))
+    # OPEN cloche: two glazing bars a side with sky between them, not a shell.
+    for sx in (-1, 1):
+        for i, yy in enumerate((-0.14, 0.30)):
+            P.append(box("bar", (0.05, 0.07, 0.40), (sx*0.44, yy, 0.60), "glass",
+                         rot=(0, math.radians(sx*17), 0)))
+    P.append(box("paneb", (0.94, 0.05, 0.40), (0, 0.40, 0.60), "glass",
+                 rot=(math.radians(-14), 0, 0)))
+    P.append(box("ridge", (1.02, 0.74, 0.05), (0, 0.04, 0.805), "teal"))
+    P.append(box("rlip", (1.10, 0.82, 0.035), (0, 0.04, 0.8375), "hazard"))
+    P.append(cyl("heat", 0.045, 0.84, (0, 0.32, 0.72), "red", verts=8, rot=(0, math.radians(90), 0)))
+    P.append(box("panel", (0.18, 0.06, 0.10), (0.42, -0.44, 0.30), "hazard"))
     return finish(P, "hatchery")
 
 def b_printer3d():
-    """Kaczkowa drukarka 3D - OTWARTY portal z glowica nad stolem. 180 s.
+    """Duck Printer. H 1.285, footprint 1.00 x 1.00.
 
-    Pierwsza wersja miala peelna przeszklona obudowe z trzech stron. W palecie
-    PAL["glass"] to (0.08, 0.16, 0.20) - kolor prawie czarny i CALKOWICIE
-    nieprzezroczysty, bo eksport nie niesie alfy dla tego materialu. Efekt:
-    ciemne pudlo, w ktorym nie bylo widac ani portalu, ani dyszy, ani szpuli,
-    czyli wszystkiego, po czym poznaje sie drukarke. Zostaje sama szyba tylna,
-    reszta idzie na otwarta rame."""
+    One of the four models the critic said already reads, and it reads for the
+    stated reason: it is an OPEN PORTAL, so its outline has a hole through the
+    middle. Nothing structural changes. What changes is the outlet, which sat at
+    0.16 while the simulation spawned at mouth_z(1.285) = 0.578 -- 42 cm up, and
+    on this machine that put the duck level with the print bed rather than with
+    the hatch under it.
+
+    So the bed rises to meet the number: the printed duck now leaves through a
+    hatch in the front apron directly below the nozzle, at 0.578, and the bed
+    sits at 0.72 where the head can reach it."""
+    H, W, D = 1.285, 1.00, 1.00
     P = []
-    P.append(box("base", (1.00, 0.96, 0.18), (0, 0, 0.09), "dark"))
-    P.append(box("hazb", (0.94, 0.90, 0.04), (0, 0, 0.19), "hazard"))
-    P.append(box("bed", (0.64, 0.64, 0.04), (0, 0, 0.36), "teal_lt"))
-    P.append(box("bedr", (0.70, 0.70, 0.03), (0, 0, 0.335), "steel_d"))
-    for sx in (-1, 1):                      # rama portalu, otwarta na wylot
-        P.append(box("colf", (0.07, 0.07, 1.08), (sx*0.42, -0.42, 0.73), "steel"))
-        P.append(box("colb", (0.07, 0.07, 1.08), (sx*0.42,  0.42, 0.73), "steel"))
-        P.append(box("beamy", (0.06, 0.90, 0.06), (sx*0.42, 0, 1.24), "steel_d"))
+    P.append(box("base", (1.00, 0.94, 0.17), (0, 0, 0.085), "dark"))
+    P.append(box("hazb", (0.94, 0.88, 0.045), (0, 0, 0.1875), "hazard"))
+    P.append(box("apron", (0.86, 0.72, 0.50), (0, 0.06, 0.45), "steel_d"))
+    chute(P, H, D, w=0.38, h=0.26, deep=0.22, jamb="steel")
+    P.append(box("bed", (0.62, 0.62, 0.04), (0, 0.02, 0.72), "teal_lt"))
+    P.append(box("bedr", (0.68, 0.68, 0.03), (0, 0.02, 0.695), "steel_d"))
+    for sx in (-1, 1):                     # portal, open right through
+        P.append(box("colf", (0.07, 0.07, 0.56), (sx*0.42, -0.42, 0.97), "steel"))
+        P.append(box("colb", (0.07, 0.07, 0.56), (sx*0.42, 0.42, 0.97), "steel"))
+        P.append(box("beamy", (0.06, 0.90, 0.06), (sx*0.42, 0, 1.22), "steel_d"))
     P.append(box("beamx", (0.90, 0.09, 0.09), (0, 0.10, 1.24), "hazard"))
-    P.append(box("beamf", (0.90, 0.06, 0.06), (0, -0.42, 1.24), "steel_d"))
-    # glowica na belce, dysza wskazuje w dol na stol
-    P.append(box("carriage", (0.22, 0.16, 0.14), (0.06, 0.10, 1.16), "orange"))
-    P.append(cone("nozzle", 0.07, 0.02, 0.13, (0.06, 0.10, 1.03), "steel_d", verts=8))
-    P.append(box("post", (0.05, 0.05, 0.62), (0.06, 0.10, 0.72), "duck"))   # wydruk w toku
-    # szpula NA ZEWNATRZ tylnej kolumny - widac ja z kazdej strony
-    P.append(cyl("spool", 0.16, 0.05, (0.30, 0.50, 0.98), "duck", verts=12, rot=(math.radians(90), 0, 0)))
-    P.append(cyl("spoolh", 0.05, 0.10, (0.30, 0.50, 0.98), "dark", verts=8, rot=(math.radians(90), 0, 0)))
-    P.append(box("skinb", (0.84, 0.04, 0.94), (0, 0.415, 0.78), "glass"))   # tylko tylna szyba
-    P.append(box("out", (0.42, 0.20, 0.18), (0, -0.38, 0.16), "dark"))
-    P.append(box("outlip", (0.48, 0.09, 0.05), (0, -0.48, 0.11), "hazard"))
-    P.append(box("panel", (0.24, 0.05, 0.12), (-0.22, -0.45, 0.42), "teal"))
+    P.append(box("beamf", (0.90, 0.06, 0.06), (0, -0.42, 1.215), "steel_d"))
+    P.append(box("carriage", (0.22, 0.16, 0.13), (0.06, 0.10, 1.155), "orange"))
+    P.append(cone("nozzle", 0.065, 0.02, 0.12, (0.06, 0.10, 1.035), "steel_d", verts=8))
+    P.append(box("post", (0.05, 0.05, 0.24), (0.06, 0.10, 0.86), "duck"))
+    P.append(cyl("spool", 0.15, 0.05, (0.30, 0.46, 1.00), "duck", verts=12, rot=(math.radians(90), 0, 0)))
+    P.append(cyl("spoolh", 0.05, 0.10, (0.30, 0.46, 1.00), "dark", verts=8, rot=(math.radians(90), 0, 0)))
+    P.append(box("skinb", (0.80, 0.04, 0.50), (0, 0.415, 0.98), "glass"))
+    P.append(box("panel", (0.22, 0.05, 0.10), (-0.24, -0.445, 0.90), "teal"))
     return finish(P, "printer3d")
 
 def b_press_gold():
-    """Zlota prasa - SCHODKOWA wieza, nie rama C. 40 s, bez tieru 0.
+    """Gold Press. H 1.645 EXACTLY (src/data/machines.js hard-codes it),
+    footprint 1.00 x 0.75.
 
-    The colour pass already split the two presses by hue -- gold on near-black
-    against safety orange on steel -- but they still shared a silhouette CLASS:
-    a bed, two posts with a window of daylight between them, a crown across the
-    top. Two objects the same size and the same outline in a game rendered at
-    480 px do not become two objects because their paint differs; a player
-    glancing sideways sees the same "П".
+    The stepped tower stays: it is what stops this reading as the plain press
+    with different paint, and the critic's silhouette pass agreed it works. The
+    defect is the outlet, which sat at 0.22 while the simulation spawned at
+    mouth_z(1.645) = 0.740 -- 38 cm apart, so the gold ducks appeared level with
+    the machine's waist and the hatch below them never opened on anything.
 
-    press_gold is now a SOLID STEPPED TOWER: no window, no visible posts, a
-    ziggurat of four setbacks narrowing to a gold cap. Against press's open
-    C-frame the difference is the 0.55 m of sky the plain press shows between
-    its legs -- 12 px of background colour that this one simply does not have --
-    and a top edge that steps in three times instead of running straight across.
+    The recess, the ram and the anvil all move to that height, which puts the
+    working face where a player standing in front of it is already looking, and
+    the mouth is the anvil's own outfeed.
 
-    Height is 1.645 EXACTLY (src/data/machines.js `press_gold`); the cap is an
-    axis-aligned box placed at H by construction. Footprint stays 1.00 x 0.75."""
-    H = 1.645
+    THE RAM IS A SEPARATE MODEL (press_gold_ram.glb); see b_press_gold_ram."""
+    H, W, D = 1.645, 1.00, 0.75
     P = []
-    # Every setback OVERLAPS the one below by 30 mm rather than sitting on it:
-    # a stack of flush slabs is a stack of coincident faces, which is exactly
-    # what tools/check-coplanar.py counts.
     P.append(box("plinth", (0.98, 0.72, 0.13), (0, 0, 0.065), "dark"))
     P.append(box("bed", (0.90, 0.64, 0.14), (0, 0, 0.18), "steel_d"))
     P.append(box("body", (0.84, 0.58, 0.81), (0, 0, 0.625), "dark"))
@@ -2022,45 +3037,46 @@ def b_press_gold():
     P.append(box("step2", (0.76, 0.54, 0.18), (0, 0, 1.23), "duck"))
     P.append(box("step3", (0.56, 0.42, 0.18), (0, 0, 1.38), "dark"))
     P.append(box("cap", (0.38, 0.30, H - 1.44), (0, 0, (1.44 + H)/2), "duck"))
-    # The working face, sunk into the front of the tower so the machine still
-    # reads as a press: a gold ram in a dark recess above a gold anvil.
-    P.append(box("recess", (0.60, 0.10, 0.56), (0, -0.31, 0.68), "black"))
-    P.append(cyl("ram", 0.13, 0.34, (0, -0.335, 0.80), "duck", verts=10))
-    P.append(box("head", (0.46, 0.16, 0.14), (0, -0.34, 0.58), "duck"))
-    P.append(box("anvil", (0.56, 0.18, 0.09), (0, -0.36, 0.325), "duck"))
-    for sx in (-1, 1):                      # zlote listwy na krawedziach wiezy
+    # The working face, sunk into the tower AT the spawn height.
+    P.append(box("recess", (0.62, 0.11, 0.60), (0, -0.305, 0.94), "black"))
+    P.append(box("anvil", (0.54, 0.17, 0.08), (0, -0.325, 0.905), "duck"))
+    chute(P, H, D, w=0.36, h=0.24, deep=0.18, frame="duck", jamb="duck")
+    for sx in (-1, 1):                     # gold inlays on the tower edges
         P.append(box("inlay", (0.05, 0.60, 0.80), (sx*0.415, 0, 0.64), "duck"))
-    P.append(cyl("gauge", 0.10, 0.05, (0, -0.345, 1.085), "white", verts=10, rot=(math.radians(90), 0, 0)))
-    P.append(box("out", (0.44, 0.16, 0.14), (0, -0.36, 0.22), "dark"))
-    P.append(box("outlip", (0.50, 0.08, 0.04), (0, -0.43, 0.16), "duck"))
+    P.append(cyl("gauge", 0.09, 0.05, (0, -0.345, 1.30), "white", verts=10,
+                 rot=(math.radians(90), 0, 0)))
     return finish(P, "press_gold")
 
 def b_reactor():
-    """Reaktor rzadkosciowy - rdzen w klatce preetow chlodzacych. Tylko top tier."""
+    """Rarity Reactor. H 1.53, footprint 1.50 x 1.50.
+
+    Outlet moves from 0.24 to mouth_z(1.53) = 0.689, which happens to be the core
+    height -- so the machine now hands the duck out of the glowing part rather
+    than out of a box below it, and the six cooling rods get a gap cut in the
+    front pair for it to pass through. The rod cage was already the best thing
+    about this model's outline and it is left alone."""
+    H, W, D = 1.53, 1.50, 1.50
     P = []
     N = 10
     P.append(cyl("vessel", 0.42, 1.10, (0, 0, 0.72), "teal", verts=N))
     P.append(cone("dome", 0.42, 0.16, 0.26, (0, 0, 1.40), "teal_lt", verts=N))
     P.append(cyl("skirt", 0.52, 0.20, (0, 0, 0.10), "dark", verts=N))
     P.append(cyl("core", 0.20, 0.60, (0, 0, 0.72), "duck", verts=8))
-    # okna rdzenia: cztery pionowe szczeliny w plaszczu
     for i in range(4):
         a = math.radians(i*90 + 45)
         P.append(box("slit%d" % i, (0.14, 0.06, 0.50), (math.sin(a)*0.42, math.cos(a)*0.42, 0.72),
                      "duck", rot=(0, 0, -a)))
-    # Obreecze i cokol na 8 segmentach, prety szesciokatne: pierwsza wersja
-    # wyszla 848 trojkatow przy budzecie 800, a roznicy w sylwetce nie widac.
     for z in (0.34, 1.02):
-        ring_xy("band", 0.45, 8, 2*math.pi*0.45/8*1.45, 0.10, 0.07, z, "hazard", P)
-    for i in range(6):                      # prety chlodzace dokola
-        a = math.radians(i*60)
+        ring_xy("band", 0.45, 8, 2*math.pi*0.45/8*1.45, 0.10, 0.07, z, "hazard", P, sep=0.0025)
+    # Rods, with the front pair pulled aside so the mouth has a clear run out.
+    for i in range(6):
+        a = math.radians(i*60 + 30)
         P.append(cyl("rod%d" % i, 0.055, 1.30, (math.sin(a)*0.62, math.cos(a)*0.62, 0.68), "steel", verts=6))
         P.append(cyl("rodc%d" % i, 0.075, 0.09, (math.sin(a)*0.62, math.cos(a)*0.62, 1.36), "hazard", verts=6))
-    ring_xy("plinth", 0.66, 8, 2*math.pi*0.66/8*1.40, 0.22, 0.12, 0.06, "concrete", P)
-    P.append(box("out", (0.40, 0.24, 0.24), (0, -0.52, 0.24), "dark"))
-    P.append(box("outlip", (0.46, 0.10, 0.05), (0, -0.64, 0.18), "hazard"))
+    ring_xy("plinth", 0.66, 8, 2*math.pi*0.66/8*1.40, 0.22, 0.12, 0.06, "concrete", P, sep=0.0025)
+    P.append(box("duct", (0.46, 0.30, 0.34), (0, -0.60, 0.689), "dark"))
+    chute(P, H, D, w=0.34, h=0.26, deep=0.20)
     return finish(P, "reactor", merge=0.001)
-
 
 # ================================================== FAZA 1 - GRUPA 3
 # Budowle. Dwanascie to czysta danina (kind wall / ramp / conveyor / blower bez
@@ -2211,10 +3227,36 @@ def b_slide():
     for i in range(6):                      # przetloczenia dna
         y, z = T(-1.20 + i*0.48, 0.035)
         P.append(box("rib%d" % i, (0.74, 0.05, 0.02), (0, y, z), "steel_d", rot=(ang, 0, 0)))
+    # A-FRAMES, not single pins on the centreline.
+    #
+    # THE BED, ITS ANGLE, ITS LENGTH AND ITS HEIGHT ARE FROZEN: src/data/
+    # buildings.js `slide` carries slope.rise 0.706 / run 2.90 and a
+    # collider.surface of half [0.4667, 0.06, 1.4917] at -13.7 degrees, all
+    # measured off this mesh, and the row is not mine to edit. So every literal
+    # above this line is untouched and the change is entirely in the legs.
+    #
+    # Four single 0.09 posts standing on the model's centreline is the worst
+    # possible support for a 3 m object: from the side they hide behind each
+    # other into one smear, and from the front they are a single 2 px line under
+    # a 22 px trough, so the slide read as a chute lying on the floor. Splayed
+    # pairs put two diagonals and a triangle of daylight under every station,
+    # and they get WIDER as they get taller, which is what makes the descent
+    # readable from the front as well as the flank.
+    # The legs stay EXACTLY floor-to-bed, spanning 0 .. zb with no tilt, and
+    # that is not laziness -- it is the height contract. finish() reports
+    # max_z - min_z, so a leg tilted by even 8 degrees lifts its own foot 3 mm
+    # off the floor, the model's minimum becomes 3 mm and its stated height
+    # drops from the 1.4546 that src/data/buildings.js `slide` was measured
+    # against. The splay is done with POSITION, and the diagonal the eye wants
+    # is a separate brace between the pair.
     for i, s in enumerate((-1.20, -0.30, 0.60, 1.32)):   # nogi malejace ku przodowi
         yb, zb = T(s, -0.03)
-        P.append(box("leg%d" % i, (0.09, 0.09, zb), (0, yb, zb/2), "steel"))
-        P.append(box("tie%d" % i, (0.62, 0.06, 0.06), (0, yb, zb*0.45), "steel_d"))
+        spl = 0.10 + 0.20 * (zb / 1.30)     # splay grows with the leg's height
+        for sx in (-1, 1):
+            P.append(box("leg%d%d" % (i, sx), (0.075, 0.075, zb), (sx*spl, yb, zb/2), "steel"))
+        P.append(box("vee%d" % i, (2*spl + 0.08, 0.055, 0.055), (0, yb, zb*0.30), "steel_d",
+                     rot=(0, math.radians(9), 0)))
+        P.append(box("tie%d" % i, (2*spl + 0.08, 0.055, 0.055), (0, yb, zb*0.68), "steel_d"))
     y, z = T(-L/2 - 0.05, 0.03)             # jezyk zjazdu przy podlodze
     P.append(box("lip", (0.80, 0.18, 0.04), (0, y, z), "hazard", rot=(ang, 0, 0)))
     y, z = T(L/2 - 0.02, 0.16)              # sciana na szczycie
@@ -2255,8 +3297,22 @@ def b_fan_strong():
     # coincident faces is the biggest z-fight the catalog could contain.
     for sx in (-1, 1):
         P.append(box("jamb", (0.14, 0.44, 1.60), (sx*0.65, 0.02, ZC), "steel"))
-    P.append(box("sill", (1.24, 0.40, 0.16), (0, 0.035, ZC - 0.70), "steel"))
-    P.append(box("lintel", (1.24, 0.40, 0.16), (0, 0.035, ZC + 0.70), "steel"))
+    # Sill and lintel are LOUVRED now, not slabs: five fins each, with air
+    # between them. Same outline, but the two 1.24 x 0.40 blanks that used to
+    # cap the duct top and bottom are 10 px of solid steel each at 10 m, and
+    # they were the only closed part of a machine whose entire selling point is
+    # that it moves air. Holes read; surface detail does not.
+    for sz in (-1, 1):
+        P.append(box("rail%d" % sz, (1.24, 0.40, 0.055), (0, 0.035, ZC + sz*0.775), "steel"))
+        for i in range(5):
+            # Alternating span. Five fins stacked 30 mm apart overlap each other
+            # in projection once they are tilted, so a shared pair of end faces
+            # at x = +-0.59 is 48 coplanar pairs -- the whole of this model's
+            # regression when the louvres went in. 12 mm of alternation is
+            # 0.26 px at play distance and removes all 48.
+            P.append(box("fin%d%d" % (sz, i), (1.18 - (0.012 if i % 2 else 0.0), 0.34, 0.035),
+                         (0, 0.035, ZC + sz*(0.670 + i*0.030)), "steel_d",
+                         rot=(math.radians(18 if sz > 0 else -18), 0, 0)))
     P.append(box("cap", (1.50, 0.52, H - 1.76), (0, 0.02, (1.76 + H)/2), "hazard"))
     # Rotor inside the square opening (z 0.36 .. 1.64, so r <= 0.64).
     P.append(cyl("hub", 0.19, 0.26, (0, 0, ZC), "orange", verts=10, rot=(math.radians(90), 0, 0)))
@@ -2265,7 +3321,24 @@ def b_fan_strong():
         P.append(box("blade%d" % i, (0.22, 0.06, 0.52),
                      (math.sin(a)*0.32, 0, ZC + math.cos(a)*0.32), "hazard",
                      rot=(math.radians(24), a, 0)))
-    P.append(box("motor", (0.24, 0.24, 0.24), (0, 0.30, ZC), "steel_d"))
+    # THE MOTOR IS A CYLINDER, AND THAT IS A SAFETY PROPERTY, NOT A STYLE ONE.
+    #
+    # src/render/rotor.js groups congruent parts by (triangle count, surface
+    # area within 0.2%) and then asks whether a group is a ring about the blow
+    # axis. The old motor was a 0.24 m CUBE: 12 triangles, area 0.290, against a
+    # blade's 12 triangles and area 0.295. Twelve equals twelve and 1.7% is not
+    # much of a margin -- the file's own comment records that at the previous
+    # 2% tolerance the motor joined the five blades, the six of them were not
+    # evenly spaced, the group was rejected and the fan span its CAGE.
+    #
+    # A tolerance is a number somebody can retune. A triangle count is not: an
+    # 8-gon cylinder bakes 28 triangles and a box bakes 12, so this motor can
+    # never enter the blades' bucket whatever anyone does to AREA_TOLERANCE.
+    # The area margin is kept wide as a second, independent line of defence --
+    # measured on the exported mesh by tools/check-rotor.py, reported with this
+    # pass, not guessed from these literals (finish() rescales x and y).
+    P.append(cyl("motor", 0.155, 0.30, (0, 0.34, ZC), "steel_d", verts=8,
+                 rot=(math.radians(90), 0, 0)))
     # Corner gussets: they square the outline off further and stop the frame
     # reading as an arch.
     for sx in (-1, 1):
@@ -2274,59 +3347,191 @@ def b_fan_strong():
     return finish(P, "fan_strong")
 
 def b_fan_vertical():
-    """Wiatrak pionowy - dmucha W GORE. Czeka na blow.pitchDegrees."""
+    """Wiatrak pionowy - dmucha W GORE. Otwarty kosz, nie stolik.
+
+    Three fixes, all of them about the same thing -- this piece had no hole in
+    it below the grille, so at 10 m it was a 22 px slab on a 22 px slab and read
+    as a little table rather than as a machine pointing at the sky.
+
+    1. THE SOLID DISC BASE IS GONE. A 0.84 m plate plus a 0.84 m hazard square
+       stacked on it was the widest, flattest, most closed thing in the model.
+       It is now a three-armed foot: same three struts, carried down to three
+       separate pads, with floor visible between them.
+    2. THE OUTLET FLARES. The grille sits on a cone that opens upward, so the
+       outline says "up" from the side as well as from above -- which is the one
+       fact that distinguishes this fan from the other two and was previously
+       carried only by four little bars you cannot resolve at play distance.
+    3. THE CAGE RING NO LONGER Z-FIGHTS. ring_xy stacked 14 overlapping boxes
+       at one height, so all 28 of their top and bottom faces sat in two shared
+       planes: 64 coplanar-overlap pairs. `sep` alternates the section height.
+
+    Height is 0.895 (src/data/buildings.js `fan_vertical`), owned by the four
+    outlet bars at z 0.88 + 0.015. Nothing else reaches it.
+
+    ROTOR SAFETY: the axis here is local +Y (blow.pitchDegrees 90), so the rotor
+    plane is the FLOOR plane. Congruent groups in it are the 4 blades at radius
+    0.22, the 3 struts at 0.36 and the ring's two 7-part groups at 0.40, and
+    detectRotor takes the closest -- the blades. The outlet bars are four
+    PARALLEL bars in a row, not a ring: their radii from their own centroid are
+    0.27, 0.09, 0.09, 0.27, so rotorFit rejects them on RADIUS_TOLERANCE before
+    it ever gets to spacing. That is why they were not made radial."""
     P = []
-    P.append(cyl("base", 0.42, 0.16, (0, 0, 0.08), "dark", verts=12))
-    ring_xy("ring", 0.40, 14, 0.20, 0.11, 0.11, 0.72, "steel", P)
+    # Trojnozna stopa: trzy ramiona zamiast talerza, podloga widoczna miedzy nimi.
+    for i in range(3):
+        a = math.radians(i*120)
+        sx_, sy_ = math.sin(a), math.cos(a)
+        P.append(box("arm%d" % i, (0.13, 0.46, 0.07), (sx_*0.21, sy_*0.21, 0.035), "dark",
+                     rot=(0, 0, -a)))
+        P.append(box("pad%d" % i, (0.22, 0.12, 0.05), (sx_*0.42, sy_*0.42, 0.025), "hazard",
+                     rot=(0, 0, -a)))
+        P.append(box("strut%d" % i, (0.07, 0.07, 0.70), (sx_*0.36, sy_*0.36, 0.37), "steel"))
+    P.append(cyl("stem", 0.12, 0.66, (0, 0, 0.35), "steel_d", verts=8))
+    ring_xy("ring", 0.40, 14, 0.20, 0.11, 0.11, 0.72, "steel", P, sep=0.006)
     P.append(cyl("hub", 0.15, 0.20, (0, 0, 0.72), "orange", verts=10))
     for i in range(4):                      # lopatki w plaszczyznie POZIOMEJ
         a = math.radians(i*90 + 20)
         P.append(box("blade%d" % i, (0.16, 0.34, 0.05),
                      (math.sin(a)*0.22, math.cos(a)*0.22, 0.72), "hazard",
                      rot=(math.radians(26), 0, -a)))
-    for i in range(3):                      # kosz nosny
-        a = math.radians(i*120)
-        P.append(box("strut%d" % i, (0.07, 0.07, 0.60), (math.sin(a)*0.36, math.cos(a)*0.36, 0.42), "steel"))
-    P.append(cyl("grille", 0.40, 0.04, (0, 0, 0.86), "steel_d", verts=14))
+    # Wylot ROZSZERZAJACY SIE ku gorze - stozek, nie plaski krazek.
+    # HAZARD, not steel_d. The outlet is the one part of this fan that says
+    # which way it blows, and a grey cone on a grey stem said it to nobody at
+    # 22 px -- the first version of this rework came out reading as a dark H.
+    # Powered orange is the palette's word for "this moves air", and putting it
+    # on the widest, highest, most sky-facing surface is the only way a 0.895 m
+    # object gets a colour statement at all.
+    P.append(cone("flare", 0.34, 0.46, 0.13, (0, 0, 0.825), "hazard", verts=14))
     for i in range(4):                      # krata wylotu - widac, ze dmucha w gore
         P.append(box("bar%d" % i, (0.78, 0.05, 0.03), (0, -0.27 + i*0.18, 0.88), "hazard"))
-    P.append(box("haz", (0.84, 0.84, 0.04), (0, 0, 0.165), "hazard"))
     return finish(P, "fan_vertical", merge=0.001)
 
 def b_vibe_floor():
-    """Wibrator podlogowy - tasmociag o ZEROWEJ wysokosci. Plaski collider."""
+    """Wibrator podlogowy - tasmociag o ZEROWEJ wysokosci. Plaski collider.
+
+    The hardest model in the set to make read, and the reason is arithmetic: at
+    10 m the whole piece is 44 x 22 px and only 3 px TALL. There is no
+    silhouette to win with, so this one has to be won on plan-view shape and
+    value contrast, which are the only two channels a 3 px object has.
+
+    What changed:
+      * Height owned by two things that are 0.1412 m tall and axis-aligned -- the
+        side kerbs and the two end drums -- rather than by an 8-gon motor's
+        outermost vertex, which is a number nobody could predict and which meant
+        the model's stated height was luck.
+      * The plate now runs the FULL 2.00 m and the kerbs the full 1.00, so every
+        extreme is a flat face and finish()'s snap factor is exactly 1.0 on both
+        axes. That is what lets vibe_floor_belt share this frame with
+        origin="raw".
+      * The ribs moved out into vibe_floor_belt and now TRAVEL. On a piece this
+        flat, motion is the only channel with any pixels in it at all, and the
+        row already carries the speed that drives it.
+      * Alternating hazard and steel ribs, so the travel is legible as movement
+        rather than as shimmer: a two-value pattern moving past a fixed kerb.
+
+    Height 0.1412 EXACTLY (src/data/buildings.js `vibe_floor`, collider half[1]
+    0.0706). The rib tops are that same 0.1412, so ducks ride ON the ribs."""
+    L, W, H = 2.00, 0.90, 0.1412
     P = []
-    L, W = 1.92, 0.92
+    # 84 triangles, so a shared plane here costs a bigger FRACTION of the model
+    # than anywhere else in the set -- a first pass had the plate, both kerbs,
+    # both drums and both shoes all standing on z = 0 and all agreeing on
+    # x = +-0.45 and z = +-1.00, which is 64 pairs out of 84 triangles, 76%.
+    # Ownership: the plate owns z = 0 and x = +-0.45, the kerbs own x = +-0.50
+    # and z = +-1.00 and y = 0.1412, and the drums stop short of all of them.
     P.append(box("plate", (W, L, 0.07), (0, 0, 0.035), "steel_d"))
-    for i in range(9):                      # poprzeczne zebra, po nich kaczki ida
-        P.append(box("rib%d" % i, (W - 0.08, 0.07, 0.035), (0, -L/2 + 0.16 + i*0.20, 0.085), "steel"))
-    for sx in (-1, 1):                      # krawezniki - 4 cm, kaczka je przejezdza
-        P.append(box("edge", (0.05, L, 0.10), (sx*(W/2 + 0.025), 0, 0.05), "hazard"))
-    for sy in (-1, 1):                      # skosne najazdy na obu koncach
-        P.append(box("ramp", (W, 0.14, 0.03), (0, sy*(L/2 + 0.05), 0.028), "hazard",
-                     rot=(math.radians(-sy*12), 0, 0)))
-    for sx in (-1, 1):                      # wibratory przykrecone pod plyta
-        P.append(cyl("mot", 0.07, 0.20, (sx*0.30, 0, 0.07), "orange", verts=8,
-                     rot=(0, math.radians(90), 0)))
-    for i in range(4):                      # zolte strzalki kierunku
-        P.append(box("ar%d" % i, (0.10, 0.24, 0.012), (0, -0.66 + i*0.44, 0.106), "hazard"))
+    for sx in (-1, 1):                      # krawezniki - kaczka je przejezdza
+        # 0.001 .. 0.1412: the kerbs, and only the kerbs, own the stated height.
+        P.append(box("edge", (0.044, L, H - 0.001), (sx*0.478, 0, 0.001 + (H - 0.001)/2), "hazard"))
+    for sy in (-1, 1):                      # bebny koncowe - miedzy nimi biegna zebra
+        P.append(box("drum", (0.88, 0.095, H - 0.006), (0, sy*0.9475, 0.002 + (H - 0.006)/2), "orange"))
+        P.append(box("shoe", (0.84, 0.16, 0.055), (0, sy*0.82, 0.004 + 0.0275), "dark"))
     return finish(P, "vibe_floor")
 
-def b_platform():
-    """Podest - plaski poziom 2x2 na czterech nogach. Kaczki po nim chodza."""
+
+def b_vibe_floor_belt():
+    """The MOVING half of `vibe_floor`: eight ribs, alternating hazard/steel.
+
+    HOW IT MOVES (same contract as conveyor_belt):
+      travel axis  local +Z.
+      period       0.22 m.
+      phase        (distance travelled) mod 0.22, distance being the integral of
+                   the row's belt.speed (1.0 m/s -- this is the slow one).
+      range        ribs sit at z = -0.88 + k*0.22 for k = 0..7, spanning
+                   -0.88 .. +0.66; a phase in [0, 0.22) keeps the leading rib
+                   at or under +0.88, which is where the end drum starts.
+    Rib tops are at 0.1412, which is collider.half[1] * 2 on the row: the duck
+    rides on the ribs, and the ribs are the part that moves.
+
+    origin="raw", and here it is exactly safe: b_vibe_floor's plate and kerbs
+    are axis-aligned at +-1.00 and +-0.50, so its snap factor is 1.0 on both
+    axes and these coordinates survive unscaled."""
+    H = 0.1412
     P = []
-    P.append(box("deck", (1.94, 1.94, 0.10), (0, 0, 0.55), "steel"))
-    for i in range(7):                      # kraty pokladu
-        P.append(box("gr%d" % i, (1.88, 0.16, 0.03), (0, -0.78 + i*0.26, 0.615), "steel_d"))
+    for k in range(8):
+        P.append(box("rib%d" % k, (0.80, 0.09, 0.085), (0, -0.88 + k*0.22, H - 0.0425),
+                     "hazard" if k % 2 else "steel"))
+    return finish(P, "vibe_floor_belt", origin="raw")
+
+def b_platform():
+    """Podest - plaski poziom 2x2 na czterech nogach. Kaczki po nim chodza.
+
+    THE DECK IS AN OPEN GRATING NOW, not a plate with bars laid on top of it.
+
+    That fixes the worst z-fight in my set by area: the deck's top face at
+    y 0.600 and the grating bars' bottom faces at the same y 0.600 were 28
+    coplanar-overlap pairs covering 2.08 m^2 -- a depth tie the size of the
+    whole platform, on a surface the player stands on and looks straight down
+    at. Sinking the bars into the deck would have fixed the tie and kept a
+    closed slab; opening the deck fixes it AND buys the silhouette something.
+
+    Nine bars with 6 cm of air between them means you see the floor through the
+    deck. At 10 m that is a 44 px square of stripes rather than a 44 px square
+    of flat grey, which is what separates a platform from the ice slab and the
+    roof -- the other two 2 x 2 flat things in the catalog.
+
+    TWO CONTRACTS, both exact by construction:
+      deck top     0.60 -- src/data/buildings.js `platform` puts its physics
+                   surface there (collider.surface offsetY 0.235 on a box whose
+                   centre is at 0.315). The bar tops are that 0.60.
+      height       0.63 -- owned by the four corner posts, which now stand
+                   3 cm proud of the deck as bollards. Previously the height was
+                   owned by the grating, so opening it up would have changed the
+                   model's stated size; a post that means to be the tallest
+                   thing is a better owner than a texture detail that happens
+                   to be."""
+    P = []
+    # Rama pokladu: cztery belki obwodowe, srodek OTWARTY.
+    # Deck plane 0.60 is shared by the two X-beams and the nine bars, so those
+    # two families must not OVERLAP in plan or their top faces are a depth tie:
+    # the bars stop at +-0.83 and the beams' inner faces are at 0.84. The
+    # Y-beams duck 5 mm under the plane instead, which is the same trick where
+    # a gap would have shown.
+    for sx in (-1, 1):
+        # beamX owns the 0.60 deck plane and beamY ducks 5 mm under it; beamY is
+        # also 0.12 wide against beamX's 0.13, so the two cannot share a flank
+        # where they cross at the corners either.
+        P.append(box("beamX", (1.94, 0.13, 0.13), (0, sx*0.900, 0.535), "steel"))
+        P.append(box("beamY", (0.12, 1.92, 0.12), (sx*0.900, 0, 0.535), "steel"))
+    for i in range(9):                      # kraty pokladu - z przeswitem
+        P.append(box("gr%d" % i, (1.66, 0.14, 0.09), (0, -0.76 + i*0.19, 0.555), "steel_d"))
+    for i in range(3):                      # belki nosne pod krata
+        P.append(box("joist%d" % i, (0.10, 1.70, 0.11), (-0.60 + i*0.60, 0, 0.50), "steel"))
     for sx in (-1, 1):
         for sy in (-1, 1):
-            P.append(box("leg", (0.12, 0.12, 0.55), (sx*0.84, sy*0.84, 0.275), "steel"))
+            # The feet alone touch z = 0; the legs start 0.02 above them.
+            P.append(box("leg", (0.12, 0.12, 0.53), (sx*0.84, sy*0.84, 0.285), "steel"))
             P.append(box("foot", (0.20, 0.20, 0.05), (sx*0.84, sy*0.84, 0.025), "dark"))
+            # Bollard: 3 cm proud of the deck, and the owner of the 0.63 height.
+            # Its underside is at 0.48, clear of the beams' 0.47.
+            P.append(box("boll", (0.14, 0.14, 0.15), (sx*0.84, sy*0.84, 0.555), "hazard"))
         P.append(box("braceX", (1.72, 0.07, 0.07), (0, sx*0.84, 0.20), "steel_d"))
-        P.append(box("braceY", (0.07, 1.72, 0.07), (sx*0.84, 0, 0.20), "steel_d"))
-    for sx in (-1, 1):                      # zolty krawedziowy pasek
-        P.append(box("nose", (2.00, 0.07, 0.05), (0, sx*0.97, 0.60), "hazard"))
-        P.append(box("noseY", (0.07, 2.00, 0.05), (sx*0.97, 0, 0.60), "hazard"))
+        P.append(box("braceY", (0.065, 1.72, 0.065), (sx*0.84, 0, 0.205), "steel_d"))
+    # noseY owns x = +-1.00 and nose owns z = +-1.00, so the two do not meet on
+    # a plane at the corners; and both sit 5 mm under the deck so neither can
+    # tie with beamX's 0.60.
+    for sx in (-1, 1):
+        P.append(box("nose", (1.90, 0.06, 0.055), (0, sx*0.97, 0.5660), "hazard"))
+        P.append(box("noseY", (0.06, 1.94, 0.050), (sx*0.97, 0, 0.5700), "hazard"))
     return finish(P, "platform")
 
 def b_stairs():
@@ -2342,14 +3547,36 @@ def b_stairs():
 
     Wysokosc dobrana pod podest: 4 x 0.15 = 0.60, czyli dokladnie gorna plaszczyzna
     pokladu b_platform. Te dwie budowle maja do siebie pasowac."""
+    #
+    # THE STEPS ARE NO LONGER NESTED SOLIDS, and that is a z-fighting fix worth
+    # 91 of this model's 123 coplanar-overlap pairs -- the most of anything in
+    # the transport set except the tube.
+    #
+    # Four boxes all standing on z = 0 and all 0.94 wide share three planes
+    # exactly: the floor, and both flanks. Every pair of them therefore overlaps
+    # in three places at gap zero, and the biggest single cluster was 5.18 m^2
+    # of coincident UNDERSIDE. It never flickered in a screenshot because the
+    # inner faces are hidden -- until a camera gets low, or the sun moves, or
+    # somebody turns on a shadow pass, and then the whole staircase strobes.
+    #
+    # Now each step is a SLAB that spans only its own rise, dropping 0.01 into
+    # the step below so the two solids overlap instead of touching, and each is
+    # 3 mm narrower than the one in front so no two flanks share a plane. The
+    # object is still solid to the ground -- which is the fact that separates it
+    # from the conveyor and must not be given up -- and still a cuboid's worth
+    # of honest volume for the collider.
     P = []
     N, RISE, RUN = 4, 0.15, 0.45
-    BACK, W = 0.98, 0.94
+    BACK, W = 1.00, 0.94
     for i in range(N):
         yf = -0.98 + i*RUN                  # czolo stopnia
         d = BACK - yf
         h = (i + 1)*RISE
-        P.append(box("step%d" % i, (W, d, h), (0, yf + d/2, h/2), "steel"))
+        z0 = max(0.0, i*RISE - 0.01)        # 0 dla pierwszego, inaczej zachodzi
+        # d shrinks by 3 mm a step as well as W: all four steps ran back to
+        # y = +1.00 and shared that plane too, which was the last 9 pairs.
+        P.append(box("step%d" % i, (W - i*0.003, d - i*0.003, h - z0),
+                     (0, yf + (d - i*0.003)/2, (z0 + h)/2), "steel"))
         # WHITE nosings, not hazard. Stairs and a conveyor were the same object
         # at play distance: both a steel deck banded with the same yellow, and
         # from 10 m the only difference was whether the bands ran across or
@@ -2359,19 +3586,41 @@ def b_stairs():
         P.append(box("nose%d" % i, (W + 0.04, 0.07, 0.035), (0, yf + 0.02, h - 0.015), "white"))
         P.append(box("riser%d" % i, (W + 0.02, 0.035, RISE - 0.05), (0, yf, h - RISE/2 - 0.02), "steel_d"))
     for sx in (-1, 1):                      # krawezniki boczne, TYLKO przy podstawie
-        P.append(box("skirt", (0.03, 1.96, 0.10), (sx*0.485, 0, 0.05), "steel_d"))
-    P.append(box("foot", (1.00, 0.10, 0.04), (0, -0.95, 0.02), "dark"))
+        # 0.028 at 0.486, so the inner face is 0.472 and NOT on step 0's own
+        # 0.470 flank -- an opposite-facing tie over 0.198 m^2 otherwise.
+        P.append(box("skirt", (0.028, 2.00, 0.10), (sx*0.486, 0, 0.05), "steel_d"))
+    # The foot plate and the skirts now run to +-1.00, so BOTH horizontal
+    # extents are set by flat axis-aligned faces and finish()'s snap factor is
+    # exactly 1.0. It used to be 1.0101 in y (the model measured 1.98 and was
+    # stretched to 2.00), which quietly moved the nosing line that
+    # src/data/buildings.js measures its -17.0 degree surface pitch off.
+    # 0.02 deep, and that is deliberate: any deeper and its underside would
+    # overlap step 0's underside in plan, which is a coincident pair at z = 0 --
+    # exactly the defect this rewrite exists to remove.
+    P.append(box("foot", (1.00, 0.02, 0.04), (0, -0.99, 0.02), "dark"))
     return finish(P, "stairs")
 
 def b_roof():
     """Dach - zadaszenie 2x2 na dwoch slupach. Kaczki pod nim, deszczu i tak nie ma."""
     P = []
-    P.append(box("sheet", (1.94, 1.94, 0.07), (0, 0, 1.72), "steel_d"))
+    # Butting a part's underside onto another part's top face at EXACTLY the same
+    # height is the single commonest tie in this file, and on the canopy it was
+    # also the biggest: 2.17 m^2 of steel_d against steel where the corrugation
+    # sat on the sheet -- a whole roof of flicker, seen from below, which is the
+    # only side of a canopy anyone looks at. Everything that stacks here now
+    # overlaps its neighbour by a few millimetres instead of meeting it exactly.
+    # The CORRUGATION is left exactly where it was, because its top face is the
+    # top of the model and footprint[1] = 1.805 in src/data/buildings.js is a
+    # contract. The sheet under it is thinned by 4 mm instead, which moves an
+    # interior face and nothing else.
+    P.append(box("sheet", (1.94, 1.94, 0.066), (0, 0, 1.718), "steel_d"))
     for i in range(8):                      # blacha trapezowa
         P.append(box("corr%d" % i, (0.14, 1.94, 0.05), (-0.84 + i*0.24, 0, 1.78), "steel"))
     P.append(box("edge", (2.00, 2.00, 0.05), (0, 0, 1.665), "hazard"))
     for sx in (-1, 1):
-        P.append(box("post", (0.13, 0.13, 1.66), (sx*0.82, 0.82, 0.83), "steel"))
+        # 0.008 off the floor and 4 mm past the beam: the post used to share its
+        # underside with the base plate and its top with the beam at once.
+        P.append(box("post", (0.13, 0.13, 1.656), (sx*0.82, 0.82, 0.836), "steel"))
         P.append(box("base", (0.24, 0.24, 0.06), (sx*0.82, 0.82, 0.03), "dark"))
         P.append(box("brace", (0.30, 0.30, 0.06), (sx*0.70, 0.70, 1.52), "steel_d",
                      rot=(0, 0, math.radians(45))))
@@ -2380,18 +3629,45 @@ def b_roof():
     return finish(P, "roof")
 
 def b_ice_slide():
-    """Slizg lodowy - plyta o niemal zerowym tarciu. collider.friction w wierszu."""
+    """Slizg lodowy - plyta o niemal zerowym tarciu. collider.friction w wierszu.
+
+    WORST COINCIDENT-FACE RATIO IN THE GAME: 152 of 180 triangles, 84%. Not the
+    ring idiom -- this one is flat slabs. The slab, both edge rails and all four
+    studs were each authored from z=0 upwards, so SEVEN parts shared the ground
+    plane, and the rails and studs additionally shared the outer faces at
+    +-1.00. Every one of those is a depth tie between two different materials
+    (glass/teal, teal/hazard), which is the kind that flickers as a visible
+    colour change rather than as noise.
+
+    The studs alone now touch z=0 and reach the full 0.15, so they are the only
+    part defining either end of the height and nothing else has to. Everything
+    else is lifted 4 mm (0.09 px at play distance) and the studs are pulled 4 mm
+    inside the rails' outer face. No triangle is added or removed.
+
+    REPORTED, NOT FIXED: at 0.15 m this piece is 3 px tall at 10 m. That is
+    below the height at which any silhouette change could be read, so ice_slide
+    can only ever be told from the other floor pieces by COLOUR. Its height is
+    `footprint[1]` and `collider.half[1]` in src/data/buildings.js, which is not
+    mine to edit -- see the report."""
     P = []
-    P.append(box("slab", (1.94, 1.94, 0.09), (0, 0, 0.045), "glass"))
+    # Four different floors and four different ceilings, so no two parts share
+    # either. The studs keep 0.000 and 0.150 because they are what the height
+    # contract is measured on.
+    P.append(box("slab", (1.94, 1.94, 0.087), (0, 0, 0.003 + 0.087/2), "glass"))
     P.append(box("sheen", (1.80, 1.80, 0.03), (0, 0, 0.10), "teal_lt"))
     for i in range(5):                      # rysy na lodzie, plytkie i nieregularne
         P.append(box("crack%d" % i, (1.60 - i*0.18, 0.03, 0.012), (0.05*i, -0.62 + i*0.31, 0.117),
                      "white", rot=(0, 0, math.radians(-9 + i*5))))
     for sx in (-1, 1):                      # obramowanie - bez niego plyta znika na betonie
-        P.append(box("edgeX", (2.00, 0.08, 0.13), (0, sx*0.96, 0.065), "teal"))
-        P.append(box("edgeY", (0.08, 2.00, 0.13), (sx*0.96, 0, 0.065), "teal"))
+        # The two rails cross at the corners, so they must not agree on a floor,
+        # a ceiling or an outer face. edgeY is shortened to 1.84 so it butts
+        # BETWEEN the edgeX pair instead of crossing through their end caps at
+        # x = +-1.00, which is where the last of the teal/teal ties lived.
+        P.append(box("edgeX", (2.00, 0.08, 0.125), (0, sx*0.96, 0.005 + 0.125/2), "teal"))
+        P.append(box("edgeY", (0.08, 1.84, 0.121), (sx*0.96, 0, 0.007 + 0.121/2), "teal"))
         for sy in (-1, 1):
-            P.append(box("stud", (0.16, 0.16, 0.15), (sx*0.92, sy*0.92, 0.075), "hazard"))
+            # The only parts touching z=0 and the only parts reaching 0.15.
+            P.append(box("stud", (0.16, 0.16, 0.15), (sx*(0.92 - 0.004), sy*(0.92 - 0.004), 0.075), "hazard"))
     return finish(P, "ice_slide")
 
 def b_pit_kerb():
@@ -2463,7 +3739,9 @@ def b_bumper():
     """Odbijacz - gumowy grzyb, ktory odrzuca kaczki. collider.restitution."""
     P = []
     P.append(cyl("plinth", 0.46, 0.10, (0, 0, 0.05), "dark", verts=12))
-    P.append(cyl("skirt", 0.42, 0.16, (0, 0, 0.18), "hazard", verts=12))
+    # 0.176, not 0.18: the skirt's underside sat exactly on the plinth's top at
+    # 0.100 -- 0.56 m^2 of dark against hazard, the widest tie on the piece.
+    P.append(cyl("skirt", 0.42, 0.16, (0, 0, 0.176), "hazard", verts=12))
     P.append(cyl("body", 0.36, 0.40, (0, 0, 0.44), "rubber", verts=12))
     P.append(cone("cap", 0.40, 0.20, 0.20, (0, 0, 0.72), "red", verts=12))
     P.append(cyl("top", 0.20, 0.07, (0, 0, 0.85), "white", verts=10))
@@ -2471,7 +3749,7 @@ def b_bumper():
         a = math.radians(i*60)
         P.append(box("rib%d" % i, (0.09, 0.07, 0.36), (math.sin(a)*0.37, math.cos(a)*0.37, 0.44),
                      "red", rot=(0, 0, -a)))
-    ring_xy("ring", 0.44, 12, 0.24, 0.09, 0.05, 0.27, "white", P)
+    ring_xy("ring", 0.44, 12, 0.24, 0.09, 0.05, 0.27, "white", P, sep=0.0015)
     return finish(P, "bumper", merge=0.001)
 
 def b_trampoline():
@@ -2480,16 +3758,18 @@ def b_trampoline():
     R, N = 0.66, 12
     P.append(cyl("mat", R, 0.05, (0, 0, 0.44), "dark", verts=N))
     P.append(cyl("matt", R - 0.06, 0.02, (0, 0, 0.475), "teal", verts=N))
-    ring_xy("frame", R + 0.06, N, 2*math.pi*(R+0.06)/N*1.45, 0.13, 0.10, 0.46, "hazard", P)
+    ring_xy("frame", R + 0.06, N, 2*math.pi*(R+0.06)/N*1.45, 0.13, 0.10, 0.46, "hazard", P, sep=0.0015)
     for i in range(N):                      # sprezyny promieniowe
         a = math.radians(i*360.0/N + 15)
-        P.append(box("spr%d" % i, (0.05, 0.14, 0.05), (math.sin(a)*(R + 0.02), math.cos(a)*(R + 0.02), 0.46),
+        # The springs do not overlap each other, but they all sit at the same z
+        # with the same height, so each one ties with the frame ring above it.
+        P.append(box("spr%d" % i, (0.05, 0.14, 0.05 - alt(i)), (math.sin(a)*(R + 0.02), math.cos(a)*(R + 0.02), 0.46),
                      "steel", rot=(0, 0, -a)))
     for i in range(6):                      # nogi
         a = math.radians(i*60 + 30)
         P.append(box("leg%d" % i, (0.07, 0.07, 0.46), (math.sin(a)*(R + 0.02), math.cos(a)*(R + 0.02), 0.23),
                      "steel_d", rot=(math.radians(-7)*math.cos(a), math.radians(7)*math.sin(a), 0)))
-    ring_xy("footring", R + 0.08, 8, 2*math.pi*(R+0.08)/8*1.40, 0.14, 0.05, 0.025, "dark", P)
+    ring_xy("footring", R + 0.08, 8, 2*math.pi*(R+0.08)/8*1.40, 0.14, 0.05, 0.025, "dark", P, sep=0.0015)
     for i in range(4):                      # strzalki w gore na macie
         a = math.radians(i*90)
         P.append(box("ar%d" % i, (0.08, 0.22, 0.015), (math.sin(a)*0.30, math.cos(a)*0.30, 0.49),
@@ -2507,16 +3787,37 @@ def b_trampoline():
 # roznily sie SYLWETKA. Inaczej gracz ma cztery wiersze i jeden przedmiot.
 
 def b_sack():
-    """Worek - miekki, przewiazany u gory. Wnetrze 0.62 x 0.62, kaczka ma 0.18."""
+    """Worek - miekki, przewiazany u gory. Wnetrze 0.62 x 0.62, kaczka ma 0.18.
+
+    THE ONE STORAGE ROW THAT DECLARED NO CAVITY. Every other container calls
+    cavity() so finish() can push the real inner box through the same centring
+    and grid-snap scale as the mesh; this one did not, so the numbers in
+    src/data/tools.js were DERIVED by hand from these literals instead of
+    measured out of the export. cavity() below closes that -- see the note on it
+    for what the measured box disagrees with the hand-derived one about."""
     P = []
     N = 10
+    BANDS = ((0.30, 0.16, 0.32), (0.34, 0.44, 0.28), (0.26, 0.66, 0.20))
+    WALL = 0.03
     for i in range(N):                      # scianka z segmentow, lekko baryklowata
         a = math.radians(i*360.0/N)
-        for j, (r, z, h) in enumerate(((0.30, 0.16, 0.32), (0.34, 0.44, 0.28), (0.26, 0.66, 0.20))):
-            P.append(box("w%d%d" % (i, j), (2*math.pi*r/N*1.45, 0.03, h),
+        for j, (r, z, h) in enumerate(BANDS):
+            # Spun about Z, overlapping, so each band shared a top and a bottom
+            # cap across all ten segments: 284 of 588 triangles were tied in the
+            # depth buffer, the worst ratio in the item tab after the pit rim.
+            P.append(box("w%d%d" % (i, j), (2*math.pi*r/N*1.45, WALL, h - alt(i)),
                          (math.sin(a)*r, math.cos(a)*r, z), "wood_lt", rot=(0, 0, -a)))
     P.append(cyl("bot", 0.29, 0.04, (0, 0, 0.02), "wood", verts=N))
-    ring_xy("tie", 0.22, N, 2*math.pi*0.22/N*1.5, 0.07, 0.09, 0.80, "rust", P)
+    ring_xy("tie", 0.22, N, 2*math.pi*0.22/N*1.5, 0.07, 0.09, 0.80, "rust", P, sep=0.0015)
+    # The cavity, measured rather than derived. Floor is the top of `bot`
+    # (0.04); the ceiling is the underside of the tie ring (0.80 - 0.09/2).
+    # The horizontal limit is the NARROWEST band over that span, which is the
+    # neck at r 0.26, inner radius 0.26 - WALL/2 = 0.245 -- and the lattice is
+    # rectangular while the sack is round, so it is the square INSCRIBED in that
+    # radius, the same rule the bucket's cavity uses.
+    neck = min(r for r, _z, _h in BANDS) - WALL/2
+    ins = neck / math.sqrt(2.0)
+    cavity("sack", (-ins, ins), (-ins, ins), (0.04, 0.80 - 0.045))
     for i in range(5):                      # zmarszczona szyjka nad przewiazaniem
         a = math.radians(i*72)
         P.append(box("fold%d" % i, (0.14, 0.07, 0.20), (math.sin(a)*0.17, math.cos(a)*0.17, 0.94),
@@ -2579,31 +3880,116 @@ def b_bucket_leaky():
     return finish(P, "bucket_leaky", merge=0.001)
 
 def b_dumper():
-    """Wywrotka - koryto na dwoch kolach, przechyla sie do przodu."""
+    """Wywrotka - koryto na dwoch kolach, przechyla sie do przodu.
+
+    The whole barrow, chassis and trough joined, which is what the shop icon and
+    the hotbar want and what src/data/tools.js measures its footprint against.
+    The parts come from _dumper_parts() so that this model and the two animated
+    halves below cannot drift: one copy of every literal, three exports."""
+    return finish(_dumper_parts(False) + _dumper_parts(True), "dumper", merge=0.001)
+
+
+# ================================================== THE TIPPER, IN TWO PIECES
+# The Tipper's data row already says `tipToEmpty: true`, and until now that was
+# a sentence in a JSON file with nothing on screen behind it: the trough, the
+# one part whose whole job is to rotate, was welded into the same mesh as the
+# wheels. These two builders split it, following the gambling box's precedent --
+# a SEPARATE model with a stated hinge -- rather than the rotor.js route, which
+# only handles rotationally symmetric congruent groups (fans).
+#
+# THE SCALE PROBLEM, AND WHY THESE TWO ARE NOT ORDINARY BUILDERS.
+# finish() ends by scaling X and Y so the exported bounding box hits FOOTPRINT
+# exactly, and the factors it computes depend on the bounding box of WHATEVER
+# PART LIST IT IS GIVEN. Build the chassis on its own and it gets its own,
+# different factors -- the body would come out a different width from the trough
+# that is supposed to sit in it, and both would differ from `dumper`. So both
+# builders below take the part list through the transform b_dumper's list gets,
+# measured off that list and stated here once:
+DUMPER_FX, DUMPER_FY = 1.1682242417983177, 0.9722222479773164
+DUMPER_CX, DUMPER_CY, DUMPER_MINZ = 0.0, -0.07999998331069946, 0.0
+# The hinge, in the builder's own coordinates: the axis of the `pivot` cylinder
+# that b_dumper already draws across the frame at (0, 0.30, 0.46), spun 90 deg
+# about Y so it lies along X. It was always the tipping axis; nothing rotated
+# about it.
+DUMPER_HINGE = (0.0, 0.30, 0.46)
+
+
+def _dumper_parts(trough):
+    """The Tipper's part list, split. `trough` picks which half you get, so the
+    two halves cannot drift apart: there is one copy of every literal."""
     P = []
     tw, td, th, t = 1.02, 1.24, 0.44, 0.05
-    P.append(box("bot", (tw, td, t), (0, 0.06, 0.52), "blue"))
-    for sx in (-1, 1):
-        P.append(box("sx", (t, td, th), (sx*(tw/2), 0.06, 0.52 + th/2), "blue"))
-    P.append(box("back", (tw, t, th), (0, 0.06 + td/2, 0.52 + th/2), "blue"))
-    P.append(box("front", (tw, t, th*0.55), (0, 0.06 - td/2, 0.52 + th*0.28), "blue"))
     ring = 0.05
-    P.append(box("rimF", (tw + 0.05, ring, ring), (0, 0.06 - td/2, 0.52 + th), "hazard"))
-    P.append(box("rimB", (tw + 0.05, ring, ring), (0, 0.06 + td/2, 0.52 + th), "hazard"))
-    for sx in (-1, 1):
-        P.append(box("rimS", (ring, td, ring), (sx*(tw/2), 0.06, 0.52 + th), "hazard"))
-        P.append(box("frame", (0.07, 1.34, 0.07), (sx*0.44, 0.10, 0.44), "steel_d"))
-        P.append(box("leg", (0.07, 0.07, 0.40), (sx*0.44, -0.48, 0.20), "steel"))
-        P.append(box("axle", (0.06, 0.06, 0.24), (sx*0.30, 0.52, 0.34), "steel"))
-        P.append(cyl("wheel", 0.30, 0.13, (sx*0.44, 0.52, 0.30), "rubber", verts=12,
+    if trough:
+        P.append(box("bot", (tw, td, t), (0, 0.06, 0.52), "blue"))
+        for sx in (-1, 1):
+            P.append(box("sx", (t, td, th), (sx*(tw/2), 0.06, 0.52 + th/2), "blue"))
+        P.append(box("back", (tw, t, th), (0, 0.06 + td/2, 0.52 + th/2), "blue"))
+        P.append(box("front", (tw, t, th*0.55), (0, 0.06 - td/2, 0.52 + th*0.28), "blue"))
+        # The four rim bars used to sit flush with the wall they cap -- same
+        # outer plane, hazard against blue -- which is 95 of the Tipper's 408
+        # tied pairs and ALL of them, since the chassis has none. Each bar is
+        # nudged 4 mm inboard of its wall, and the side bars 3 mm DOWN (never up:
+        # the rim's top face is the model's 0.985 height contract).
+        P.append(box("rimF", (tw + 0.05, ring, ring), (0, 0.06 - (td/2 - 0.004), 0.52 + th), "hazard"))
+        P.append(box("rimB", (tw + 0.05, ring, ring), (0, 0.06 + (td/2 - 0.004), 0.52 + th), "hazard"))
+        for sx in (-1, 1):
+            P.append(box("rimS", (ring, td, ring), (sx*(tw/2 - 0.004), 0.06, 0.52 + th - 0.003), "hazard"))
+    else:
+        for sx in (-1, 1):
+            P.append(box("frame", (0.07, 1.34, 0.07), (sx*0.44, 0.10, 0.44), "steel_d"))
+            P.append(box("leg", (0.07, 0.07, 0.40), (sx*0.44, -0.48, 0.20), "steel"))
+            P.append(box("axle", (0.06, 0.06, 0.24), (sx*0.30, 0.52, 0.34), "steel"))
+            P.append(cyl("wheel", 0.30, 0.13, (sx*0.44, 0.52, 0.30), "rubber", verts=12,
+                        rot=(0, math.radians(90), 0)))
+            P.append(cyl("hub", 0.12, 0.15, (sx*0.44, 0.52, 0.30), "steel", verts=9,
+                        rot=(0, math.radians(90), 0)))
+            P.append(box("handle", (0.06, 0.50, 0.06), (sx*0.44, -0.72, 0.62), "wood",
+                        rot=(math.radians(-22), 0, 0)))
+            P.append(box("grip", (0.07, 0.16, 0.07), (sx*0.44, -0.90, 0.70), "dark"))
+        P.append(cyl("pivot", 0.05, 0.94, (0, 0.30, 0.46), "hazard", verts=8,
                      rot=(0, math.radians(90), 0)))
-        P.append(cyl("hub", 0.12, 0.15, (sx*0.44, 0.52, 0.30), "steel", verts=9,
-                     rot=(0, math.radians(90), 0)))
-        P.append(box("handle", (0.06, 0.50, 0.06), (sx*0.44, -0.72, 0.62), "wood",
-                     rot=(math.radians(-22), 0, 0)))
-        P.append(box("grip", (0.07, 0.16, 0.07), (sx*0.44, -0.90, 0.70), "dark"))
-    P.append(cyl("pivot", 0.05, 0.94, (0, 0.30, 0.46), "hazard", verts=8, rot=(0, math.radians(90), 0)))
-    return finish(P, "dumper", merge=0.001)
+    return P
+
+
+def _as_dumper(o, origin_at_hinge):
+    """Put an already-joined half through b_dumper's own finish() transform.
+
+    origin_at_hinge=False reproduces `dumper`'s origin exactly (bbox-centred in
+    XY, floor at z=0), so the chassis is a drop-in for the whole model.
+    origin_at_hinge=True puts (0,0,0) on the tipping axis, which is the contract
+    the renderer needs: rotate the mesh about its own X axis and it swings the
+    way the real trough would, with no offset to work out."""
+    hx = (DUMPER_HINGE[0] - DUMPER_CX) * DUMPER_FX
+    hy = (DUMPER_HINGE[1] - DUMPER_CY) * DUMPER_FY
+    hz = DUMPER_HINGE[2] - DUMPER_MINZ
+    for v in o.data.vertices:
+        x = (v.co.x - DUMPER_CX) * DUMPER_FX
+        y = (v.co.y - DUMPER_CY) * DUMPER_FY
+        z = v.co.z - DUMPER_MINZ
+        if origin_at_hinge:
+            x -= hx; y -= hy; z -= hz
+        v.co.x, v.co.y, v.co.z = x, y, z
+    o.data.update()
+    return o
+
+
+def b_dumper_body():
+    """The Tipper without its trough. Same origin and same scale as `dumper`, so
+    the renderer can swap one for the other and change nothing else."""
+    o, tris = finish(_dumper_parts(False), "dumper_body", merge=0.001, origin="raw")
+    return _as_dumper(o, False), tris
+
+
+def b_dumper_trough():
+    """The Tipper's trough alone, ORIGIN ON THE TIPPING AXIS.
+
+    Hinge, travel and driver are written out in full in the report; the short
+    version is: origin (0,0,0) is the axis, the axis is the model's +X, and
+    positive rotation about it drops the front lip and raises the back, which is
+    the direction a barrow actually empties."""
+    o, tris = finish(_dumper_parts(True), "dumper_trough", merge=0.001, origin="raw")
+    return _as_dumper(o, True), tris
 
 def b_pallet_jack():
     """Wozek paletowy - dwa widlaste ramiona przy podlodze, dyszel z pompa."""
@@ -2756,11 +4142,13 @@ def b_lasso():
     for j, (R, z) in enumerate(((0.215, 0.035), (0.175, 0.085))):
         for i in range(NC):
             a = math.radians(i*360.0/NC + j*14)
-            P.append(box("c%d%d" % (j, i), (2*math.pi*R/NC*1.5, 0.05, 0.05),
+            # Coil spun about Z: every segment of a course shares its top and
+            # bottom cap with both neighbours.
+            P.append(box("c%d%d" % (j, i), (2*math.pi*R/NC*1.5, 0.05, 0.05 - alt(i, phases=5)),
                          (math.sin(a)*R, math.cos(a)*R, z), "wood", rot=(0, 0, -a)))
     # Petla w plaszczyznie XZ. Jasniejszy sznur niz zwoj - dwa tony jednej liny
     # rozdzielaja te dwie bryly bez wprowadzania obcego koloru do palety.
-    ring_xz("loop", 0.19, NL, 2*math.pi*0.19/NL*1.55, 0.05, 0.05, 0.33, "wood_lt", P)
+    ring_xz("loop", 0.19, NL, 2*math.pi*0.19/NL*1.55, 0.05, 0.05, 0.33, "wood_lt", P, sep=0.0015)
     P.append(box("knot", (0.09, 0.09, 0.09), (0, 0, 0.135), "rust"))
     P.append(box("grip", (0.055, 0.055, 0.13), (0, 0, 0.175), "rust"))
     return finish(P, "lasso", merge=0.001)
@@ -2785,7 +4173,9 @@ def b_fire_hose():
     for j, (R, z, col) in enumerate(((0.28, 0.10, "red"), (0.28, 0.23, "red"), (0.20, 0.36, "red"))):
         for i in range(N):
             a = math.radians(i*360.0/N + j*8)
-            P.append(box("c%d%d" % (j, i), (2*math.pi*R/N*1.5, 0.11, 0.12),
+            # Three courses of coil, each spun about Z, each sharing a top and a
+            # bottom cap all the way round: 252 of 684 triangles.
+            P.append(box("c%d%d" % (j, i), (2*math.pi*R/N*1.5, 0.11, 0.12 - alt(i, phases=7)),
                          (math.sin(a)*R, math.cos(a)*R, z), col, rot=(0, 0, -a)))
     # The reel cheeks: the whole point of the change.
     for sx in (-1, 1):
@@ -2889,7 +4279,13 @@ def b_magnet():
     R, TH = 0.17, 0.09
     for i in range(N):                      # luk podkowy: od -80 do +80 stopni
         a = math.radians(-80 + i*160.0/(N - 1))
-        P.append(box("arc%d" % i, (2*math.pi*R/N*1.4, TH, TH),
+        # The horseshoe is spun about Y, so its segments keep their +-Y faces
+        # parallel and at the same two offsets -- the ring_xz case, and 118 of
+        # this model's 180 triangles were in it. The magnet is a benchmark for
+        # the whole set (an open two-colour shape beating a detailed closed one),
+        # so the fix has to be the one that changes no silhouette: 3 mm off the
+        # thickness of every other segment, on the axis facing the camera.
+        P.append(box("arc%d" % i, (2*math.pi*R/N*1.4, TH - alt(i, phases=3), TH),
                      (math.sin(a)*R, 0, 0.62 + math.cos(a)*R), "red", rot=(0, a, 0)))
     for sx in (-1, 1):                      # bieguny - jasne koncowki
         a = math.radians(sx*80)
@@ -2983,37 +4379,146 @@ def b_gamble_box_lid():
 # szprychy i luk korby widoczne.
 
 def b_crank_bot():
-    """Automat nakrecajacy - obejma na piascie, silnik, ramie do korby."""
+    """Auto-Cranker. Clamps on the workbench hub and turns the wheel for you.
+
+    Re-cut for the wheel's new plane. The wheel used to turn about the model's
+    local X, so the bot's clamp ring lay in the YZ plane and its motor stuck out
+    sideways; the wheel now turns about local Z and FACES the player, so the ring
+    lies in the XZ plane and the motor points at the player down local -Z with
+    the drive arm reaching out to the handle at the 45 degree station.
+
+    ORIGIN (0,0,0) is the MOUNT POINT -- the wheel hub -- not the centre of the
+    bounding box, which is why this builder passes origin="raw" to finish(). Code
+    that attaches it needs to know one point, not an outline.
+
+    sep=0.006 on the clamp ring, not the 0.003 used elsewhere: at 0.003 the walls
+    separate but the BEVEL CHAMFERS (0.012) of neighbouring segments land 1.2 mm
+    apart, which is inside the tolerance check-coplanar.py tests. This part rides
+    on the wheel, so it turns right in front of the player's eyes and there is no
+    margin here for "nearly"."""
     P = []
-    # obejma na piascie: pierscien w plaszczyznie YZ, czyli w plaszczyznie kola.
-    # sep=0.006, a nie 0.003 jak w crank: przy 0.003 rozjezdzaja sie owszem
-    # sciany, ale SCIECIA bevela (0.012) sasiada laduja 1.2 mm od sciany obok.
-    # 0.006 wypycha i je poza prog. Bot jedzie na kole, wiec obraca sie razem
-    # z nim tuz przed oczami gracza - tu nie ma marginesu na "prawie".
-    ring_yz("collar", 0.115, 8, 0.13, 2*math.pi*0.115/8*1.5, 0.055, 0.045, 0.0,
-            "steel_d", P, sep=0.006)
-    for sy in (-1, 1):                       # sruby obejmy - widac, ze SIE ZACISKA
-        P.append(box("bolt", (0.13, 0.05, 0.05), (0.045, sy*0.150, 0), "orange"))
-    # silnik - lezy na osi, wystaje na zewnatrz. To on mowi "to robi maszyna".
-    P.append(cyl("motor", 0.105, 0.17, (0.195, 0, 0), "teal", verts=10,
-                 rot=(0, math.radians(90), 0)))
-    P.append(cyl("motorcap", 0.075, 0.05, (0.295, 0, 0), "dark", verts=10,
-                 rot=(0, math.radians(90), 0)))
-    for i in range(3):                       # zebra chlodzace
-        P.append(box("fin%d" % i, (0.02, 0.22, 0.22), (0.145 + i*0.05, 0, 0), "teal_lt"))
-    # 0.258, nie 0.255: przy 0.255 tylna sciana diody lezala dokladnie w tylnej
-    # scianie ostatniego zebra (0.235) - dwie plaszczyzny, dwa rozne kolory.
-    P.append(box("led", (0.04, 0.05, 0.05), (0.258, 0, 0.10), "hazard"))
-    # ramie do korby: wzdluz +Y na promien korby, zakonczone widelcem
-    P.append(box("arm", (0.055, 0.075, 0.20), (0.105, 0, 0.145), "steel"))
-    P.append(box("wrist", (0.075, 0.10, 0.07), (0.105, 0, 0.245), "steel_d"))
-    for sz in (-1, 1):                       # widelec obejmujacy raczke korby
-        P.append(box("fork", (0.09, 0.035, 0.06), (0.145, sz*0.055, 0.255), "hazard"))
+    # Clamp ring in the XZ plane -- the wheel's plane. ring_xz lays segments out
+    # with rotation (0, a, 0), which is the same construction the new rim uses.
+    NC, RC = 8, 0.115
+    for i in range(NC):
+        a = math.radians(i * 360.0 / NC)
+        odd = i % 2
+        rr = RC + (0.006 if odd else 0.0)
+        P.append(box("collar%d" % i, (2*math.pi*RC/NC*1.5, 0.13 - (0.012 if odd else 0.0), 0.055),
+                     (math.sin(a)*rr, 0.0, math.cos(a)*rr), "steel_d", rot=(0, a, 0)))
+    for sx in (-1, 1):                       # clamp bolts: it visibly grips
+        P.append(box("bolt", (0.05, 0.05, 0.13), (sx*0.150, 0.0, 0.045), "orange"))
+    # Motor, lying on the axis and sticking out towards the player.
+    P.append(cyl("motor", 0.105, 0.17, (0, -0.195, 0), "teal", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("motorcap", 0.075, 0.05, (0, -0.295, 0), "dark", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    for i in range(3):                       # cooling fins
+        P.append(box("fin%d" % i, (0.22, 0.02, 0.22), (0, -0.145 - i*0.05, 0), "teal_lt"))
+    P.append(box("led", (0.04, 0.04, 0.05), (0.10, -0.258, 0), "hazard"))
+    # Drive arm, out along the wheel's 45 degree station to the handle.
+    KA = math.radians(45)
+    P.append(box("arm", (0.075, 0.055, 0.20),
+                 (math.sin(KA)*0.105, -0.105, math.cos(KA)*0.105), "steel", rot=(0, KA, 0)))
+    P.append(box("wrist", (0.10, 0.075, 0.07),
+                 (math.sin(KA)*0.205, -0.105, math.cos(KA)*0.205), "steel_d", rot=(0, KA, 0)))
+    for sy in (-1, 1):                       # fork closing round the grip
+        P.append(box("fork", (0.09, 0.035, 0.06),
+                     (math.sin(KA)*0.245, -0.145 + sy*0.055, math.cos(KA)*0.245), "hazard",
+                     rot=(0, KA, 0)))
     return finish(P, "crank_bot", bevel=0.012, merge=0.0008, origin="raw")
+
+def b_press_gold_ram():
+    """The Gold Press's moving half.
+
+    ORIGIN (0,0,0) is the ram's TOP CENTRE. Mount it on `press_gold` at
+    model-local (0, 1.240, -0.335) -- centred laterally, at the top of the sunken
+    working recess, 0.335 forward of centre so it sits in the recess rather than
+    behind it -- with identity rotation.
+
+    AXIS: the model's local -Y, straight down. TRAVEL: 0 (rest, head face at
+    1.240 - 0.370 = 0.870) to -0.075 (struck, head face at 0.795, flat on the
+    anvil, whose top is 0.905 + half its 0.08 = 0.945 -- no, the anvil top is
+    0.945, so the head meets it at -0.075 measured from rest). Range 0 .. -0.075.
+
+    STATE: produce.secondsPerDuck (6.0 s). Same drive as the plain press but
+    shorter and slower -- this machine is meant to look expensive, so ease down
+    over 0.30 s, hold 0.10 s, ease back over 0.45 s, duck released on the hold."""
+    P = []
+    P.append(cyl("shaft", 0.085, 0.26, (0, 0, -0.13), "duck", verts=10))
+    P.append(cyl("collar", 0.12, 0.06, (0, 0, -0.035), "dark", verts=10))
+    P.append(box("head", (0.44, 0.15, 0.13), (0, 0, -0.305), "duck"))
+    P.append(box("headlip", (0.49, 0.19, 0.035), (0, 0, -0.250), "dark"))
+    return finish(P, "press_gold_ram", origin="raw")
+
+
+def b_press_belt_ram():
+    """The Belt Press's moving half -- the one that stamps five at a time.
+
+    ORIGIN (0,0,0) is the ram's TOP CENTRE. Mount it on `press_belt` at
+    model-local (0, 1.305, -0.160) -- under the crown, over the belt -- with
+    identity rotation. (Local -Z 0.160 because the gantry straddles the belt
+    0.16 m behind the model's centre.)
+
+    AXIS: the model's local -Y. TRAVEL: 0 (rest, punch faces at 1.305 - 0.465 =
+    0.840) to -0.040 (struck, punch faces at 0.800, exactly on the five dies on
+    the belt, whose tops are 0.775 + half their 0.05). Range 0 .. -0.040.
+
+    STATE: produce.secondsPerDuck (10.0 s), five ducks per cycle. The natural
+    read is one stroke per CYCLE, not per duck: ease down 0.20 s, hold 0.08 s,
+    ease back 0.35 s, and release all five on the hold so the batch and the blow
+    are the same event."""
+    P = []
+    P.append(cyl("shaft", 0.11, 0.30, (0, 0, -0.15), "steel_d", verts=10))
+    P.append(cyl("collar", 0.145, 0.06, (0, 0, -0.045), "dark", verts=10))
+    P.append(box("head", (0.62, 0.34, 0.14), (0, 0, -0.35), "orange"))
+    P.append(box("headlip", (0.68, 0.40, 0.04), (0, 0, -0.285), "dark"))
+    for i in range(5):                      # five punches, one per duck
+        P.append(box("punch%d" % i, (0.07, 0.07, 0.05), (-0.24 + i*0.12, 0, -0.440), "steel_d"))
+    return finish(P, "press_belt_ram", origin="raw")
+
+
+def b_slot_reels():
+    """Duck Slots' three reels.
+
+    ORIGIN (0,0,0) is the CENTRE OF THE MIDDLE REEL, on its own axle. Mount on
+    `slot_machine` at model-local (0, 1.020, -0.195) -- the centre of the reel
+    recess -- with identity rotation.
+
+    AXIS: the model's local X, for all three. They are three separate cylinders
+    on one axle line at x = -0.155, 0 and +0.155, so a renderer that wants them
+    to stop one after another has to split this model into three or spin the
+    whole thing as one; if it spins as one, that is still better than the
+    painted-on reels it replaces.
+
+    TRAVEL: unbounded rotation about local X. Suggested drive -- on each
+    emission, spin all three up to ~25 rad/s, then stop them at 0.15 s intervals
+    on a multiple of 60 degrees (six symbols a reel), the last one landing as the
+    ducks leave the tray. produce.count is [1,10] on this row, so the number of
+    ducks is already a roll; the reels should show that roll, not precede it."""
+    P = []
+    for i, x in enumerate((-0.155, 0.0, 0.155)):
+        P.append(cyl("reel%d" % i, 0.145, 0.13, (x, 0, 0), "white", verts=12,
+                     rot=(0, math.radians(90), 0)))
+        P.append(cyl("hubr%d" % i, 0.048, 0.15, (x, 0, 0), "dark", verts=8,
+                     rot=(0, math.radians(90), 0)))
+        # Symbols on the rim: six flats a reel, so a stopped reel reads as having
+        # landed on something and a spinning one flickers.
+        for k in range(6):
+            a = math.radians(k * 60.0)
+            P.append(box("sym%d%d" % (i, k), (0.10, 0.055, 0.045),
+                         (x, math.sin(a)*0.128, math.cos(a)*0.128),
+                         "duck" if k % 2 == 0 else "teal", rot=(-a, 0, 0)))
+    return finish(P, "slot_reels", origin="raw")
 
 
 BUILDERS += [
     ("crank_bot", b_crank_bot, "Maszyny", "Automat nakrecajacy kolo warsztatu."),
+    ("crank_wheel", b_crank_wheel, "Maszyny", "Kolo warsztatu - czesc ruchoma."),
+    ("press_ram", b_press_ram, "Maszyny", "Prasa - stempel, czesc ruchoma."),
+    ("press_gold_ram", b_press_gold_ram, "Maszyny", "Zlota prasa - stempel."),
+    ("press_belt_ram", b_press_belt_ram, "Maszyny", "Prasa tasmowa - stempel."),
+    ("slot_reels", b_slot_reels, "Maszyny", "Duck Slots - bebny, czesc ruchoma."),
     ("gamble_box", b_gamble_box, "Maszyny", "Skrzynka hazardowa - korpus."),
     ("gamble_box_lid", b_gamble_box_lid, "Maszyny", "Skrzynka hazardowa - wieko."),
     ("sack", b_sack, "Przedmioty", "Worek."),
@@ -3041,6 +4546,7 @@ BUILDERS += [
     ("fan_strong", b_fan_strong, "Budowle", "Wiatrak mocny."),
     ("fan_vertical", b_fan_vertical, "Budowle", "Wiatrak pionowy - blow.pitchDegrees."),
     ("vibe_floor", b_vibe_floor, "Budowle", "Wibrator podlogowy - plaski tasmociag."),
+    ("vibe_floor_belt", b_vibe_floor_belt, "Budowle", "Wibrator podlogowy - RUCHOME zebra."),
     ("platform", b_platform, "Budowle", "Podest 2x2 m."),
     ("stairs", b_stairs, "Budowle", "Schody na podest."),
     ("roof", b_roof, "Budowle", "Dach 2x2 m na slupach."),
@@ -3065,6 +4571,8 @@ BUILDERS += [
     ("printer3d", b_printer3d, "Maszyny", "Kaczkowa drukarka 3D - 180 s, bez tieru 0."),
     ("press_gold", b_press_gold, "Maszyny", "Zlota prasa - 40 s, bez tieru 0."),
     ("reactor", b_reactor, "Maszyny", "Reaktor rzadkosciowy - tylko najwyzsze tiery."),
+    ("dumper_body", b_dumper_body, "Przedmioty", "Wywrotka - podwozie bez koryta."),
+    ("dumper_trough", b_dumper_trough, "Przedmioty", "Wywrotka - koryto, zawias w origin."),
 ]
 
 

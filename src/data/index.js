@@ -141,6 +141,27 @@ export const MODEL_MANIFEST = {
   // by measuring, and get them wrong the first time somebody re-exports.
   gamble_box:       { file: 'gamble_box.glb',       staged: true, role: 'machine' },
   gamble_box_lid:   { file: 'gamble_box_lid.glb',   staged: true, role: 'machine' },
+
+  // --- moving parts -----------------------------------------------------------
+  // Second models that belong to a row and MOVE relative to it, declared by the
+  // `moving` block below. They are separate exports for the same reason the
+  // gambling box's lid is: their motion is authored, not discovered. Each is
+  // exported at origin "raw", so its own coordinates ARE the body's coordinates
+  // and the renderer draws it with the body's matrix plus one extra transform.
+  //
+  // The cleats on a belt: one period of travel maps cleat k onto cleat k+1's
+  // start, so the loop is seamless with no wrap and no second copy.
+  conveyor_belt:       { file: 'conveyor_belt.glb',       staged: true, role: 'machine' },
+  conveyor_corner_belt:{ file: 'conveyor_corner_belt.glb',staged: true, role: 'machine' },
+  conveyor_slope_belt: { file: 'conveyor_slope_belt.glb', staged: true, role: 'machine' },
+  vibe_floor_belt:     { file: 'vibe_floor_belt.glb',     staged: true, role: 'building' },
+  // The rams of the three presses and the reels of the slot machine. A ram is
+  // driven by the machine's own emissions (`drive: 'stroke'`), so the press
+  // presses when a duck comes out and not on a clock of its own.
+  press_ram:        { file: 'press_ram.glb',        staged: true, role: 'machine' },
+  press_gold_ram:   { file: 'press_gold_ram.glb',   staged: true, role: 'machine' },
+  press_belt_ram:   { file: 'press_belt_ram.glb',   staged: true, role: 'machine' },
+  slot_reels:       { file: 'slot_reels.glb',       staged: true, role: 'machine' },
 };
 
 // --- the closed set of behaviours -------------------------------------------
@@ -686,6 +707,90 @@ function checkLid(where, l) {
   }
 }
 
+// `moving` is a list of SECOND MODELS that travel with this row's body and move
+// against it: the cleats of a belt, the ram of a press, the reels of a slot
+// machine. It is the general form of the `lid` block above, and it exists for
+// the same reason: the renderer must not rediscover a motion by measuring a
+// mesh. Every field here was measured off the exported GLB by the builder who
+// made it, and is quoted in the row that uses it.
+//
+//   model    the part's own manifest entry, exported at origin "raw" -- so its
+//            coordinates are already the body's, and there is no mount offset
+//            to get wrong. A translation therefore needs no pivot at all.
+//   motion   'slide' straight along `axis`, or 'turn' about `axis` at `pivot`
+//   axis     the direction of travel, or the axis of rotation. Model-local.
+//   pivot    'turn' only: the point the part turns about, model-local metres
+//   period   the travel (metres for 'slide', DEGREES for 'turn') after which
+//            the part is back on top of its own next tooth. The phase is taken
+//            modulo this, which is what makes an endless belt cost one model
+//            and no wrapping logic.
+//   drive    where the phase comes from, and the closed set is deliberate:
+//              'belt'   integrate this row's belt.speed. A reversed belt
+//                       reverses the cleats with no extra state.
+//              'spin'   a constant rate, in metres or degrees per second
+//              'stroke' one pulse per duck this machine emits: down and back
+//   travel   'stroke' only: how far along `axis` the full pulse goes, metres
+//   seconds  'stroke' only: how long one full down-and-back takes
+//   rate     'spin' only: units of `period` per second
+// Three SIGNED finite numbers -- a direction or a point, not a size. When
+// `nonZero`, the vector must also have a length, because a direction of
+// [0, 0, 0] is a part declared to move nowhere and would fail silently.
+function checkVec3(where, what, v, nonZero) {
+  if (!Array.isArray(v) || v.length !== 3 || !v.every((n) => num(n))) {
+    throw new DataError(`${where}: ${what} must be three finite numbers, got ${JSON.stringify(v)}`);
+  }
+  if (nonZero && Math.hypot(v[0], v[1], v[2]) < 1e-6) {
+    throw new DataError(`${where}: ${what} has no length -- a direction of zero is a part that never moves`);
+  }
+}
+
+function checkMoving(where, list) {
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new DataError(`${where}: moving must be a non-empty array of part blocks`);
+  }
+  const DRIVES = ['belt', 'spin', 'stroke'];
+  const FIELDS = ['model', 'motion', 'axis', 'pivot', 'period', 'drive', 'travel', 'seconds', 'rate'];
+  for (const p of list) {
+    if (typeof p !== 'object' || p === null || Array.isArray(p)) {
+      throw new DataError(`${where}: each moving part must be an object`);
+    }
+    if (typeof p.model !== 'string' || !Object.prototype.hasOwnProperty.call(MODEL_MANIFEST, p.model)) {
+      throw new DataError(
+        `${where}: moving.model ${JSON.stringify(p.model)} is not in MODEL_MANIFEST (src/data/index.js)`
+      );
+    }
+    if (p.motion !== 'slide' && p.motion !== 'turn') {
+      throw new DataError(`${where}: moving.motion must be 'slide' or 'turn', got ${JSON.stringify(p.motion)}`);
+    }
+    // NOT checkTriple: that one is for sizes, and demands three POSITIVE
+    // numbers. A direction and a pivot are both signed, and a direction with a
+    // zero component is the ordinary case -- [0, -1, 0] is a ram falling.
+    checkVec3(where, 'moving.axis', p.axis, true);
+    if (p.motion === 'turn') checkVec3(where, 'moving.pivot', p.pivot, false);
+    else if (p.pivot !== undefined) {
+      throw new DataError(`${where}: moving.pivot is meaningless on a 'slide' -- the part is exported at origin 'raw'`);
+    }
+    if (DRIVES.indexOf(p.drive) < 0) {
+      throw new DataError(`${where}: moving.drive must be one of ${DRIVES.join(', ')}, got ${JSON.stringify(p.drive)}`);
+    }
+    if (p.drive === 'stroke') {
+      if (!posNum(p.travel)) throw new DataError(`${where}: moving.travel must be a positive number on a 'stroke'`);
+      if (!posNum(p.seconds)) throw new DataError(`${where}: moving.seconds must be a positive number on a 'stroke'`);
+      if (p.period !== undefined) {
+        throw new DataError(`${where}: a 'stroke' has no period -- it is one pulse, not a loop`);
+      }
+    } else {
+      if (!posNum(p.period)) throw new DataError(`${where}: moving.period must be a positive number`);
+      if (p.drive === 'spin' && !posNum(p.rate)) {
+        throw new DataError(`${where}: moving.rate must be a positive number on a 'spin'`);
+      }
+    }
+    for (const k of Object.keys(p)) {
+      if (FIELDS.indexOf(k) < 0) throw new DataError(`${where}: moving part has unknown field '${k}'`);
+    }
+  }
+}
+
 function checkRepeat(where, r) {
   if (typeof r !== 'object' || r === null || Array.isArray(r)) {
     throw new DataError(`${where}: repeat must be an object {times, curve}`);
@@ -875,6 +980,20 @@ export function validateRows(rows) {
       checkLid(where, row.lid);
       if (!row.model) {
         throw new DataError(`${where}: a row with a 'lid' block must have a model for the lid to sit on`);
+      }
+    }
+    if (row.moving !== undefined) {
+      checkMoving(where, row.moving);
+      if (!row.model) {
+        throw new DataError(`${where}: a row with a 'moving' block must have a model for the parts to move against`);
+      }
+      for (const p of row.moving) {
+        if (p.drive === 'belt' && !isObj(row.belt)) {
+          throw new DataError(`${where}: moving.drive 'belt' needs a 'belt' block to take its speed from`);
+        }
+        if (p.drive === 'stroke' && !isObj(row.produce)) {
+          throw new DataError(`${where}: moving.drive 'stroke' needs a 'produce' block -- the pulse is one emission`);
+        }
       }
     }
     if (isObj(row.blow)) checkBlow(where, row.blow);
