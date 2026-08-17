@@ -512,6 +512,30 @@ export const MACHINES = [
     tags: ['bigticket'],
   },
 
+  // --- the garage, netId 30 ---------------------------------------------------
+  {
+    id: 'car_spawner', netId: 30, name: 'Truck Garage',
+    desc: 'Puts a tipper truck on the plate. Drive it, back it under a belt, tip the load out where you want it.',
+    cost: 1450, model: 'car_spawner',
+    // Measured off assets/models/car_spawner.glb: a 2.00 x 2.50 pad with a
+    // gantry over it, 2.00 tall. Both horizontal numbers are exact multiples of
+    // config.build.grid, which is what lets it butt up against anything else.
+    footprint: [2.00, 2.00, 2.50], anchor: 'floor',
+    kind: 'spawner',
+    // The first truck is FREE and arrives the moment the garage is placed --
+    // the player has already paid for it, and a building that asks for more
+    // money before it does anything is two purchases for one decision. Every
+    // truck after that costs config.vehicle.spawnCost.
+    spawn: { what: 'truck', firstFree: true },
+    // Three garages is a fleet; more is a frame budget with a button on it.
+    repeat: { times: 3, curve: 1.45 },
+    // The gantry legs, not the pad: the pad is 8 cm thick and a collider that
+    // tall would be a kerb the truck has to climb every time it comes home.
+    collider: { shape: 'cuboid', half: [1.00, 1.00, 1.25], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: ['bigticket'],
+  },
+
   // --- the gambling box, netId 29 --------------------------------------------
   {
     id: 'gamble_box', netId: 29, name: 'Gambling Box',

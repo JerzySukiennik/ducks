@@ -21,6 +21,8 @@ import { createPrestige } from './sim/prestige.js';
 import { createProducers } from './sim/producers.js';
 import { createCollectors, createAttention } from './sim/collectors.js';
 import { createConveyors } from './sim/conveyors.js';
+import { createVehicles } from './sim/vehicles.js';
+import { TRUCK } from './data/vehicles.js';
 import { createBlowers } from './sim/blowers.js';
 import { createContainers, isStorageRow } from './sim/containers.js';
 import { createTools, isToolRow } from './sim/tools.js';
@@ -257,6 +259,13 @@ async function boot() {
   // Other players. Not a catalog row -- nobody buys a person -- so it is named
   // here or it never loads.
   if (!modelSpecs.avatar) modelSpecs.avatar = { fallbackBox: [0.6, 1.85, 0.4] };
+  // The truck's three parts. Not catalog rows -- nobody buys a truck, they buy
+  // the garage that makes them -- so they are named here for the same reason
+  // `avatar` is, and with no fallbackBox for the same reason a belt's cleats
+  // have none: a stand-in box in the shape of a chassis is not a chassis.
+  for (const m of ['car_body', 'car_bed', 'car_gate']) {
+    if (!modelSpecs[m]) modelSpecs[m] = null;
+  }
 
   const models = await loadModels(modelSpecs);
   const fellBack = Object.keys(models).filter((k) => models[k].fallback);
@@ -641,10 +650,22 @@ async function boot() {
   // than caching the configured 20.
   const netCodec = createSnapshotCodec(config);
 
+  // The tipper trucks. Created before the fixed hook below because that hook is
+  // where they drive; nothing about a truck happens outside a substep.
+  const vehicles = createVehicles({ world, config, spec: TRUCK });
+
   if (typeof world.onFixedUpdate === 'function') {
     world.onFixedUpdate((h) => {
       conveyors._fixedUpdate(h);
       blowers._fixedUpdate(h);
+      // Trucks, and then whoever is riding one. The order matters and it is the
+      // only order that works: the drive writes the chassis velocity for the
+      // step the solver is about to run, and the carry moves passengers by the
+      // distance the solver moved the truck LAST step. Both inside the substep,
+      // because a truck that only moved once a frame would leave its passengers
+      // behind at every frame boundary.
+      if (!net.isClient()) vehicles.fixedUpdate(h);
+      carryRiders();
       // The slot spring and the broom are springs like the grab controller: the
       // impulse has to land in the substep the solver is about to integrate, not
       // once per frame, or a full crate visibly sags between frames.
@@ -656,6 +677,210 @@ async function boot() {
       if (!net.isClient()) containers._fixedUpdate(h);
       tools._fixedUpdate(h);
     });
+  }
+
+  // --- the truck: driving it, riding on it, tipping it -------------------------
+  //
+  // Everything below is the LOCAL player's relationship with a truck. The truck
+  // itself does not live here: src/sim/vehicles.js owns the bodies and the
+  // hinges, src/data/vehicles.js owns the geometry, and config.vehicle owns
+  // every number a player can feel.
+  //
+  // The capsule is kinematic, which is what makes both halves of this simple.
+  // A driver is not "attached" to anything: they are put at the seat once per
+  // substep, after their own controller has run and before the solver, so there
+  // is no frame in which they are half in the cab. A passenger is moved by the
+  // truck's own last-substep displacement, which is what a moving platform is.
+
+  // Which truck the local player is driving, or null.
+  let driving = null;
+  // Their look, kept while driving, so the third-person camera can be swung
+  // round the truck without the truck steering to follow the mouse.
+  const truckMeshes = new Map();     // vehicle key -> [attached render records]
+
+  function playerBody() {
+    if (!world._raw || typeof player.handle !== 'number') return null;
+    const b = world._raw.getRigidBody(player.handle);
+    return b && b.handle === player.handle ? b : null;
+  }
+
+  // The capsule's centre for a given foot position: the player module measures
+  // its body from the middle of the capsule, and every position this file deals
+  // in -- a seat, a bed floor -- is where the FEET go.
+  function centreForFeet(p) {
+    return { x: p.x, y: p.y + config.player.height / 2, z: p.z };
+  }
+
+  function carryRiders() {
+    if (!vehicles.count()) return;
+    const b = playerBody();
+    if (!b) return;
+    if (driving) {
+      const rec = vehicles.byKey(driving);
+      if (!rec) { driving = null; return; }
+      // Pinned to the seat. setNextKinematicTranslation rather than
+      // setTranslation: the controller has already written its own next pose
+      // this substep and this overwrites it, so the two never fight and the
+      // capsule never spends a substep inside the cab's collider.
+      b.setNextKinematicTranslation(centreForFeet(vehicles.seatOf(rec)));
+      return;
+    }
+    // A passenger. The capsule's own next pose is the one the controller just
+    // computed -- walking, falling, standing still -- and the truck's
+    // displacement is ADDED to it, so a player can walk about on a moving bed.
+    const next = typeof b.nextTranslation === 'function' ? b.nextTranslation() : b.translation();
+    const feet = { x: next.x, y: next.y - config.player.height / 2, z: next.z };
+    for (const rec of vehicles.list) {
+      if (!vehicles.onBed(rec, feet)) continue;
+      const d = vehicles.carryDelta(rec);
+      // The yaw part is a rotation about the truck's centre, not a spin in
+      // place: a passenger standing at the back of a turning truck travels
+      // further than one standing over the axle, exactly as they should.
+      const t = rec.chassis.translation();
+      const rx = next.x - t.x;
+      const rz = next.z - t.z;
+      const c = Math.cos(d.yaw);
+      const s = Math.sin(d.yaw);
+      b.setNextKinematicTranslation({
+        x: t.x + rx * c + rz * s + d.x,
+        y: next.y + d.y,
+        z: t.z - rx * s + rz * c + d.z,
+      });
+      return;
+    }
+  }
+
+  // The three meshes of one truck, bolted to the three bodies. They are drawn
+  // with NO seating offset -- see placed.attachBody -- because the models are
+  // authored in their bodies' own frames.
+  function attachTruck(rec) {
+    const parts = [];
+    for (const [part, model] of [
+      ['chassis', TRUCK.models.body], ['bed', TRUCK.models.bed], ['gate', TRUCK.models.gate],
+    ]) {
+      const m = placed.attachBody(model, rec[part]);
+      if (m) parts.push(m);
+    }
+    truckMeshes.set(rec.key, parts);
+    return parts.length;
+  }
+
+  // Put a truck on the plate in front of a garage. `free` is the first one,
+  // which came with the building; every other costs config.vehicle.spawnCost
+  // and this refuses rather than going overdrawn.
+  function spawnTruck(garage, free) {
+    const V = config.vehicle;
+    let owned = 0;
+    for (const rec of vehicles.list) if (rec.garage === garage.key) owned++;
+    if (owned >= V.maxPerSpawner) return { ok: false, reason: 'full' };
+    if (!free) {
+      if (world.economy.money() < V.spawnCost) return { ok: false, reason: 'money' };
+      world.economy.spend(V.spawnCost, 'vehicle');
+    }
+    const o = V.spawnOffset;
+    const c = Math.cos(garage.yaw);
+    const s = Math.sin(garage.yaw);
+    const pos = {
+      x: garage.x + o[0] * c + o[2] * s,
+      y: garage.y - garage.hy + o[1],
+      z: garage.z - o[0] * s + o[2] * c,
+    };
+    // Nose OUT. The truck stands on the far side of the garage from its gantry,
+    // and a truck facing the building it came out of can only leave in reverse
+    // -- measured: full throttle moved it 0.45 m and stopped against the
+    // garage's own collider, which reads exactly like a broken vehicle.
+    const rec = vehicles.spawn(pos, garage.yaw + Math.PI);
+    rec.garage = garage.key;
+    attachTruck(rec);
+    return { ok: true, key: rec.key, cost: free ? 0 : V.spawnCost };
+  }
+
+  // The garage under the crosshair, if the player is close enough to use it.
+  function garageTarget() {
+    const p = player.position();
+    let best = null;
+    let bestD = config.booth.useRange + 1.5;
+    for (const rec of placed.objects) {
+      if (rec.kind !== 'spawner') continue;
+      const d = Math.hypot(p.x - rec.x, p.z - rec.z);
+      if (d < bestD) { bestD = d; best = rec; }
+    }
+    return best;
+  }
+
+  function enterTruck() {
+    const near = vehicles.nearest(player.position());
+    if (!near) return false;
+    if (near.vehicle.driver !== null && near.vehicle.driver !== 0) return false;
+    driving = near.key;
+    vehicles.setDriver(near.key, 0);
+    vehicles.control(near.key, { throttle: 0, steer: 0, handbrake: false });
+    return true;
+  }
+
+  // One frame of driving. Everything here is a REQUEST written onto the record;
+  // the truck itself only ever moves inside a substep, in src/sim/vehicles.js.
+  // A test harness cannot press a key, so debugDrive writes here and this is
+  // read INSTEAD of the keyboard for as long as it is set. Without it every
+  // scripted drive was overwritten by the real input on the very next frame --
+  // the truck would be told to go, and then told to stop, sixty times a second.
+  let driveOverride = null;
+
+  function driveFromInput(inp) {
+    if (!driving) return;
+    const rec = vehicles.byKey(driving);
+    if (!rec) { driving = null; return; }
+    const src = driveOverride || inp;
+    vehicles.control(driving, {
+      throttle: src.fwd,
+      steer: src.right,
+      // Space is the brake, which is the same key that jumps on foot. It reads
+      // as the right one anyway: the thing you press when you want to stop.
+      handbrake: !!src.jump,
+    });
+    // Q raises the bed, Z lowers it, and it holds wherever you let go -- which
+    // is the whole point of a lever. Pressing both is a tie and nothing moves.
+    if (driveOverride && driveOverride.tip !== undefined && driveOverride.tip !== null) {
+      vehicles.setTip(driving, driveOverride.tip);
+      return;
+    }
+    const up = input.isKeyDown('KeyQ');
+    const down = input.isKeyDown('KeyZ');
+    if (up !== down) vehicles.setTip(driving, up ? 1 : 0);
+    else vehicles.setTip(driving, rec.tip);
+  }
+
+  // The camera when driving: behind the truck, above it, looking at it. The
+  // player's own yaw and pitch still swing it, so you can look over your
+  // shoulder while reversing under a belt -- which is the manoeuvre this whole
+  // vehicle exists for and the one thing a cab-view camera cannot show.
+  function truckCamera(yaw, pitch) {
+    if (!driving) return null;
+    const rec = vehicles.byKey(driving);
+    if (!rec) return null;
+    const t = rec.chassis.translation();
+    const focus = { x: t.x, y: t.y + config.vehicle.camHeight, z: t.z };
+    const d = config.vehicle.camDistance;
+    const cp = Math.cos(pitch);
+    return {
+      x: focus.x + Math.sin(yaw) * d * cp,
+      y: focus.y - Math.sin(pitch) * d,
+      z: focus.z + Math.cos(yaw) * d * cp,
+    };
+  }
+
+  function exitTruck() {
+    if (!driving) return false;
+    const rec = vehicles.byKey(driving);
+    if (rec) {
+      vehicles.setDriver(driving, null);
+      const b = playerBody();
+      // Put down beside the cab, not inside it. setTranslation, not `next`:
+      // getting out is instant and the controller picks up from where it lands.
+      if (b) b.setTranslation(centreForFeet(vehicles.exitOf(rec)), true);
+    }
+    driving = null;
+    return true;
   }
 
   // A container is a DROPPED PROP with a real dynamic body -- a placed building
@@ -1553,6 +1778,14 @@ async function boot() {
     }
     placeCount++;
     audio.placed(res.record ? { x: res.record.x, y: res.record.y, z: res.record.z } : undefined);
+    // A garage arrives WITH ITS FIRST TRUCK. The player already paid for it when
+    // they bought the building, so making them walk up and pay again before
+    // anything happened would be charging twice for one decision -- and a garage
+    // with an empty pad is a building that looks broken.
+    if (item.kind === 'spawner' && item.spawn && item.spawn.firstFree && !net.isClient()) {
+      const rec = placed.objects.find((o) => o.key === (res.record && res.record.key));
+      if (rec) spawnTruck(rec, true);
+    }
     return { record: res.record, placement: res.placement };
   }
 
@@ -1724,9 +1957,44 @@ async function boot() {
       // E is THE interact key and it acts on what the crosshair is on: an item
       // lying on the floor first, the booth otherwise. Inventing a second pick-up
       // key would leave the player guessing which one this object wants.
+      // BEHIND THE WHEEL THE KEYBOARD MEANS SOMETHING ELSE. This block comes
+      // first and swallows everything it handles, because a driver pressing E
+      // wants to get out of the truck and not to open a shop they are sitting
+      // three metres above. Only the panel keys above this line still work.
+      if (driving) {
+        if (c === 'KeyE') { exitTruck(); continue; }
+        // The tailgate: one key, one flap. It is a toggle rather than a hold
+        // because it has exactly two useful states and holding a key open to
+        // keep a gate open is a hand you cannot steer with.
+        if (c === 'KeyR') {
+          const rec = vehicles.byKey(driving);
+          if (rec) { vehicles.setGate(driving, rec.gateWant > 0.5 ? 0 : 1); audio.rotated(); }
+          continue;
+        }
+        // The bed is Q/Z, held: up while you hold it, down while you hold the
+        // other, and it stops where you let go. That is what a real tipper's
+        // lever does, and it is the only way to pour half a load.
+        if (c === 'KeyQ' || c === 'KeyZ') continue;
+        continue;
+      }
       if (c === 'KeyE') {
         if (shopUI.isOpen()) shopUI.close();
         else if (pickupTarget()) pickUp();
+        // A truck you are standing next to answers E before anything else on
+        // the plate does: it is three metres of vehicle, so if it is in range
+        // it is unambiguously what the player meant.
+        else if (vehicles.nearest(player.position())) enterTruck();
+        // A garage sells another truck for config.vehicle.spawnCost. The first
+        // one came with the building; this is how you get a second.
+        else if (garageTarget()) {
+          const out = spawnTruck(garageTarget(), false);
+          if (!out.ok) {
+            hud.showCap(out.reason === 'money'
+              ? `A truck costs $${config.vehicle.spawnCost}.`
+              : `This garage already keeps ${config.vehicle.maxPerSpawner} trucks.`);
+            audio.placementRefused();
+          } else audio.placed(player.position());
+        }
         // The gambling box answers the same key, after the floor and before the
         // booth: a delivery lying against the box is still the thing you meant,
         // and the box is a metre wide so it can never be confused for the shop.
@@ -2369,6 +2637,17 @@ async function boot() {
     // worker clock when it has. While the tab is visible this is only a stamp.
     net.beginFrame();
     const inp = input.read();
+    // A driver's WASD steers the truck, so it must NOT also walk the capsule --
+    // otherwise the player would be trying to run out of the cab every frame
+    // while being pinned back into it by carryRiders(). The look is untouched:
+    // the mouse swings the camera round the truck, and steering is the keys.
+    if (driving) {
+      driveFromInput(inp);
+      inp.fwd = 0;
+      inp.right = 0;
+      inp.jump = false;
+      inp.sprint = false;
+    }
     player.update(dt, inp);
     applyColliderFilters();
     syncContainers();
@@ -2463,7 +2742,9 @@ async function boot() {
     // cutscene records as its worst frame -- this frame's cost is not known yet.
     const csPose = cutscene && cutscene.isActive() ? cutscene.update(dt, lastFrameMs) : null;
     const eye = player.eyePosition();
+    const truckEye = csPose ? null : truckCamera(inp.yaw, inp.pitch);
     if (csPose) view.updateCamera(csPose, csPose.yaw, csPose.pitch);
+    else if (truckEye) view.updateCamera(truckEye, inp.yaw, inp.pitch);
     else view.updateCamera(eye, inp.yaw, inp.pitch);
     // Every piece of interface the world normally wears comes off while the
     // camera is flying: a crosshair, a build hologram or a "Press E - Shop"
@@ -3618,6 +3899,39 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    // --- the truck ------------------------------------------------------------
+    debugTrucks: () => vehicles.list.map((r) => vehicles.info(r.key)),
+    debugTruckInfo: (key) => vehicles.info(key),
+    debugSpawnTruck(free) {
+      const g = garageTarget() || placed.objects.find((o) => o.kind === 'spawner');
+      if (!g) return { ok: false, reason: 'no garage' };
+      return spawnTruck(g, free !== false);
+    },
+    debugEnterTruck: () => enterTruck(),
+    debugExitTruck: () => exitTruck(),
+    debugDriving: () => driving,
+    debugDrive(throttle, steer, handbrake) {
+      if (throttle === null) { driveOverride = null; return true; }
+      driveOverride = { fwd: Number(throttle) || 0, right: Number(steer) || 0, jump: !!handbrake };
+      if (!driving) return false;
+      return vehicles.control(driving, { throttle, steer, handbrake });
+    },
+    debugTruckTip(v) {
+      // Through the override for the same reason debugDrive is: the frame loop
+      // rewrites the tip from the keyboard every frame, and a test that wrote
+      // straight to the record would be undone before the next substep.
+      if (!driveOverride) driveOverride = { fwd: 0, right: 0, jump: false };
+      driveOverride.tip = v === null ? null : Number(v) || 0;
+      return driving ? vehicles.setTip(driving, driveOverride.tip) : null;
+    },
+    debugTruckGate(v) { return driving ? vehicles.setGate(driving, v) : null; },
+    // Is this world point standing on the bed? The ride test itself, so a
+    // passenger that is not being carried can be told from one that is not
+    // standing where they think they are.
+    debugOnBed(key, p) {
+      const rec = vehicles.byKey(key === undefined ? vehicles.list[0] && vehicles.list[0].key : key);
+      return rec ? vehicles.onBed(rec, p) : null;
+    },
     // The chute's queue. `pending` is what has been PAID FOR and not yet fallen
     // out; nothing here is ever discarded, so pending + dropped == everything
     // bought that has a model.

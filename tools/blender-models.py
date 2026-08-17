@@ -147,6 +147,11 @@ FOOTPRINT = {
     "crate_wood":      (1.00, 1.00),
     "bucket_leaky":    (0.75, 0.75),
     "dumper":          (1.25, 1.75),
+    # The garage pad. The three truck parts are deliberately NOT here: they use
+    # origin="raw" so that all three keep one shared coordinate system, and a
+    # footprint entry would scale each one by its own bounding box and pull them
+    # apart. Their sizes are authored exactly instead.
+    "car_spawner":     (2.00, 2.50),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -4589,3 +4594,176 @@ def build_all(only=None):
         if name in CAVITY_OUT: row["interior"] = CAVITY_OUT[name]
         rep.append(row)
     return rep
+
+
+# ============================================ THE TIPPER TRUCK, IN THREE PIECES
+# A vehicle is not one mesh, because two of its parts turn on hinges: the bed
+# tips and the tailgate drops. Same precedent as the gambling box and the
+# Tipper barrow -- a part that moves independently cannot be inside a joined
+# mesh -- but here each part is also its own RIGID BODY, jointed to the chassis
+# in src/sim/world.js, so the numbers below are physics anchors and not only
+# render offsets.
+#
+# ONE COORDINATE SYSTEM FOR ALL THREE, and it is the chassis body's:
+#
+#   (0, 0, 0) is the point on the GROUND at the centre of the truck.
+#   +y is the front (the cab), -y is the back (where the ducks go in).
+#   z is up, so z is a height above the plate exactly as the plate sees it.
+#
+# All three export with origin="raw", which keeps the author's coordinates
+# untouched -- no centring, no footprint scaling. That is the whole reason they
+# can be authored together and still fit together: a scale factor computed from
+# one part's bounding box would have moved it relative to the other two, which
+# is precisely the trap b_dumper_body had to work around with hand-copied
+# factors. The bed and the gate are then shifted onto their own hinge lines, so
+# each one's (0,0,0) IS the axis it turns about and the joint anchors are zero.
+#
+# THE ONE NUMBER THE PLAYER CARES ABOUT: the tailgate's top edge is at 0.62,
+# and a conveyor's belt surface is at 0.65 (src/data/machines.js `conveyor`,
+# collider.half[1] * 2). A duck rolling off the end of a belt therefore clears
+# the gate by 3 cm and drops into the bed. Everything else here is built around
+# that one clearance -- the side walls are as high as they like, but the BACK of
+# this truck is at belt height by construction.
+
+CAR_L = 3.40          # overall length
+CAR_W = 1.50          # overall width
+CAR_WHEEL_R = 0.22
+CAR_FLOOR = 0.40      # the bed's floor, top face
+CAR_WALL = 0.90       # the side walls' top
+CAR_GATE_TOP = 0.62   # the tailgate's top -- BELOW the 0.65 belt
+CAR_BED_Y0 = -1.62    # the bed's back, which is the hinge line for both parts
+CAR_BED_Y1 = 0.30     # the bed's front wall, where the cab starts
+CAR_BED_HALF_X = 0.65 # the bed's interior half-width
+
+# The two hinges, in the shared frame above. Both lie on the bed's rear bottom
+# edge: the bed tips about it (front goes up, load slides back) and the gate
+# swings down and out about the same line, so an open gate is a ramp off the
+# back rather than a flap in the air.
+CAR_BED_HINGE = (0.0, CAR_BED_Y0, 0.38)
+CAR_GATE_HINGE = (0.0, CAR_BED_Y0 - 0.04, 0.40)
+
+
+def _shift(objs, d):
+    """Move a finished part list so a stated point becomes its origin."""
+    for o in objs:
+        o.location = (o.location.x - d[0], o.location.y - d[1], o.location.z - d[2])
+    return objs
+
+
+def b_car_body():
+    """Wywrotka - podwozie z kabina, BEZ paki i klapy.
+
+    Origin (0,0,0) = punkt na ziemi w srodku auta; +y to przod. To jest uklad
+    ciala sztywnego podwozia, wiec render rysuje ten model bez zadnego offsetu."""
+    P = []
+    # The ladder frame. Two rails and four crossmembers, left open between the
+    # wheels so the truck reads as a chassis with something bolted on top rather
+    # than a solid brick with wheels painted on it.
+    for sx in (-1, 1):
+        P.append(box("rail", (0.14, CAR_L - 0.30, 0.13), (sx*0.56, 0, 0.315), "steel_d"))
+    for yy in (-1.42, -0.62, 0.42, 1.34):
+        P.append(box("xmem", (1.20, 0.11, 0.09), (0, yy, 0.305), "steel_d"))
+    # The deck the bed sits on, and the mudguards over the rear wheels.
+    P.append(box("deck", (1.38, 2.00, 0.05), (0, -0.66, 0.375), "steel"))
+    for sx in (-1, 1):
+        P.append(box("guard", (0.20, 0.62, 0.05), (sx*0.65, -1.10, 0.475), "hazard"))
+        P.append(box("guardl", (0.05, 0.62, 0.11), (sx*0.755, -1.10, 0.425), "hazard"))
+    # Wheels. Visual only -- the truck drives on a locked-upright body, not on
+    # four raycast suspensions, so a wheel here is a tyre and a hub and nothing
+    # the simulation ever asks about.
+    for sx in (-1, 1):
+        for yy in (-1.10, 1.06):
+            P.append(cyl("tyre", CAR_WHEEL_R, 0.22, (sx*0.66, yy, CAR_WHEEL_R), "rubber",
+                         verts=12, rot=(0, math.radians(90), 0)))
+            P.append(cyl("hub", 0.10, 0.24, (sx*0.66, yy, CAR_WHEEL_R), "steel", verts=8,
+                         rot=(0, math.radians(90), 0)))
+    # The cab. Short, upright and blunt: it has to read as the FRONT from across
+    # the plate, and at this size a raked windscreen would be four pixels.
+    P.append(box("cabf", (1.34, 1.16, 0.44), (0, 1.02, 0.62), "hazard"))
+    P.append(box("cabu", (1.28, 0.94, 0.36), (0, 0.94, 1.00), "hazard"))
+    P.append(box("roof", (1.32, 0.98, 0.05), (0, 0.94, 1.20), "orange"))
+    P.append(box("wind", (1.14, 0.05, 0.28), (0, 0.46, 1.02), "glass"))
+    for sx in (-1, 1):
+        P.append(box("side", (0.05, 0.72, 0.24), (sx*0.645, 0.98, 1.00), "glass"))
+        P.append(box("lamp", (0.16, 0.06, 0.12), (sx*0.50, 1.62, 0.58), "white"))
+    P.append(box("grill", (1.20, 0.06, 0.20), (0, 1.62, 0.72), "steel_d"))
+    P.append(box("bump", (1.42, 0.12, 0.14), (0, 1.66, 0.44), "steel"))
+    # A step under each door, because the player walks up to this thing and the
+    # cab floor is 0.40 off the plate.
+    for sx in (-1, 1):
+        P.append(box("step", (0.30, 0.44, 0.04), (sx*0.72, 0.72, 0.30), "steel_d"))
+    return finish(P, "car_body", merge=0.001, origin="raw")
+
+
+def b_car_bed():
+    """Paka wywrotki. Origin = OS PRZECHYLU (tylna dolna krawedz paki).
+
+    Sciany boczne i przednia sa wysokie (0.90), TYL jest otwarty - zamyka go
+    osobna klapa, ktorej gorna krawedz stoi 3 cm ponizej tasmociagu."""
+    P = []
+    x = CAR_BED_HALF_X
+    ylen = CAR_BED_Y1 - CAR_BED_Y0
+    ymid = (CAR_BED_Y1 + CAR_BED_Y0) / 2
+    P.append(box("floor", (2*x + 0.10, ylen, 0.05), (0, ymid, CAR_FLOOR - 0.025), "steel"))
+    for sx in (-1, 1):
+        P.append(box("wall", (0.05, ylen, CAR_WALL - CAR_FLOOR),
+                     (sx*(x + 0.025), ymid, (CAR_WALL + CAR_FLOOR)/2), "hazard"))
+        # A rib every so often, so a bare slab does not read as cardboard.
+        for yy in (-1.30, -0.70, -0.10):
+            P.append(box("rib", (0.04, 0.07, CAR_WALL - CAR_FLOOR - 0.04),
+                         (sx*(x + 0.055), yy, (CAR_WALL + CAR_FLOOR)/2), "orange"))
+    P.append(box("front", (2*x + 0.10, 0.05, CAR_WALL - CAR_FLOOR + 0.14),
+                 (0, CAR_BED_Y1 - 0.025, (CAR_WALL + CAR_FLOOR)/2 + 0.07), "hazard"))
+    # The lip the load slides over when the bed is up. It is what makes the back
+    # of the bed read as an OPENING rather than as a missing wall.
+    for sx in (-1, 1):
+        P.append(box("lip", (0.09, 0.09, 0.10), (sx*(x + 0.02), CAR_BED_Y0 + 0.05, 0.46), "steel_d"))
+    return finish(_shift(P, CAR_BED_HINGE), "car_bed", merge=0.001, origin="raw")
+
+
+def b_car_gate():
+    """Klapa tylna. Origin = jej wlasny zawias (dolna krawedz).
+
+    Gorna krawedz przy zamknietej klapie stoi na 0.62 - a tasma konwejora ma
+    0.65. Kaczka zjezdzajaca z tasmy przechodzi nad klapa i wpada do paki. To
+    jest jedyny powod, dla ktorego ta klapa jest niska."""
+    P = []
+    x = CAR_BED_HALF_X
+    h = CAR_GATE_TOP - CAR_FLOOR
+    gy = CAR_GATE_HINGE[1]              # authored ON its own hinge line, so the
+    P.append(box("gate", (2*x + 0.08, 0.05, h), (0, gy, CAR_FLOOR + h/2), "hazard"))
+    P.append(box("gbar", (2*x + 0.10, 0.06, 0.05), (0, gy, CAR_GATE_TOP - 0.025), "steel_d"))
+    for sx in (-1, 1):
+        P.append(box("hinge", (0.08, 0.08, 0.08), (sx*(x - 0.06), gy, CAR_FLOOR + 0.04), "steel_d"))
+    return finish(_shift(P, CAR_GATE_HINGE), "car_gate", merge=0.001, origin="raw")
+
+
+def b_car_spawner():
+    """Garaz - stawiasz go i wyjezdza z niego wywrotka.
+
+    Zwykly model stojacy na ziemi (origin="floor"), bo to jest budynek na
+    siatce jak kazdy inny. Rampa jest zwrocona w lokalne +Y autora, czyli w
+    gre w lokalne -Z: to jest kierunek, w ktorym stawiany jest samochod."""
+    P = []
+    P.append(box("pad", (1.90, 2.30, 0.08), (0, 0, 0.04), "concrete"))
+    for i in range(5):                      # hazard stripes across the pad
+        P.append(box("stripe", (1.70, 0.10, 0.02), (0, -0.80 + i*0.40, 0.09), "hazard"))
+    for sx in (-1, 1):                      # two posts and a lintel: a gantry
+        P.append(box("post", (0.16, 0.16, 1.70), (sx*0.86, 0.90, 0.93), "steel_d"))
+        P.append(box("foot", (0.30, 0.30, 0.07), (sx*0.86, 0.90, 0.115), "steel"))
+    P.append(box("lint", (1.96, 0.20, 0.22), (0, 0.90, 1.89), "hazard"))
+    P.append(box("sign", (0.92, 0.06, 0.30), (0, 0.78, 1.60), "steel"))
+    P.append(box("bulb", (0.16, 0.10, 0.10), (0, 0.72, 1.60), "white"))
+    P.append(cyl("hose", 0.05, 1.10, (0.86, 0.30, 0.55), "rubber", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(box("pump", (0.34, 0.30, 0.70), (0.72, -0.42, 0.43), "steel_d"))
+    P.append(box("pumpt", (0.28, 0.22, 0.16), (0.72, -0.42, 0.86), "orange"))
+    return finish(P, "car_spawner", merge=0.001)
+
+
+BUILDERS += [
+    ("car_body", b_car_body, "Pojazdy", "Wywrotka - podwozie z kabina."),
+    ("car_bed", b_car_bed, "Pojazdy", "Wywrotka - paka, zawias w origin."),
+    ("car_gate", b_car_gate, "Pojazdy", "Wywrotka - klapa tylna, zawias w origin."),
+    ("car_spawner", b_car_spawner, "Pojazdy", "Garaz - spawner samochodu."),
+]

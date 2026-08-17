@@ -162,6 +162,16 @@ export const MODEL_MANIFEST = {
   press_gold_ram:   { file: 'press_gold_ram.glb',   staged: true, role: 'machine' },
   press_belt_ram:   { file: 'press_belt_ram.glb',   staged: true, role: 'machine' },
   slot_reels:       { file: 'slot_reels.glb',       staged: true, role: 'machine' },
+
+  // --- the tipper truck -------------------------------------------------------
+  // The garage is an ordinary placed building. The three truck models are not
+  // rows and never appear in a shop tab -- nobody buys a truck, they buy the
+  // garage that makes them -- so they are named here and loaded by name, the
+  // same exception `avatar` has. Their geometry is in src/data/vehicles.js.
+  car_spawner:      { file: 'car_spawner.glb',      staged: true, role: 'machine' },
+  car_body:         { file: 'car_body.glb',         staged: true, role: 'vehicle' },
+  car_bed:          { file: 'car_bed.glb',          staged: true, role: 'vehicle' },
+  car_gate:         { file: 'car_gate.glb',         staged: true, role: 'vehicle' },
 };
 
 // --- the closed set of behaviours -------------------------------------------
@@ -203,6 +213,13 @@ export const KINDS = {
   // second, drifting copy of it. Behaviour lives in src/sim/gamble.js, selected
   // by this kind.
   gamble:          { placeable: true,  needsModel: true,  block: null,       effects: false, build: true },
+  // A building that puts a VEHICLE on the plate. `block: 'spawn'` names what it
+  // makes; every number about the vehicle itself -- what it costs, how fast it
+  // drives, how far its bed tips -- is one config.vehicle table, because a
+  // truck is not a row's rate the way a press's output is. Geometry lives in
+  // src/data/vehicles.js and is measured off the models. Behaviour is in
+  // src/sim/vehicles.js, selected by this kind.
+  spawner:         { placeable: true,  needsModel: true,  block: 'spawn',    effects: false, build: true },
   // `modes` closes the set of behaviours a block's `mode` field may name. It is
   // how "broom sweeps, vacuum beams" is expressed as declared data instead of
   // being inferred from the arc width, and an unknown mode is a boot error.
@@ -241,6 +258,10 @@ export const KIND_TAB = {
   blower:          'transport',
   ramp:            'transport',
   collector_auto:  'transport',
+  // A garage is transport for the same reason a conveyor is: the player's
+  // question at that tab is "how do I get ducks from here to there", and a
+  // truck is the answer that carries a load rather than a stream.
+  spawner:         'transport',
 
   wall:            'building',
 
@@ -735,6 +756,30 @@ function checkLid(where, l) {
 // Three SIGNED finite numbers -- a direction or a point, not a size. When
 // `nonZero`, the vector must also have a length, because a direction of
 // [0, 0, 0] is a part declared to move nowhere and would fail silently.
+// `spawn` says what a spawner puts on the plate, and nothing else. It is
+// deliberately thin: the truck's price, its speed, its bed angle and its
+// per-garage limit are all one config.vehicle table, because they are facts
+// about the VEHICLE and would drift the moment a second garage row existed.
+const SPAWNABLE = ['truck'];
+function checkSpawn(where, s) {
+  if (typeof s !== 'object' || s === null || Array.isArray(s)) {
+    throw new DataError(`${where}: spawn must be an object {what, firstFree}`);
+  }
+  if (SPAWNABLE.indexOf(s.what) < 0) {
+    throw new DataError(
+      `${where}: spawn.what must be one of ${SPAWNABLE.join(', ')}, got ${JSON.stringify(s.what)}`
+    );
+  }
+  if (s.firstFree !== undefined && typeof s.firstFree !== 'boolean') {
+    throw new DataError(`${where}: spawn.firstFree must be a boolean`);
+  }
+  for (const k of Object.keys(s)) {
+    if (['what', 'firstFree'].indexOf(k) < 0) {
+      throw new DataError(`${where}: spawn has unknown field '${k}'`);
+    }
+  }
+}
+
 function checkVec3(where, what, v, nonZero) {
   if (!Array.isArray(v) || v.length !== 3 || !v.every((n) => num(n))) {
     throw new DataError(`${where}: ${what} must be three finite numbers, got ${JSON.stringify(v)}`);
@@ -996,6 +1041,7 @@ export function validateRows(rows) {
         }
       }
     }
+    if (isObj(row.spawn)) checkSpawn(where, row.spawn);
     if (isObj(row.blow)) checkBlow(where, row.blow);
     if (isObj(row.storage)) checkStorageLeak(where, row.storage);
     if (isObj(row.tool)) checkTool(where, row.tool);

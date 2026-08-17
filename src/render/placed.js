@@ -245,6 +245,10 @@ export function createPlaced({ scene, models, world, groups }) {
   const streams = [];           // placed objects drawing an airstream
   const gambles = [];           // placed objects with a lid that flies open
   const movers = [];            // placed objects with a `moving` block on the row
+  const attached = [];          // meshes bolted to bodies another module owns
+  // Vehicle models are authored in their own body's frame, so they are drawn
+  // with no seating offset at all. See attachBody.
+  const ZERO_OFF = { x: 0, y: 0, z: 0 };
   const raw = world._raw || null;
   let nextKey = 1;
   let lastAnimTime = null;
@@ -1185,6 +1189,43 @@ export function createPlaced({ scene, models, world, groups }) {
       const q = r.body.rotation();
       writeMatrix(r.pool, r.slot, t, q, r.off || offsetFor(r.model, r.halfY, r.scale), r.scale);
     }
+    for (let i = 0; i < attached.length; i++) {
+      const r = attached[i];
+      const t = r.body.translation();
+      const q = r.body.rotation();
+      writeMatrix(r.pool, r.slot, t, q, ZERO_OFF, 1);
+    }
+  }
+
+  // --- a mesh bolted to a body somebody else owns ------------------------------
+  //
+  // The truck's three parts, and the one path in this file that does NOT put the
+  // mesh's bottom on its collider's bottom. Everything else here is a row with a
+  // footprint, so `offsetFor` centres the model inside the box the data declares;
+  // the truck's models are exported at origin "raw" out of one shared coordinate
+  // system (src/data/vehicles.js), which means their vertices are ALREADY in
+  // their body's frame. Re-centring them would be undoing the thing that makes
+  // the bed line up with the chassis it hinges on.
+  //
+  // The caller owns the body. This owns only the instance slot, and gives it
+  // back when the body goes.
+  function attachBody(model, body) {
+    const pool = poolFor(model);
+    if (!pool || !body) return null;
+    const slot = pool.alloc();
+    if (slot < 0) return null;
+    const rec = { model, body, pool, slot };
+    attached.push(rec);
+    return rec;
+  }
+
+  function detachBody(rec) {
+    if (!rec) return false;
+    const i = attached.indexOf(rec);
+    if (i < 0) return false;
+    attached.splice(i, 1);
+    rec.pool.release(rec.slot);
+    return true;
   }
 
   // What is under the crosshair, among the things lying on the floor. Slab test
@@ -1300,6 +1341,10 @@ export function createPlaced({ scene, models, world, groups }) {
       };
     }),
     setWheelAngle,
+    // The truck: a mesh that follows a body this module does not own.
+    attachBody,
+    detachBody,
+    attachedCount: () => attached.length,
     // One duck came out of the machine with this key: press its ram once.
     strokeAt,
     // What the moving parts are ACTUALLY doing, read back out of the instance

@@ -252,6 +252,94 @@ export const config = {
     maxLoggedErrors: 1,
   },
 
+  // The tipper truck. Geometry lives in src/data/vehicles.js (it is measured off
+  // the models); everything here is FEEL and cost, which is the split every
+  // other block in this file keeps.
+  vehicle: {
+    // What one truck costs at the garage. The garage itself is priced on the
+    // row in src/data/machines.js, and the first truck comes free with it --
+    // buying a garage that then asks for more money before it does anything
+    // would be two purchases for one decision.
+    spawnCost: 100,
+    // How many trucks one garage will keep alive. A garage that spawned an
+    // unbounded queue of 3.4-metre rigid bodies is a frame-budget hole with a
+    // button on it.
+    maxPerSpawner: 3,
+    // Where the truck appears, in the garage's local metres: out through the
+    // gantry, nose first.
+    //
+    // THE Z IS NOT A LOOK, IT IS A CLEARANCE. The garage's collider is 2.50
+    // deep (half 1.25) and the truck reaches 1.72 behind its own origin, so
+    // anything under 2.97 spawns a 3.4-metre rigid body INSIDE the building
+    // that made it -- and Rapier resolves that overlap the only way it can, by
+    // firing the truck across the yard. Measured: at 2.30 the first truck left
+    // the plate. 3.30 clears it with 33 cm to spare.
+    spawnOffset: [0, 0.05, 3.30],
+
+    // --- driving -------------------------------------------------------------
+    // Speeds are deliberately walking-scale. The plate is 40 m across and the
+    // player runs at 5.2; a truck that did 20 would cross the yard in two
+    // seconds and be undrivable indoors.
+    topSpeed: 7.0,
+    reverseSpeed: 3.2,
+    // THESE ARE NOT THE ACCELERATION THE PLAYER FEELS, and the difference is
+    // why the first numbers here (7 and 12) produced a truck that did not move
+    // at all. The drive SETS the chassis velocity each substep; the solver then
+    // spends that substep taking some of it back through ground contact --
+    // measured at 9.5 m/s^2 on the plate. So the number below is a budget that
+    // contact is paid out of first, and what is left over is the truck: 16
+    // against 9.5 is about 6.5 m/s^2 of real acceleration, or nought to seven in
+    // a shade over a second. Anything at or under 9.5 is a truck with the
+    // handbrake welded on.
+    accel: 16.0,
+    brakeAccel: 26.0,
+    // Radians per second at full lock, scaled by how fast you are going.
+    steerRate: 1.5,
+    // The speed at which steering reaches full rate. Below it a truck turns
+    // proportionally less, which is what stops it pirouetting at a standstill.
+    steerFullSpeed: 3.0,
+    // How much sideways velocity survives a substep. Wheels are visual here, so
+    // this is the only thing standing in for lateral grip; 0 would be on rails
+    // and 1 would be ice.
+    gripLoss: 0.12,
+    linearDamping: 0.15,
+    angularDamping: 1.2,
+    density: 4.0,
+    // LOW ON PURPOSE, and it is not a slippery truck: the box under this
+    // vehicle stands in for four wheels, and a wheel ROLLS. At 0.9 -- the
+    // friction a crate has, which is what this started as -- the plate held the
+    // chassis still: measured, the drive asked for 0.20 m/s of acceleration per
+    // substep and static friction was good for 0.24, so full throttle produced
+    // exactly zero movement, forever. Sideways grip does not come from here; it
+    // comes from `gripLoss`, which is the one thing standing in for a tyre.
+    friction: 0.12,
+    restitution: 0.05,
+
+    // --- the bed and the tailgate --------------------------------------------
+    // Both angles are travelled at a RATE (fractions of full travel per second)
+    // rather than snapped: a bed that jumped to 45 degrees would teleport its
+    // load through its own floor.
+    tipMaxDegrees: 45,
+    tipRate: 0.55,
+    gateMaxDegrees: 105,
+    gateRate: 1.6,
+
+    // --- the camera behind the wheel ------------------------------------------
+    // Third person, because the half of this truck that matters is the half
+    // behind the driver: you cannot back a bed under a conveyor you cannot see.
+    camDistance: 7.5,
+    camHeight: 2.4,
+
+    // --- getting in and out ---------------------------------------------------
+    enterRange: 3.2,
+    // How far outside the bed's own box a player may stand and still be carried
+    // along with the truck. Generous on purpose: a passenger who slides off
+    // because the driver clipped a kerb is a passenger who stops riding.
+    rideMarginXZ: 0.25,
+    rideMarginDown: 0.35,
+    rideMarginUp: 1.30,
+  },
+
   // The gambling box. Timings are the FEEL of the thing: a roll that resolves in
   // half a second is a vending machine, and one that takes ten is a chore.
   gamble: {
@@ -2603,6 +2691,30 @@ export const config = {
 // deleted or renamed key fails loudly at boot instead of falling back silently.
 export const REQUIRED_CONFIG_KEYS = [
   'world.gravity.y',
+  'vehicle.spawnCost',
+  'vehicle.maxPerSpawner',
+  'vehicle.topSpeed',
+  'vehicle.reverseSpeed',
+  'vehicle.accel',
+  'vehicle.brakeAccel',
+  'vehicle.steerRate',
+  'vehicle.steerFullSpeed',
+  'vehicle.gripLoss',
+  'vehicle.linearDamping',
+  'vehicle.angularDamping',
+  'vehicle.density',
+  'vehicle.friction',
+  'vehicle.restitution',
+  'vehicle.tipMaxDegrees',
+  'vehicle.tipRate',
+  'vehicle.gateMaxDegrees',
+  'vehicle.gateRate',
+  'vehicle.camDistance',
+  'vehicle.camHeight',
+  'vehicle.enterRange',
+  'vehicle.rideMarginXZ',
+  'vehicle.rideMarginDown',
+  'vehicle.rideMarginUp',
   'gamble.shakeSeconds',
   'gamble.openSeconds',
   'gamble.settleSeconds',
