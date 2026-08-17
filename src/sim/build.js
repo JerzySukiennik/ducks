@@ -210,6 +210,41 @@ export function resolvePlacement(item, rayOrigin, rayDir, rotation, worldQuery) 
     reason = REASONS.NO_SURFACE;
   }
 
+  // --- what you are standing the new object ON --------------------------------
+  //
+  // Until now this function knew about exactly one surface: the plate. Every
+  // placement was resolved onto B.groundY, so aiming at the top of a platform
+  // put the object at ground level UNDERNEATH it -- where the platform's own box
+  // was already sitting -- and the placer refused with "something is there".
+  // From the player's side that reads as "you cannot build on a platform", and
+  // it was true: the surface was never a candidate.
+  //
+  // A placed object's TOP FACE is now a surface like the plate is. Only the top
+  // face: hitting the side of a platform still resolves to the ground beyond it,
+  // because a box hanging off a wall is not what the player meant. The test is
+  // the plane y = top, then the hit point inside the box's own rectangle -- the
+  // same slab test in the box's frame that every other query here uses, and it
+  // needs no new data on the row.
+  let supportY = B.groundY;
+  for (let i = 0; i < q.objects.length; i++) {
+    const o = q.objects[i];
+    const s = o.c === undefined ? obb(o.x, o.y, o.z, o.yaw, o.hx, o.hy, o.hz) : o;
+    const top = s.y + s.hy;
+    if (dy > -1e-6 || rayOrigin.y <= top) continue;      // looking up, or below it
+    const ts = (top - rayOrigin.y) / dy;
+    if (!(ts > 0) || ts >= t) continue;                  // behind us, or further than what we have
+    const l = toLocal(s, rayOrigin.x + dx * ts - s.x, rayOrigin.z + dz * ts - s.z);
+    if (Math.abs(l.u) > s.hx || Math.abs(l.v) > s.hz) continue;
+    t = ts;
+    supportY = top;
+    // A surface found in front of the plate cannot be "no surface", and it is
+    // never past the reach either: it is nearer than the ground hit that was
+    // already accepted.
+    if (reason === REASONS.NO_SURFACE || reason === REASONS.TOO_FAR) reason = null;
+  }
+  if (t > B.maxDistance) { t = B.maxDistance; reason = REASONS.TOO_FAR; }
+  else if (t < B.minDistance) { t = B.minDistance; reason = REASONS.TOO_CLOSE; }
+
   let px = rayOrigin.x + dx * t;
   let pz = rayOrigin.z + dz * t;
 
@@ -218,7 +253,8 @@ export function resolvePlacement(item, rayOrigin, rayDir, rotation, worldQuery) 
     px = snapTo(px, item.snap.grid);
     pz = snapTo(pz, item.snap.grid);
   }
-  const py = B.groundY + hy;
+  // On whatever it landed on -- the plate, or the top of a platform.
+  const py = supportY + hy;
 
   const box = obb(px, py, pz, yaw, hx, hy, hz);
 
