@@ -2665,6 +2665,30 @@ export const config = {
     // for the same reason the pit payoff is: a shake that has to last exactly as
     // long as config.gamble.shakeSeconds cannot be a fixed-length recording, and
     // a payout chime that says "you won something big" has to know what it paid.
+    // The tipper truck. Synthesized rather than sampled because AN ENGINE IS NOT
+    // AN EVENT: its pitch is the speedometer, and the speed is a number that
+    // changes sixty times a second. See src/audio/trucksynth.js.
+    truck: {
+      idleHz: 42,
+      revHz: 96,
+      engineGain: 0.16,
+      subGain: 0.12,
+      // How fast the heard note chases the real speed. This is the flywheel: a
+      // truck whose note snapped to its speed would chirp over every kerb.
+      revLerpPerSecond: 3.5,
+      gateHz: 320,
+      gateGain: 0.5,
+      gateDecaySeconds: 0.32,
+      // The ram sounds only while the bed is MOVING, and its pitch says which
+      // way -- which is how the player hears that Q/Z is a lever, not a button.
+      ramHz: 180,
+      ramHzEnd: 300,
+      ramGain: 0.18,
+      dumpGain: 0.5,
+      dumpDecaySeconds: 0.7,
+      maxVoices: 8,
+    },
+
     gamble: {
       // The shake: a rattle of short wooden ticks that accelerates towards the
       // lid, so the box sounds like it is winding up rather than idling.
@@ -3513,6 +3537,19 @@ export const REQUIRED_CONFIG_KEYS = [
   'audio.master.attackSeconds',
   'audio.master.releaseSeconds',
   'audio.master.makeup',
+  'audio.truck.idleHz',
+  'audio.truck.revHz',
+  'audio.truck.engineGain',
+  'audio.truck.subGain',
+  'audio.truck.revLerpPerSecond',
+  'audio.truck.gateHz',
+  'audio.truck.gateGain',
+  'audio.truck.gateDecaySeconds',
+  'audio.truck.ramHz',
+  'audio.truck.ramHzEnd',
+  'audio.truck.ramGain',
+  'audio.truck.dumpGain',
+  'audio.truck.dumpDecaySeconds',
   'audio.gamble.rattleHz',
   'audio.gamble.rattleHzEnd',
   'audio.gamble.rattleGain',

@@ -14,6 +14,7 @@ import { createLoops } from './loops.js';
 import { createSteps } from './steps.js';
 import { createPitSynth } from './pitsynth.js';
 import { createGambleSynth } from './gamblesynth.js';
+import { createTruckSynth } from './trucksynth.js';
 
 // Sounds that are GENERATED, not played back, and therefore deliberately absent
 // from CLIPS. coverage() reports them separately so "no file" reads as a design
@@ -184,6 +185,17 @@ export function createGameAudio(deps) {
       nodes: () => bus.synthNodes(),
       gain: () => bus.clipGain('gamble_box'),
       note: (info) => bus.recordSynth(info.kind || 'gamble_box', info.gain),
+    },
+  });
+
+  // The truck. Its engine is a running note rather than a clip, so unlike every
+  // other sound in this file it has an on and an off rather than a play().
+  const truckSynth = createTruckSynth({
+    params: A.truck,
+    audio: {
+      nodes: () => bus.synthNodes(),
+      gain: () => bus.clipGain('truck_engine'),
+      note: (info) => bus.recordSynth(info.kind || 'truck_engine', info.gain),
     },
   });
 
@@ -625,6 +637,16 @@ export function createGameAudio(deps) {
     //
     // `at` is the box's position, so the roll pans and attenuates from where the
     // box actually is; omit it and it plays at the listener.
+    // --- the truck -----------------------------------------------------------
+    // Driven from the frame loop in main.js, because that is where the truck's
+    // speed and the two lever positions are known.
+    truckEngineOn: () => truckSynth.engineOn(),
+    truckEngineOff: () => truckSynth.stopAll(),
+    truckSpeed: (frac, dt) => truckSynth.setSpeed(frac, dt),
+    truckGate: (open) => truckSynth.gate(open),
+    truckRam: (active, frac) => truckSynth.ram(active, frac),
+    truckDump: () => truckSynth.dump(),
+    truckState: () => ({ running: truckSynth.running(), rev: truckSynth.rev(), voices: truckSynth.voices() }),
     gambleStarted: (seconds) => gambleSynth.start(simClock, seconds),
     // `size` is 0..1: how big the prize was against the best the table can pay.
     // It makes the arpeggio longer and start higher -- the only sound in the game

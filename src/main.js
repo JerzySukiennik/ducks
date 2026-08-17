@@ -821,6 +821,9 @@ async function boot() {
     // is what a player says when the tailgate is on a key nobody told them
     // about. E is the way OUT, because E is the way out of everything.
     hud.showCap('WASD drive - Space brake - R tailgate - Q/Z bed - E out');
+    // The engine starts when the driver does. It is a running note, not a clip
+    // (src/audio/trucksynth.js), so it has an on and an off rather than a play.
+    if (audio.truckEngineOn) audio.truckEngineOn();
     return true;
   }
 
@@ -886,7 +889,39 @@ async function boot() {
       if (b) b.setTranslation(centreForFeet(vehicles.exitOf(rec)), true);
     }
     driving = null;
+    if (audio.truckEngineOff) audio.truckEngineOff();
     return true;
+  }
+
+  // The truck's own sounds, once a frame. Everything here is READ from the
+  // record rather than remembered: the engine note is the truck's real speed as
+  // a fraction of its top speed, and the ram whines only while the bed is
+  // actually moving -- which is what tells the player that Q and Z are a lever
+  // they are holding rather than a button they pressed.
+  let lastTip = 0;
+  let lastGateOpen = 0;
+  function truckAudio(dt) {
+    if (!driving) return;
+    const rec = vehicles.byKey(driving);
+    if (!rec) return;
+    const v = rec.chassis.linvel();
+    if (audio.truckSpeed) {
+      audio.truckSpeed(Math.hypot(v.x, v.z) / config.vehicle.topSpeed, dt);
+    }
+    const moving = Math.abs(rec.tip - lastTip) > 1e-4;
+    if (audio.truckRam) audio.truckRam(moving, rec.tip);
+    // The load leaves when the bed is high enough for it to slide, and the
+    // sound fires once on that crossing rather than every frame past it.
+    const dumpAt = 0.55;
+    if (lastTip < dumpAt && rec.tip >= dumpAt && rec.gateOpen > 0.5 && audio.truckDump) {
+      audio.truckDump();
+    }
+    lastTip = rec.tip;
+    const gateNow = rec.gateWant > 0.5 ? 1 : 0;
+    if (gateNow !== lastGateOpen) {
+      if (audio.truckGate) audio.truckGate(!!gateNow);
+      lastGateOpen = gateNow;
+    }
   }
 
   // A container is a DROPPED PROP with a real dynamic body -- a placed building
@@ -2649,6 +2684,7 @@ async function boot() {
     // the mouse swings the camera round the truck, and steering is the keys.
     if (driving) {
       driveFromInput(inp);
+      truckAudio(dt);
       inp.fwd = 0;
       inp.right = 0;
       inp.jump = false;
@@ -3907,6 +3943,10 @@ async function boot() {
     debugDropStats() { return placed.stats(); },
     // --- the truck ------------------------------------------------------------
     debugTrucks: () => vehicles.list.map((r) => vehicles.info(r.key)),
+    // What the truck's own synth is doing: whether the engine note is running,
+    // where its revs are (0..1) and how many one-shots are alive. Read back from
+    // the synth rather than from what was asked of it.
+    debugTruckAudio: () => (audio.truckState ? audio.truckState() : null),
     debugTruckInfo: (key) => vehicles.info(key),
     debugSpawnTruck(free) {
       const g = garageTarget() || placed.objects.find((o) => o.kind === 'spawner');
