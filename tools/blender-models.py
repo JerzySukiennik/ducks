@@ -4680,44 +4680,98 @@ def b_car_body():
     """Wywrotka - podwozie z kabina, BEZ paki i klapy.
 
     Origin (0,0,0) = punkt na ziemi w srodku auta; +y to przod. To jest uklad
-    ciala sztywnego podwozia, wiec render rysuje ten model bez zadnego offsetu."""
+    ciala sztywnego podwozia, wiec render rysuje ten model bez zadnego offsetu.
+
+    PRZEBUDOWANE: pierwsza wersja byla pudlem na czterech walcach - kabina bez
+    ani jednej pochylej sciany, opony bez bieznika, rama bez osi. Nic w tym nie
+    bylo zle zmierzone, po prostu nic nie mowilo, ze to CIEZAROWKA. Ta wersja
+    dodaje pochylona szybe, blotniki, osie z resorami, zbiornik, komin wydechu,
+    lusterka i bieznik. Wszystkie punkty, na ktorych stoi fizyka i dane
+    (src/data/vehicles.js), sa nietkniete: kola nadal na +-0.66 w x i 0.22 nad
+    ziemia, kabina nadal miedzy y 0.44 a 1.60."""
     P = []
-    # The ladder frame. Two rails and four crossmembers, left open between the
-    # wheels so the truck reads as a chassis with something bolted on top rather
-    # than a solid brick with wheels painted on it.
+    # --- rama drabinowa -----------------------------------------------------
     for sx in (-1, 1):
-        P.append(box("rail", (0.14, CAR_L - 0.30, 0.13), (sx*0.56, 0, 0.315), "steel_d"))
+        P.append(box("rail", (0.13, CAR_L - 0.30, 0.15), (sx*0.56, 0, 0.315), "steel_d"))
+        P.append(box("railtop", (0.15, CAR_L - 0.40, 0.03), (sx*0.56, 0, 0.395), "steel"))
     for yy in (-1.42, -0.62, 0.42, 1.34):
         P.append(box("xmem", (1.20, 0.11, 0.09), (0, yy, 0.305), "steel_d"))
-    # The deck the bed sits on, and the mudguards over the rear wheels.
     P.append(box("deck", (1.38, 2.00, 0.05), (0, -0.66, 0.375), "steel"))
-    for sx in (-1, 1):
-        P.append(box("guard", (0.20, 0.62, 0.05), (sx*0.65, -1.10, 0.475), "hazard"))
-        P.append(box("guardl", (0.05, 0.62, 0.11), (sx*0.755, -1.10, 0.425), "hazard"))
-    # Wheels. Visual only -- the truck drives on a locked-upright body, not on
-    # four raycast suspensions, so a wheel here is a tyre and a hub and nothing
-    # the simulation ever asks about.
+    # --- osie i resory ------------------------------------------------------
+    # Bez nich kola wisza w powietrzu obok ramy i auto czyta sie jak zabawka.
+    for yy in (-1.10, 1.06):
+        P.append(cyl("axle", 0.055, 1.34, (0, yy, 0.22), "steel_d", verts=8,
+                     rot=(0, math.radians(90), 0)))
+        P.append(box("diff", (0.20, 0.24, 0.20), (0, yy, 0.24), "steel"))
+        for sx in (-1, 1):
+            P.append(box("leaf", (0.07, 0.62, 0.04), (sx*0.44, yy, 0.30), "steel_d"))
+            P.append(box("leaf2", (0.06, 0.48, 0.03), (sx*0.44, yy, 0.255), "steel_d"))
+            P.append(box("damper", (0.05, 0.05, 0.22), (sx*0.38, yy + 0.16, 0.33), "orange",
+                         rot=(math.radians(12), 0, 0)))
+    # --- kola z bieznikiem ---------------------------------------------------
     for sx in (-1, 1):
         for yy in (-1.10, 1.06):
-            P.append(cyl("tyre", CAR_WHEEL_R, 0.22, (sx*0.66, yy, CAR_WHEEL_R), "rubber",
+            P.append(cyl("tyre", CAR_WHEEL_R, 0.24, (sx*0.66, yy, CAR_WHEEL_R), "rubber",
                          verts=12, rot=(0, math.radians(90), 0)))
-            P.append(cyl("hub", 0.10, 0.24, (sx*0.66, yy, CAR_WHEEL_R), "steel", verts=8,
+            P.append(cyl("hub", 0.105, 0.26, (sx*0.66, yy, CAR_WHEEL_R), "steel", verts=8,
                          rot=(0, math.radians(90), 0)))
-    # The cab. Short, upright and blunt: it has to read as the FRONT from across
-    # the plate, and at this size a raked windscreen would be four pixels.
-    P.append(box("cabf", (1.34, 1.16, 0.44), (0, 1.02, 0.62), "hazard"))
-    P.append(box("cabu", (1.28, 0.94, 0.36), (0, 0.94, 1.00), "hazard"))
-    P.append(box("roof", (1.32, 0.98, 0.05), (0, 0.94, 1.20), "orange"))
-    P.append(box("wind", (1.14, 0.05, 0.28), (0, 0.46, 1.02), "glass"))
+            P.append(cyl("nut", 0.045, 0.28, (sx*0.66, yy, CAR_WHEEL_R), "steel_d", verts=6,
+                         rot=(0, math.radians(90), 0)))
+            # Osiem klockow bieznika: przy 12-scianowej oponie to jest roznica
+            # miedzy "walec" a "opona" i kosztuje 8 x 12 trojkatow na kolo.
+            for i in range(8):
+                a = math.radians(i*45.0)
+                # Promien 0.195, nie 0.205: klocek ma polowe grubosci 0.025, a
+                # opona promien 0.22 - przy 0.205 bieznik schodzil 1 cm PONIZEJ
+                # zera, czyli auto stalo w ziemi. 0.195 + 0.025 = 0.22 dokladnie.
+                P.append(box("tread", (0.26, 0.07, 0.05),
+                             (sx*0.66, yy + math.sin(a)*0.195, CAR_WHEEL_R + math.cos(a)*0.195),
+                             "black", rot=(-a, 0, 0)))
+    # --- blotniki -----------------------------------------------------------
     for sx in (-1, 1):
-        P.append(box("side", (0.05, 0.72, 0.24), (sx*0.645, 0.98, 1.00), "glass"))
-        P.append(box("lamp", (0.16, 0.06, 0.12), (sx*0.50, 1.62, 0.58), "white"))
-    P.append(box("grill", (1.20, 0.06, 0.20), (0, 1.62, 0.72), "steel_d"))
-    P.append(box("bump", (1.42, 0.12, 0.14), (0, 1.66, 0.44), "steel"))
-    # A step under each door, because the player walks up to this thing and the
-    # cab floor is 0.40 off the plate.
+        # Kazdy element listwy ma INNA dlugosc niz to, co obudowuje. Rownej
+        # dlugosci obudowa dzieli z blotnikiem obie sciany koncowe co do
+        # mikrona, a wspolna plaszczyzna to remis w buforze glebi -- 10 z 59 par
+        # koplanarnych w tym modelu bralo sie z tej jednej pary.
+        P.append(box("guard", (0.24, 0.66, 0.05), (sx*0.66, -1.10, 0.485), "hazard"))
+        P.append(box("guardl", (0.05, 0.60, 0.13), (sx*0.775, -1.10, 0.425), "hazard"))
+        P.append(box("guardf", (0.24, 0.56, 0.05), (sx*0.66, 1.06, 0.485), "hazard"))
+        P.append(box("mud", (0.22, 0.03, 0.16), (sx*0.66, -1.44, 0.38), "rubber"))
+    # --- kabina --------------------------------------------------------------
+    # Dolna bryla, gorna bryla wezsza, i POCHYLONA szyba miedzy nimi. Skos jest
+    # jedyna rzecza, ktora z dwudziestu metrow odroznia kabine od skrzyni.
+    P.append(box("cabf", (1.34, 1.16, 0.44), (0, 1.02, 0.62), "hazard"))
+    P.append(box("cabu", (1.28, 0.86, 0.36), (0, 0.98, 1.00), "hazard"))
+    P.append(box("wind", (1.18, 0.05, 0.34), (0, 0.545, 1.01), "glass",
+                 rot=(math.radians(-22), 0, 0)))
+    P.append(box("windf", (1.22, 0.05, 0.05), (0, 0.60, 1.188), "steel_d",
+                 rot=(math.radians(-22), 0, 0)))
+    P.append(box("roof", (1.30, 0.94, 0.05), (0, 0.98, 1.20), "orange"))
+    P.append(box("beacon", (0.14, 0.14, 0.09), (0.40, 1.30, 1.27), "duck"))
+    for sx in (-1, 1):
+        P.append(box("side", (0.05, 0.64, 0.24), (sx*0.645, 1.02, 1.00), "glass"))
+        P.append(box("door", (0.03, 0.58, 0.38), (sx*0.678, 1.00, 0.63), "orange"))
+        P.append(box("handle", (0.04, 0.14, 0.04), (sx*0.70, 0.76, 0.72), "steel"))
+        # Lusterka: dwa piksele, ktore mowia "to ma kierowce".
+        P.append(box("mirror", (0.05, 0.05, 0.18), (sx*0.76, 1.42, 1.02), "steel_d"))
+        P.append(box("marm", (0.14, 0.04, 0.04), (sx*0.70, 1.42, 1.10), "steel_d"))
+        P.append(box("lamp", (0.18, 0.06, 0.13), (sx*0.48, 1.62, 0.60), "white"))
+        P.append(box("lampr", (0.21, 0.04, 0.16), (sx*0.48, 1.598, 0.60), "steel_d"))
+    P.append(box("grill", (1.16, 0.06, 0.22), (0, 1.62, 0.86), "steel_d"))
+    for i in range(4):
+        P.append(box("grillbar", (1.10, 0.03, 0.03), (0, 1.655, 0.78 + i*0.055), "black"))
+    P.append(box("bump", (1.44, 0.13, 0.15), (0, 1.66, 0.42), "steel"))
+    P.append(box("plate", (0.34, 0.03, 0.12), (0, 1.735, 0.42), "white"))
+    # Komin wydechu za kabina - pion, ktory lamie plaska sylwetke z boku.
+    P.append(cyl("stack", 0.055, 0.86, (-0.60, 0.42, 0.90), "steel_d", verts=8))
+    P.append(cyl("stackt", 0.075, 0.10, (-0.60, 0.42, 1.36), "black", verts=8))
+    # Zbiornik i skrzynka narzedziowa pod rama, po przeciwnych stronach.
+    P.append(cyl("tank", 0.16, 0.62, (0.62, 0.10, 0.30), "steel", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(box("tbox", (0.20, 0.44, 0.22), (-0.64, 0.10, 0.32), "steel_d"))
     for sx in (-1, 1):
         P.append(box("step", (0.30, 0.44, 0.04), (sx*0.72, 0.72, 0.30), "steel_d"))
+        P.append(box("step2", (0.26, 0.34, 0.03), (sx*0.715, 0.70, 0.16), "steel_d"))
     return finish(P, "car_body", merge=0.001, origin="raw")
 
 
