@@ -260,7 +260,7 @@ export const config = {
     // row in src/data/machines.js, and the first truck comes free with it --
     // buying a garage that then asks for more money before it does anything
     // would be two purchases for one decision.
-    spawnCost: 100,
+    spawnCost: 20,
     // How many trucks one garage will keep alive. A garage that spawned an
     // unbounded queue of 3.4-metre rigid bodies is a frame-budget hole with a
     // button on it.
@@ -268,13 +268,15 @@ export const config = {
     // Where the truck appears, in the garage's local metres: out through the
     // gantry, nose first.
     //
-    // THE Z IS NOT A LOOK, IT IS A CLEARANCE. The garage's collider is 2.50
-    // deep (half 1.25) and the truck reaches 1.72 behind its own origin, so
-    // anything under 2.97 spawns a 3.4-metre rigid body INSIDE the building
-    // that made it -- and Rapier resolves that overlap the only way it can, by
-    // firing the truck across the yard. Measured: at 2.30 the first truck left
-    // the plate. 3.30 clears it with 33 cm to spare.
-    spawnOffset: [0, 0.05, 3.30],
+    // ON THE PAD, not in front of it. The garage's collider is now the pad
+    // alone -- 4 cm of concrete with no walls -- so the truck can be put down
+    // in the middle of its own garage and drive out through the gantry, which
+    // is what a garage is for. It stands 9 cm up because the pad is 4 cm thick
+    // and a truck spawned level with it lands INSIDE it: measured, the body
+    // came to rest at y -0.005, under a pad whose top is at 0.04, with its
+    // wheels interpenetrating the concrete and the throttle doing nothing at
+    // all. Dropping it from 35 cm costs a tenth of a second and cannot wedge.
+    spawnOffset: [0, 0.35, 0],
 
     // --- driving -------------------------------------------------------------
     // Speeds are deliberately walking-scale. The plate is 40 m across and the
@@ -294,17 +296,17 @@ export const config = {
     accel: 16.0,
     brakeAccel: 26.0,
     // Radians per second at full lock, scaled by how fast you are going.
-    steerRate: 1.5,
+    steerRate: 1.0,
     // The speed at which steering reaches full rate. Below it a truck turns
     // proportionally less, which is what stops it pirouetting at a standstill.
     steerFullSpeed: 3.0,
     // How much sideways velocity survives a substep. Wheels are visual here, so
     // this is the only thing standing in for lateral grip; 0 would be on rails
     // and 1 would be ice.
-    gripLoss: 0.12,
+    gripLoss: 0.06,
     linearDamping: 0.15,
     angularDamping: 1.2,
-    density: 4.0,
+    density: 40.0,
     // LOW ON PURPOSE, and it is not a slippery truck: the box under this
     // vehicle stands in for four wheels, and a wheel ROLLS. At 0.9 -- the
     // friction a crate has, which is what this started as -- the plate held the
@@ -312,13 +314,19 @@ export const config = {
     // substep and static friction was good for 0.24, so full throttle produced
     // exactly zero movement, forever. Sideways grip does not come from here; it
     // comes from `gripLoss`, which is the one thing standing in for a tyre.
-    friction: 0.12,
+    friction: 0.02,
     restitution: 0.05,
 
     // --- the bed and the tailgate --------------------------------------------
     // Both angles are travelled at a RATE (fractions of full travel per second)
     // rather than snapped: a bed that jumped to 45 degrees would teleport its
     // load through its own floor.
+    // How much of the chassis's angular velocity the bed's pose is allowed to
+    // predict, 0..1. See poseParts in src/sim/vehicles.js: 1.0 overshoots and
+    // throws the load out on every corner, 0 leaves a one-substep lag that is
+    // consistent and therefore harmless.
+    yawPredictFrac: 0,
+
     tipMaxDegrees: 45,
     tipRate: 0.55,
     gateMaxDegrees: 105,
@@ -2705,6 +2713,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'vehicle.density',
   'vehicle.friction',
   'vehicle.restitution',
+  'vehicle.yawPredictFrac',
   'vehicle.tipMaxDegrees',
   'vehicle.tipRate',
   'vehicle.gateMaxDegrees',

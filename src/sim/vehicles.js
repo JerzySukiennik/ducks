@@ -85,18 +85,51 @@ export function createVehicles({ world, config, spec }) {
     GROUP_PROP, GROUP_WORLD | GROUP_PROP | GROUP_PLAYER
   );
 
+  // The same part, moved by a mount point. Used to hang the bed's own colliders
+  // off the CHASSIS at the bed's hinge, so one part list serves both bodies and
+  // the two copies cannot drift apart.
+  function offsetPart(p, mount) {
+    const c = p.center;
+    const moved = { center: [c[0] + mount[0], c[1] + mount[1], c[2] + mount[2]] };
+    if (p.shape === 'ball') { moved.shape = 'ball'; moved.radius = p.radius; } else moved.half = p.half;
+    return moved;
+  }
+
+  function addPart(body, p, density) {
+    const desc = p.shape === 'ball'
+      ? RAPIER.ColliderDesc.ball(p.radius)
+      : RAPIER.ColliderDesc.cuboid(p.half[0], p.half[1], p.half[2]);
+    return world._raw.createCollider(
+      desc
+        .setTranslation(p.center[0], p.center[1], p.center[2])
+        .setDensity(density)
+        .setFriction(V.friction)
+        .setRestitution(V.restitution)
+        .setCollisionGroups(carGroups),
+      body
+    );
+  }
+
   function addParts(body, parts, density) {
+    const out = [];
     for (const p of parts) {
-      world._raw.createCollider(
-        RAPIER.ColliderDesc.cuboid(p.half[0], p.half[1], p.half[2])
+      // A part is a box unless it says otherwise. The four wheels say otherwise:
+      // a ball has no vertical face at ground level, so it rolls over a kerb
+      // instead of stopping dead against it. See src/data/vehicles.js.
+      const desc = p.shape === 'ball'
+        ? RAPIER.ColliderDesc.ball(p.radius)
+        : RAPIER.ColliderDesc.cuboid(p.half[0], p.half[1], p.half[2]);
+      out.push(world._raw.createCollider(
+        desc
           .setTranslation(p.center[0], p.center[1], p.center[2])
           .setDensity(density)
           .setFriction(V.friction)
           .setRestitution(V.restitution)
           .setCollisionGroups(carGroups),
         body
-      );
+      ));
     }
+    return out;
   }
 
   // --- one truck -------------------------------------------------------------
@@ -127,6 +160,34 @@ export function createVehicles({ world, config, spec }) {
         .setCanSleep(false)
     );
     addParts(chassis, S.chassis.parts, V.density);
+    // A SECOND COPY OF THE BED, BOLTED TO THE CHASSIS ITSELF, and it is the
+    // only reason a loaded truck can take a corner.
+    //
+    // The bed is a kinematic body: every substep it is TELEPORTED to where the
+    // chassis is. Rapier reads a teleport as velocity, and the faster and more
+    // sideways the truck moves, the worse that reading gets. Measured with the
+    // load on a kinematic bed through a hard turn: a duck went from 1.0 m/s to
+    // 41.7 m/s inside a single 0.1 s window and left the plate. Predicting the
+    // chassis a substep forward helped and did not fix it; predicting the yaw
+    // as well made it worse.
+    //
+    // So while the bed is DOWN -- which is all of the time the truck is moving
+    // -- the load does not rest on the kinematic body at all. It rests on these
+    // colliders, which belong to the chassis and therefore move exactly as the
+    // truck moves, because they ARE the truck. The kinematic copy is switched on
+    // only while the bed is tipping, when the truck is standing still and a
+    // teleport reads as what it is: a bed going up.
+    const bedOnChassis = [];
+    for (const p of S.bed.parts) {
+      bedOnChassis.push(addPart(chassis, offsetPart(p, S.bed.hinge), V.density));
+    }
+    for (const p of S.gate.parts) {
+      bedOnChassis.push(addPart(chassis, offsetPart(p, [
+        S.bed.hinge[0] + S.gate.hingeInBed[0],
+        S.bed.hinge[1] + S.gate.hingeInBed[1],
+        S.bed.hinge[2] + S.gate.hingeInBed[2],
+      ]), V.density));
+    }
 
     // BORN WHERE THEY BELONG, not at the chassis origin and posed a step later.
     // setNextKinematicTranslation is a promise about the NEXT step, so a bed
@@ -141,7 +202,7 @@ export function createVehicles({ world, config, spec }) {
         .setTranslation(bedPos.x, bedPos.y, bedPos.z)
         .setRotation(q)
     );
-    addParts(bed, S.bed.parts, V.density);
+    const bedColliders = addParts(bed, S.bed.parts, V.density);
 
     const gatePos = localToWorld(bedPos, y, {
       x: S.gate.hingeInBed[0], y: S.gate.hingeInBed[1], z: S.gate.hingeInBed[2],
@@ -151,7 +212,7 @@ export function createVehicles({ world, config, spec }) {
         .setTranslation(gatePos.x, gatePos.y, gatePos.z)
         .setRotation(q)
     );
-    addParts(gate, S.gate.parts, V.density);
+    const gateColliders = addParts(gate, S.gate.parts, V.density);
 
     const rec = {
       key: nextKey++,
@@ -170,14 +231,40 @@ export function createVehicles({ world, config, spec }) {
       handbrake: false,
       // Where the truck was last substep, so anything standing on it can be
       // carried by the DIFFERENCE rather than by guessing at its velocity.
+      bedOnChassis,
+      bedKinematic: bedColliders.concat(gateColliders),
+      // NOT `false`: setBedMode short-circuits when the mode already matches, so
+      // a record born `false` would never actually switch the kinematic copy
+      // off, and the truck would drive around double-walled -- a duck caught
+      // between the two copies is a duck squeezed by a solver.
+      tipped: null,
       prev: { x: p.x, y: p.y, z: p.z, yaw: y },
       delta: { x: 0, y: 0, z: 0, yaw: 0 },
       yaw: y,
     };
-    poseParts(rec);
+    setBedMode(rec, false);
+    poseParts(rec, 0);
     list.push(rec);
     byKey.set(rec.key, rec);
     return rec;
+  }
+
+  // Which copy of the bed is solid right now. Exactly one of the two is ever
+  // enabled, so nothing is ever double-walled and a duck can never be caught
+  // between a bed and its own shadow.
+  //
+  //   down (tipped === false)  the chassis's copy. The load rides on the truck
+  //                            itself and a corner cannot throw it, because
+  //                            nothing is being teleported.
+  //   up   (tipped === true)   the kinematic bodies. They are the ones that can
+  //                            actually rotate, and a truck tipping its load out
+  //                            is a truck that is standing still.
+  function setBedMode(rec, tipped) {
+    if (rec.tipped === tipped) return false;
+    rec.tipped = tipped;
+    for (const c of rec.bedOnChassis) c.setEnabled(!tipped);
+    for (const c of rec.bedKinematic) c.setEnabled(tipped);
+    return true;
   }
 
   function remove(key) {
@@ -199,9 +286,35 @@ export function createVehicles({ world, config, spec }) {
   // would drift the first time the chassis was moved by something other than
   // this file (a shove, a snapshot restore, a duck landing on the bonnet).
 
-  function poseParts(rec) {
+  // `dt` is not optional decoration. setNextKinematicTranslation states where a
+  // body will be at the END of the step, so posing the bed at the chassis's
+  // CURRENT pose puts it one substep behind the chassis, every substep, forever.
+  // A truck driving straight barely shows it; a truck TURNING does, because the
+  // bed then has to snap round to catch up each substep and Rapier reads that
+  // snap as velocity -- the bed's far corner covering its lag in a single
+  // 1/60 s is metres per second of implied speed, applied to whatever is
+  // resting on it. That is why the load came out of the back on every corner
+  // and went a very long way. Predicting the chassis one substep forward, from
+  // the velocities the solver is about to integrate, removes the lag entirely.
+  function poseParts(rec, dt) {
     const t = rec.chassis.translation();
-    const yaw = rec.yaw;
+    let yaw = rec.yaw;
+    if (dt > 0) {
+      const v = rec.chassis.linvel();
+      const w = rec.chassis.angvel();
+      t.x += v.x * dt;
+      t.y += v.y * dt;
+      t.z += v.z * dt;
+      // TRANSLATION IS PREDICTED, ROTATION IS NOT, and the asymmetry is
+      // measured rather than tidy. The solver honours a set linear velocity
+      // almost exactly, so predicting where the chassis will be is reliable.
+      // It does NOT honour a set angular velocity the same way -- ground
+      // contact fights the yaw -- so predicting the ANGLE overshoots, the bed
+      // snaps back the next substep, and Rapier reads that snap as speed and
+      // throws the load out. Measured with yaw predicted: nine ducks aboard, a
+      // hard turn, nine ducks 17 to 23 metres away.
+      yaw += w.y * dt * V.yawPredictFrac;
+    }
     const tipA = rec.tip * V.tipMaxDegrees * (Math.PI / 180);
     const gateA = rec.gateOpen * V.gateMaxDegrees * (Math.PI / 180);
 
@@ -373,7 +486,12 @@ export function createVehicles({ world, config, spec }) {
       rec.gateOpen = rec.gateWant > rec.gateOpen
         ? Math.min(rec.gateWant, rec.gateOpen + gr)
         : Math.max(rec.gateWant, rec.gateOpen - gr);
-      poseParts(rec);
+      // The moment either hinge leaves its resting position, the moving copy of
+      // the bed takes over; the moment both are back home, the chassis's copy
+      // does. `> 0` and not a threshold: a bed one degree up is a bed that has
+      // to be able to move, and the switch is one frame either way.
+      setBedMode(rec, rec.tip > 0 || rec.gateOpen > 0);
+      poseParts(rec, dt);
     }
   }
 

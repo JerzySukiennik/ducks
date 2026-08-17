@@ -30,26 +30,42 @@ export const TRUCK = {
   chassis: {
     // Two boxes, not one: a single box round the whole silhouette would make
     // the cab's roofline part of the thing a duck bounces off at bumper height.
+    // THE TRUCK STANDS ON FOUR BALLS, one per wheel, and that is the single
+    // most important line in this file.
+    //
+    // It used to stand on one flat-bottomed box spanning the whole chassis, and
+    // a flat box with a vertical face at ground level catches on EVERYTHING: a
+    // kerb, a ramp's lip, the edge of a conveyor, the lip of its own garage
+    // pad. The truck would simply stop dead with the throttle wide open, at no
+    // particular place, which from the driver's seat reads as the vehicle
+    // randomly seizing up. Measured in that state: full throttle for twelve
+    // seconds, speed 0.0 the whole way.
+    //
+    // A ball has no vertical face to catch. It rolls over anything shallower
+    // than its own radius, which is what a wheel is for, and it is also why the
+    // radius here is the radius drawn on the model: 0.22, centred at 0.22, so
+    // the contact point is the bottom of the tyre exactly as it looks.
+    //
+    // Between the wheels there is now no collider at all, and there does not
+    // need to be: the load rests on the BED, which is its own body bolted on
+    // top, and the cab is its own box below.
     parts: [
-      // The frame, the deck it carries and the WHEELS UNDER IT, from the rear
-      // bumper to the front of the cab's floor: 0.00..0.40 off the plate.
-      //
-      // It reaches the ground on purpose. The frame's own steel starts at 0.25
-      // and the first version of this box said so -- which parked the truck 25
-      // centimetres into the plate, because a body rests where its lowest
-      // COLLIDER stops and the wheels holding this one up are decoration. The
-      // wheels are 0.44 across and the box is 0.34 deep, so the tyres still
-      // stand a hair proud of it and read as the thing carrying the load.
-      //
-      // IT STOPS AT 0.34, ONE CENTIMETRE UNDER THE BED'S FLOOR (0.35), and that
-      // centimetre is load-bearing. The bed is its own rigid body sitting on
-      // top of this one, and two rigid bodies that overlap are two rigid bodies
-      // the solver has to separate -- which it does, instantly, by throwing the
-      // lighter one across the plate. Measured with the boxes touching at 0.40:
-      // the truck left the ground at 78 m/s and was 91 m up two seconds later.
-      { half: [0.70, 0.17, 1.605], center: [0, 0.17, 0.055] },
+      // 0.16, not the tyre's own 0.22, and the difference is the bed. A ball of
+      // 0.22 centred at 0.22 reaches y 0.44, and the bed's floor starts at 0.35
+      // -- so the wheels were inside the bed they are supposed to carry, which
+      // is two rigid bodies overlapping, which is the truck 2100 metres up.
+      // The contact point is unchanged (bottom of the ball is still y 0.00, so
+      // the ride height still matches the drawn tyre); only the kerb it can
+      // climb shrinks from 22 cm to 16.
+      { shape: 'ball', radius: 0.16, center: [0.66, 0.16, 1.10] },
+      { shape: 'ball', radius: 0.16, center: [-0.66, 0.16, 1.10] },
+      { shape: 'ball', radius: 0.16, center: [0.66, 0.16, -1.06] },
+      { shape: 'ball', radius: 0.16, center: [-0.66, 0.16, -1.06] },
       // The cab. Its own box, so the bonnet line is real and a player can stand
-      // in front of the truck without standing inside it.
+      // in front of the truck without standing inside it. It clears the bed's
+      // front wall (z -0.30) by 14 cm: two rigid bodies that overlap are two
+      // rigid bodies the solver separates, and it does that by firing the
+      // lighter one across the plate.
       { half: [0.67, 0.4125, 0.58], center: [0, 0.8125, -1.02] },
     ],
   },

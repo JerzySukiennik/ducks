@@ -815,6 +815,12 @@ async function boot() {
     driving = near.key;
     vehicles.setDriver(near.key, 0);
     vehicles.control(near.key, { throttle: 0, steer: 0, handbrake: false });
+    // THE CONTROLS, ON SCREEN, ONCE. Nothing else in this game needs a key
+    // legend because everything else is one key on one object; a truck is five
+    // keys the player has no way to discover, and "I cannot drop the tailgate"
+    // is what a player says when the tailgate is on a key nobody told them
+    // about. E is the way OUT, because E is the way out of everything.
+    hud.showCap('WASD drive - Space brake - R tailgate - Q/Z bed - E out');
     return true;
   }
 

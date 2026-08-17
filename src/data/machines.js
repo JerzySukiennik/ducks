@@ -517,10 +517,15 @@ export const MACHINES = [
     id: 'car_spawner', netId: 30, name: 'Truck Garage',
     desc: 'Puts a tipper truck on the plate. Drive it, back it under a belt, tip the load out where you want it.',
     cost: 1450, model: 'car_spawner',
-    // Measured off assets/models/car_spawner.glb: a 2.00 x 2.50 pad with a
-    // gantry over it, 2.00 tall. Both horizontal numbers are exact multiples of
-    // config.build.grid, which is what lets it butt up against anything else.
-    footprint: [2.00, 2.00, 2.50], anchor: 'floor',
+    // Measured off assets/models/car_spawner.glb: a 2.50 x 4.50 pad with a
+    // gantry at one end, 2.44 tall. Both horizontal numbers are exact multiples
+    // of config.build.grid, which is what lets it butt up against anything else.
+    //
+    // IT IS THIS BIG BECAUSE THE TRUCK PARKS ON IT. The truck is 3.38 long and
+    // 1.74 wide, so a pad it can actually stand on has to beat both -- the first
+    // version was 2.00 x 2.50 and the truck could only be put down in FRONT of
+    // its own garage, which read as the garage having missed.
+    footprint: [2.50, 2.44, 4.50], anchor: 'floor',
     kind: 'spawner',
     // The first truck is FREE and arrives the moment the garage is placed --
     // the player has already paid for it, and a building that asks for more
@@ -529,9 +534,16 @@ export const MACHINES = [
     spawn: { what: 'truck', firstFree: true },
     // Three garages is a fleet; more is a frame budget with a button on it.
     repeat: { times: 3, curve: 1.45 },
-    // The gantry legs, not the pad: the pad is 8 cm thick and a collider that
-    // tall would be a kerb the truck has to climb every time it comes home.
-    collider: { shape: 'cuboid', half: [1.00, 1.00, 1.25], blockDucks: true },
+    // THE PAD, AND ONLY THE PAD. The gantry is 2.44 m of decoration with no
+    // collider at all, deliberately: the truck spawns under it and has to be
+    // able to drive out through it. A box round the whole building would spawn
+    // a 3.4-metre rigid body inside a solid wall, and Rapier's answer to that
+    // is to fire it across the yard -- which is exactly what the first version
+    // of this row did.
+    //
+    // 4 cm tall, so it is a low kerb rather than a step: the truck rolls off it
+    // and the model carries a shallow ramp at the open end to roll back on.
+    collider: { shape: 'cuboid', half: [1.25, 0.02, 2.25], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
     tags: ['bigticket'],
   },

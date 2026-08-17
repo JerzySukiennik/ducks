@@ -151,7 +151,7 @@ FOOTPRINT = {
     # origin="raw" so that all three keep one shared coordinate system, and a
     # footprint entry would scale each one by its own bounding box and pull them
     # apart. Their sizes are authored exactly instead.
-    "car_spawner":     (2.00, 2.50),
+    "car_spawner":     (2.50, 4.50),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -4739,25 +4739,40 @@ def b_car_gate():
 
 
 def b_car_spawner():
-    """Garaz - stawiasz go i wyjezdza z niego wywrotka.
+    """Garaz - PLASKI POMOST, na ktorym stoi wywrotka.
 
-    Zwykly model stojacy na ziemi (origin="floor"), bo to jest budynek na
-    siatce jak kazdy inny. Rampa jest zwrocona w lokalne +Y autora, czyli w
-    gre w lokalne -Z: to jest kierunek, w ktorym stawiany jest samochod."""
+    Wywrotka spawnuje sie NA nim, nie przed nim, wiec pomost musi byc dluzszy
+    niz auto (3.40) i szerszy niz jego obrys (1.74): 2.50 x 4.50. Bryla
+    kolizyjna w src/data/machines.js to sam pomost, 4 cm wysokosci -- brama jest
+    dekoracja bez kolizji, bo auto musi przez nia przejechac."""
     P = []
-    P.append(box("pad", (1.90, 2.30, 0.08), (0, 0, 0.04), "concrete"))
-    for i in range(5):                      # hazard stripes across the pad
-        P.append(box("stripe", (1.70, 0.10, 0.02), (0, -0.80 + i*0.40, 0.09), "hazard"))
-    for sx in (-1, 1):                      # two posts and a lintel: a gantry
-        P.append(box("post", (0.16, 0.16, 1.70), (sx*0.86, 0.90, 0.93), "steel_d"))
-        P.append(box("foot", (0.30, 0.30, 0.07), (sx*0.86, 0.90, 0.115), "steel"))
-    P.append(box("lint", (1.96, 0.20, 0.22), (0, 0.90, 1.89), "hazard"))
-    P.append(box("sign", (0.92, 0.06, 0.30), (0, 0.78, 1.60), "steel"))
-    P.append(box("bulb", (0.16, 0.10, 0.10), (0, 0.72, 1.60), "white"))
-    P.append(cyl("hose", 0.05, 1.10, (0.86, 0.30, 0.55), "rubber", verts=8,
+    P.append(box("pad", (2.50, 4.50, 0.08), (0, 0, 0.04), "concrete"))
+    for i in range(9):                      # hazard stripes down the pad
+        P.append(box("stripe", (2.30, 0.12, 0.02), (0, -1.80 + i*0.45, 0.09), "hazard"))
+    for sx in (-1, 1):                      # kerbs down the long sides
+        P.append(box("kerb", (0.10, 4.50, 0.10), (sx*1.20, 0, 0.13), "steel_d"))
+    for sx in (-1, 1):                      # the gantry, at the closed end
+        P.append(box("post", (0.18, 0.18, 2.10), (sx*1.12, 2.05, 1.13), "steel_d"))
+        P.append(box("foot", (0.34, 0.34, 0.08), (sx*1.12, 2.05, 0.12), "steel"))
+        P.append(box("brace", (0.10, 0.60, 0.10), (sx*1.02, 1.72, 2.00), "steel_d",
+                     rot=(math.radians(40), 0, 0)))
+    P.append(box("lint", (2.56, 0.22, 0.26), (0, 2.05, 2.31), "hazard"))
+    P.append(box("sign", (1.20, 0.07, 0.34), (0, 1.92, 1.92), "steel"))
+    for sx in (-1, 1):
+        P.append(box("bulb", (0.14, 0.10, 0.10), (sx*0.34, 1.85, 1.92), "white"))
+    # The service side: a pump, a hose and a rack. It is what makes this read as
+    # a place a truck LIVES rather than a rectangle of paint.
+    P.append(box("pump", (0.36, 0.32, 0.78), (1.02, 1.10, 0.47), "steel_d"))
+    P.append(box("pumpt", (0.30, 0.24, 0.18), (1.02, 1.10, 0.95), "orange"))
+    P.append(cyl("hose", 0.05, 0.90, (1.02, 0.62, 0.60), "rubber", verts=8,
                  rot=(math.radians(90), 0, 0)))
-    P.append(box("pump", (0.34, 0.30, 0.70), (0.72, -0.42, 0.43), "steel_d"))
-    P.append(box("pumpt", (0.28, 0.22, 0.16), (0.72, -0.42, 0.86), "orange"))
+    P.append(box("rack", (0.24, 1.00, 0.06), (-1.06, 0.90, 0.62), "steel"))
+    for i in range(3):
+        P.append(box("tyre", (0.20, 0.20, 0.20), (-1.06, 0.50 + i*0.40, 0.75), "rubber"))
+    # A shallow ramp at the OPEN end, so the 8 cm pad is something a truck rolls
+    # off rather than a step it has to be lifted over.
+    P.append(box("ramp", (2.30, 0.34, 0.04), (0, -2.32, 0.05), "concrete",
+                 rot=(math.radians(-7), 0, 0)))
     return finish(P, "car_spawner", merge=0.001)
 
 
