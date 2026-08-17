@@ -501,8 +501,22 @@ export const config = {
     // resolution. Resolution decides whether those four pixels are solid;
     // contrast decides whether you notice them. Both were wrong, and only one
     // of them was in the shadow settings.
-    sunIntensity: 1.95,
-    hemiIntensity: 0.30,
+    // BOTH x 1.5 from 1.95 / 0.30, and both together on purpose: the pair above
+    // is a RATIO before it is two brightnesses, and every shadow number in this
+    // block was tuned against 6.5:1. Scaling one alone would have re-lit the
+    // whole game as a side effect of making the yard brighter.
+    //
+    // Measured off a real render target, the plate at (9, 9) seen from 3.2 m up,
+    // mean of the floor half of the frame in LINEAR light:
+    //   1.95 / 0.30    9.31   -- what the yard was
+    //   2.34 / 0.36   11.22
+    //   2.63 / 0.41   12.60
+    //   2.93 / 0.45   14.02   -- 50% more light on the plate
+    //   3.41 / 0.53   16.29   -- rejected: the amber accents start to wash out
+    //                            against concrete that is no longer darker than
+    //                            they are, and the yard stops reading as night
+    sunIntensity: 2.93,
+    hemiIntensity: 0.45,
     // The fill light's two colours, which used to be literals in view.js.
     // They are here because they decide what a SHADOW looks like: a shadowed
     // patch of concrete is lit by these alone, so their hue is the shadow's hue.
