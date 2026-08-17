@@ -867,7 +867,15 @@ export function createPlaced({ scene, models, world, groups }) {
     const m = config.machine;
     _wheelM.copy(bodyMatrix(rec));
     _wheelM.multiply(_off.makeTranslation(m.wheelLocalX, m.wheelLocalY, m.wheelLocalZ));
-    _wheelM.multiply(_spin.makeRotationX(rec.wheelAngle));
+    // ABOUT Z, and negated -- the same two facts src/render/props.js states for
+    // the starter workbench (`wheel.rotation.z = -a`). This turned about X,
+    // which is where the axle was when the wheel was bolted to the machine's
+    // SIDE. The wheel was moved to the FRONT face and its split predicate moved
+    // with it, but this line did not, so every workbench the player BOUGHT span
+    // its wheel edge-on -- flipping like a tossed coin instead of turning like
+    // a wheel -- while the starter one, drawn by the other file, was right.
+    // Two copies of one fact, and only one of them was updated.
+    _wheelM.multiply(_spin.makeRotationZ(-rec.wheelAngle));
     rec.wheelPool.set(rec.wheelSlot, _wheelM);
   }
 
