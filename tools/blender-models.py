@@ -2782,36 +2782,62 @@ def b_geyser():
 def b_pipe_endless():
     """Endless Pipe. H 1.4194, footprint 1.00 x 1.00.
 
-    Another of the four that already read -- a loop of pipe is a hole by
-    construction -- so the loop, the column and the plinth are untouched. The
-    outlet spur was at 0.50 and the simulation spawns at mouth_z(1.4194) = 0.639,
-    so the spur rises 14 cm to meet it and keeps its flare, which is the part a
-    player watches the stream come out of."""
+    PRZEBUDOWANE: bylo to plaskie kolo z 16 pudelek w plaszczyznie XZ, czyli
+    torus rysowany jako obrecz - i dokladnie tak sie czytalo, jak KOLO, a nie
+    jak rura. Teraz petla jest prostokatna i zrobiona z WALCOW: dwa piony, gora,
+    dol, kolana w rogach, kolnierze na stykach. Walec czyta sie jak rura z
+    dwudziestu metrow, obrecz z pudelek nie.
+
+    Wysokosc jest zwiazana i wyliczona z gory modelu w dol - patrz ZT nizej."""
     H, W, D = 1.4194, 1.00, 1.00
     P = []
-    R, N = 0.40, 16
-    ZC = 0.92
-    seg = 2*math.pi*R/N*1.40
-    for i in range(N):
-        a = math.radians(i*360.0/N)
-        P.append(box("loop%d" % i, (seg, 0.20, 0.19),
-                     (math.sin(a)*R, 0, ZC + math.cos(a)*R), "steel_d", rot=(0, a, 0)))
-    for i in range(0, N, 4):
-        a = math.radians(i*360.0/N)
-        P.append(box("band%d" % i, (seg*0.9, 0.25, 0.06),
-                     (math.sin(a)*R, 0, ZC + math.cos(a)*R), "hazard", rot=(0, a, 0)))
-    # The spur, at the height the sim ejects from.
+    R = 0.09                       # promien rury
+    XL, XR = -0.32, 0.32           # piony
+    # ZT jest WYLICZONE, nie dobrane: najwyzszym punktem modelu jest kula kolana
+    # o promieniu R*1.06 = 0.0954 na srodku gornego odcinka, a caly model ma
+    # miec dokladnie 1.4194 (footprint[1] wiersza, i z tego liczy sie wysokosc
+    # wylotu). 1.4194 - 0.0954 = 1.3240.
+    ZB, ZT = 0.52, 1.3240          # dol i gora petli
+    # Piony.
+    for x in (XL, XR):
+        P.append(cyl("riser", R, ZT - ZB, (x, 0, (ZT + ZB)/2), "steel_d", verts=10))
+    # Gora i dol - walce polozone wzdluz X.
+    for z in (ZB, ZT):
+        P.append(cyl("run", R, XR - XL, (0, 0, z), "steel_d", verts=10,
+                     rot=(0, math.radians(90), 0)))
+    # Kolana: kula w kazdym rogu zamyka styk bez remisu w buforze glebi.
+    for x in (XL, XR):
+        for z in (ZB, ZT):
+            P.append(ball("elbow", R*1.06, (x, 0, z), "steel", seg=8, ring_count=5))
+    # Kolnierze - to one mowia, ze to rura skrecana, a nie giete drutu.
+    for x in (XL, XR):
+        for z in (ZB + 0.22, ZT - 0.22):
+            P.append(cyl("flange", R*1.55, 0.045, (x, 0, z), "hazard", verts=10))
+    # Na DOLNYM odcinku, nie na gornym: kolnierz o promieniu 0.1395 nalozony na
+    # gorna rure siega 1.469, a caly model ma miec dokladnie 1.4194 - tyle mowi
+    # footprint wiersza i z tego liczy sie wysokosc wylotu.
+    for xx in (-0.16, 0.16):
+        P.append(cyl("flangeb", R*1.55, 0.045, (xx, 0, ZB), "hazard", verts=10,
+                     rot=(0, math.radians(90), 0)))
+    # Kolumna i wsporniki do petli.
+    P.append(box("column", (0.26, 0.26, 0.40), (0, 0.02, 0.30), "steel"))
+    for x in (XL, XR):
+        P.append(box("stay", (abs(x) - 0.10, 0.07, 0.05), (x/2, 0.02, 0.50), "steel"))
+    # Manometr na froncie - jeden czytelny detal na wysokosci wzroku.
+    P.append(cyl("gauge", 0.10, 0.05, (0, -0.14, 0.98), "white", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(box("needle", (0.015, 0.03, 0.07), (0, -0.17, 1.01), "red",
+                 rot=(0, math.radians(20), 0)))
+    P.append(cyl("gstem", 0.03, 0.14, (0, -0.06, 0.98), "steel_d", verts=6,
+                 rot=(math.radians(90), 0, 0)))
+    # Wylot - na tej samej wysokosci, z ktorej symulacja wypuszcza kaczki.
     ZM = mouth_z(H)
-    NM = 10
-    for i in range(NM):
-        a = math.radians(i*360.0/NM)
-        P.append(box("mouth%d" % i, (2*math.pi*0.19/NM*1.5, 0.32, 0.05),
-                     (math.sin(a)*0.19, -0.33, ZM + math.cos(a)*0.19), "steel", rot=(0, a, 0)))
-    for i in range(NM):
-        a = math.radians(i*360.0/NM)
-        P.append(box("mlip%d" % i, (2*math.pi*0.24/NM*1.5, 0.08, 0.09),
-                     (math.sin(a)*0.24, -0.46, ZM + math.cos(a)*0.24), "hazard", rot=(0, a, 0)))
-    P.append(box("column", (0.26, 0.26, 0.42), (0, 0.02, 0.31), "steel"))
+    P.append(cyl("spur", 0.17, 0.30, (0, -0.30, ZM), "steel", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("flare", 0.23, 0.09, (0, -0.47, ZM), "hazard", verts=10,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("spurup", 0.13, 0.34, (0, -0.30, ZM + 0.17), "steel_d", verts=8))
+    # Podstawa.
     P.append(box("plinth", (0.86, 0.86, 0.14), (0, 0, 0.07), "dark"))
     P.append(box("hazbase", (0.92, 0.92, 0.05), (0, 0, 0.155), "hazard"))
     return finish(P, "pipe_endless", merge=0.001)
