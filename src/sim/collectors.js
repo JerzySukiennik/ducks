@@ -10,6 +10,8 @@
 // No three.js, no Rapier types, no DOM. Behaviour comes from `kind` and data
 // blocks; nothing here looks at a row id.
 
+import { mouthOf } from './producers.js';
+
 const COLLECTOR_KIND = 'collector_auto';
 
 function num(v, name) {
@@ -54,7 +56,31 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
     burstSeconds: num(config.collectors.burstSeconds, 'collectors.burstSeconds'),
     minRadius: num(config.collectors.minRadius, 'collectors.minRadius'),
     liftGravityFrac: num(config.collectors.liftGravityFrac, 'collectors.liftGravityFrac'),
+    feedCooldown: num(config.collectors.feedCooldownSeconds, 'collectors.feedCooldownSeconds'),
+    outletClear: num(config.collectors.outletClear, 'collectors.outletClear'),
+    outletCos: num(config.collectors.outletCos, 'collectors.outletCos'),
   };
+  // The mouth is a MACHINE-WIDE convention, not a collector one: these are the
+  // producers' own numbers, read here so that a Vacuum Station's outlet and a
+  // press's outlet are the same point on the same face of the same footprint.
+  // Two copies of that geometry would drift the first time either was tuned.
+  const M = {
+    mouthDepthFrac: num(config.producers.mouthDepthFrac, 'producers.mouthDepthFrac'),
+    mouthClear: num(config.producers.mouthClear, 'producers.mouthClear'),
+    mouthHeightFrac: num(config.producers.mouthHeightFrac, 'producers.mouthHeightFrac'),
+    ejectSpeed: num(config.producers.ejectSpeed, 'producers.ejectSpeed'),
+  };
+  let fedTotal = 0;
+  // Sim-clock seconds, advanced by update() itself. Used only for the re-entry
+  // cooldown below, so nothing here depends on wall time.
+  let clock = 0;
+  // When each duck last came OUT of a station, by duck id. A station whose
+  // suction radius is 3.5 m delivers at 1.4 m, so without this it pulls its own
+  // output straight back in and one duck bounces in and out forever -- measured,
+  // six ducks were fed twenty-five times in six seconds. The cooldown is what
+  // gives the belt in front of the station time to carry the duck away, and a
+  // station with nothing in front of it simply stops rather than juggling.
+  const fedAt = new Map();
   // A duck lying on concrete is held by friction worth mu * g = 0.6 * 22 =
   // 13.2 m/s^2, which is MORE than the Vacuum Station's own pull of 12. Sucking
   // sideways therefore moves nothing at all: measured, 2745 impulses over ten
@@ -73,6 +99,18 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
   // Scratch buffers reused every update so a 300-duck sweep allocates nothing.
   const candIds = [];
   const candD2 = [];
+  // The ducks that have already arrived at this station and are waiting to be
+  // fed out of its mouth. Refilled per station per update, like the two above.
+  const arrivedIds = [];
+
+  // How far in front of the station a fed duck is put down. Whichever is
+  // further: the machine-wide mouth (footprint x mouthDepthFrac + mouthClear)
+  // or just outside this station's own arrival column -- because a duck
+  // delivered inside that column reads as "arrived" and is delivered again on
+  // the next frame, forever.
+  function outAtOf(row, arrive) {
+    return Math.max(row.footprint[2] * M.mouthDepthFrac + M.mouthClear, arrive + C.arriveRadius);
+  }
 
   function isCollector(row) {
     return !!row && row.kind === COLLECTOR_KIND && !!row.collect;
@@ -88,7 +126,7 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
       seen.add(rec.key);
       let u = units.get(rec.key);
       if (!u) {
-        u = { key: rec.key, id: rec.id, tokens: 0, pulled: 0 };
+        u = { key: rec.key, id: rec.id, tokens: 0, pulled: 0, out: 0, fed: 0 };
         units.set(rec.key, u);
       }
       u.rec = rec;
@@ -103,6 +141,7 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
 
   function update(dt) {
     if (!(dt > 0) || !isFinite(dt)) return 0;
+    clock += dt;
     sync();
     if (units.size === 0) return 0;
     let pulls = 0;
@@ -122,8 +161,29 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
 
       candIds.length = 0;
       candD2.length = 0;
+      arrivedIds.length = 0;
+      // The outlet's own cone, and the reason the station is not a juggler. It
+      // reaches 3.5 m in every direction and delivers at 1.4 m, so the patch of
+      // floor it feeds ducks onto is INSIDE its own suction -- it was pulling
+      // its output straight back in, and one duck would go round that loop
+      // forever. Measured: six ducks fed twenty-five times in six seconds.
+      //
+      // A real extractor has an intake and an outlet and does not breathe
+      // through both. Anything lying in front of the mouth, out to the distance
+      // the station itself throws, is DOWNSTREAM and is left alone -- so a belt
+      // laid in front collects a steady stream, and a duck that wanders back in
+      // from the side is collected again like any other.
+      const mdx = Math.sin(u.rec.yaw || 0);
+      const mdz = Math.cos(u.rec.yaw || 0);
+      const outletKeep = outAtOf(u.row, arrive) + C.outletClear;
       ducks.forEach((id, x, y, z) => {
         if (busy(id)) return;
+        const t = fedAt.get(id);
+        if (t !== undefined && clock - t < C.feedCooldown) return;
+        const ox = x - u.rec.x;
+        const oz = z - u.rec.z;
+        const od = Math.hypot(ox, oz);
+        if (od > 1e-4 && od < outletKeep && (ox * mdx + oz * mdz) / od > C.outletCos) return;
         const dx = intake.x - x;
         const dy = intake.y - y;
         const dz = intake.z - z;
@@ -131,10 +191,61 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
         if (d2 > r2) return;
         // Range is a sphere; arrival is a column, because a duck resting
         // against the housing is at floor level and never reaches the intake.
-        if (dx * dx + dz * dz < arrive2) return;
+        if (dx * dx + dz * dz < arrive2) { arrivedIds.push(id); return; }
         candIds.push(id);
         candD2.push(d2);
       });
+
+      // THE DUCKS THAT HAVE ARRIVED, and what happens to them. This used to be
+      // nothing at all: the row's own description says the station "feeds them
+      // onward", and onward did not exist in the code. A duck was pulled in,
+      // crossed the arrival radius, stopped consuming suction and lay there
+      // forever -- so the machine looked broken, and the only reason it did not
+      // look broken sooner is that the ducks it pulled in were still ducks and
+      // the player could pick them up by hand. Measured before this block: a
+      // duck came to rest 0.68 m from a station whose arrival radius is 1.06,
+      // and nothing else ever happened to it.
+      //
+      // A station is a PUMP: in at the intake, out at the mouth. The mouth is
+      // the same mouth every producer has (src/sim/producers.js mouthOf), so a
+      // belt laid in front of a Vacuum Station catches its output exactly as it
+      // catches a press's, and the player has one rule to learn instead of two.
+      u.out = Math.min(u.out + spec.perSecond * dt, spec.perSecond * C.burstSeconds);
+      if (arrivedIds.length) {
+        const mouth = mouthOf(u.row, u.rec, M);
+        // BEYOND ITS OWN ARRIVAL RADIUS, and that is not a detail. A press's
+        // mouth sits 0.78 m out (footprint 1.00 x mouthDepthFrac 0.5, plus
+        // mouthClear 0.28) and this station's arrival column has a radius of
+        // 1.06. Put the duck at the bare mouth and it lands back inside the
+        // zone that says "arrived", is fed again on the very next frame, and
+        // the station spends the rest of the session flicking one duck in
+        // place. The delivery point is therefore whichever is further out.
+        const outAt = outAtOf(u.row, arrive);
+        for (let k = 0; k < arrivedIds.length && u.out >= 1; k++) {
+          const id = arrivedIds[k];
+          const body = ducks.body(id);
+          if (!body) continue;
+          ducks.wakeDuck(id);
+          body.setTranslation({
+            x: u.rec.x + mouth.dx * outAt,
+            y: mouth.y,
+            z: u.rec.z + mouth.dz * outAt,
+          }, true);
+          // Out and slightly down, the same shape of throw a machine's own
+          // eject uses -- a duck posted out horizontally at head height sails
+          // over the belt it was aimed at.
+          body.setLinvel({
+            x: mouth.dx * M.ejectSpeed,
+            y: -Math.abs(M.ejectSpeed * 0.2),
+            z: mouth.dz * M.ejectSpeed,
+          }, true);
+          body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+          fedAt.set(id, clock);
+          u.out -= 1;
+          u.fed++;
+          fedTotal++;
+        }
+      }
 
       // Nearest first: a station under load finishes the ducks it has almost
       // landed rather than tugging at everything in range at once.
@@ -203,6 +314,8 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
         perSecond: u.row.collect.perSecond,
         tokens: u.tokens,
         pulled: u.pulled,
+        fed: u.fed,
+        outlet: (() => { const m = mouthOf(u.row, u.rec, M); return { x: m.x, y: m.y, z: m.z }; })(),
       });
     }
     return out;
@@ -213,8 +326,11 @@ export function createCollectors({ ducks, applyImpulse, list, byId, config, isBu
     info,
     count: () => units.size,
     pulledTotal: () => pulledTotal,
+    // How many ducks this station has actually fed onward, which is the number
+    // that says whether it is doing its job -- `pulled` only says it is sucking.
+    fedTotal: () => fedTotal,
     impulses: () => impulses,
-    reset() { units.clear(); pulledTotal = 0; impulses = 0; },
+    reset() { units.clear(); pulledTotal = 0; impulses = 0; fedTotal = 0; fedAt.clear(); clock = 0; },
   };
 }
 

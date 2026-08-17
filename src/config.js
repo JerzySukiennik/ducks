@@ -1451,6 +1451,19 @@ export const config = {
     // intake. It has to exceed 1.0 or a duck on the floor never leaves it:
     // friction on concrete (mu 0.6 x g 22 = 13.2 m/s^2) is stronger than the
     // Vacuum Station's own pull of 12, so a purely sideways suck moves nothing.
+    // How long a duck a station has just delivered is invisible to every
+    // station. Without it a Vacuum Station sucks its own output back in -- it
+    // reaches 3.5 m and delivers at 1.4 -- and one duck bounces in and out
+    // forever: measured, six ducks fed twenty-five times in six seconds. This
+    // is the window a conveyor in front has to carry the duck away in.
+    feedCooldownSeconds: 2.5,
+    // The outlet cone: how far past the delivery point a station stays blind,
+    // and how wide that blind spot is. cos(50 deg) = 0.643, so the station
+    // ignores a 100-degree wedge in front of its own mouth out to the delivery
+    // distance plus this clearance -- which is exactly the patch a conveyor is
+    // laid on. Everything else in range is collected as before.
+    outletClear: 1.20,
+    outletCos: 0.643,
     liftGravityFrac: 1.15,
   },
 
@@ -3164,6 +3177,9 @@ export const REQUIRED_CONFIG_KEYS = [
   'collectors.burstSeconds',
   'collectors.minRadius',
   'collectors.liftGravityFrac',
+  'collectors.feedCooldownSeconds',
+  'collectors.outletClear',
+  'collectors.outletCos',
   'attention.beltMargin',
   'attention.pitMargin',
   'automation.cellSize',
