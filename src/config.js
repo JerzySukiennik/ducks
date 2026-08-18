@@ -1414,6 +1414,18 @@ export const config = {
     // move ducks; if a new transport kind is added it belongs here, and the
     // symptom of forgetting is a chain that stops 1.6 m short of the hole.
     pitCloseKinds: ['conveyor', 'blower', 'ramp', 'wall'],
+    // And these may go OVER it -- no keep-out at all, the hole is simply not
+    // consulted. A belt is the only thing in the game that can carry ducks
+    // somewhere on its own, so the one place a player most wants to end a belt
+    // is the pit's mouth, and until now that was the one place they could not:
+    // the keep-out ring stopped every piece a full 1.55 m short of the lip,
+    // which is further than a duck rolls off the end.
+    //
+    // A 2 m belt over a 3 m hole cannot bridge it, so a duck riding to the end
+    // drops in, which is the whole point. A player who lays enough belt to
+    // cover the hole completely has built a floor over their own pit -- that is
+    // their decision to make and it is trivially undone.
+    pitOverKinds: ['conveyor'],
     // How far inside the plate edge an object must stay.
     plateMargin: 1.0,
     // Overlap slack: two objects may share this much before it counts as a

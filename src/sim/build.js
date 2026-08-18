@@ -138,6 +138,7 @@ export function createWorldQuery(config, objects) {
       pitMargin: b.pitMargin,
       pitMarginBuild: b.pitMarginBuild,
       pitCloseKinds: b.pitCloseKinds,
+      pitOverKinds: b.pitOverKinds,
       plateMargin: b.plateMargin,
       overlapEpsilon: b.overlapEpsilon,
     },
@@ -148,6 +149,7 @@ export function createWorldQuery(config, objects) {
       // config.build.pitMarginBuild for why there are two.
       radiusBuild: p.radius + b.pitMarginBuild,
       closeKinds: b.pitCloseKinds || [],
+      overKinds: b.pitOverKinds || [],
     },
     booth: boothBox,
     bounds: { half: w.plateSize / 2 - b.plateMargin },
@@ -272,10 +274,14 @@ export function resolvePlacement(item, rayOrigin, rayDir, rotation, worldQuery) 
   if (reason === null) {
     // Transport may touch the lip; everything else is held back. Read from the
     // row's kind so the rule is data, not a list of ids maintained by hand.
+    // Three answers, not two: over it, up to its lip, or held well back.
+    const overOk = q.pit.overKinds && q.pit.overKinds.indexOf(item.kind) >= 0;
     const closeOk = q.pit.closeKinds && q.pit.closeKinds.indexOf(item.kind) >= 0;
-    const keepOut = closeOk ? q.pit.radius
-      : (typeof q.pit.radiusBuild === 'number' ? q.pit.radiusBuild : q.pit.radius);
-    if (distanceToBoxXZ(box, q.pit.x, q.pit.z) < keepOut) reason = REASONS.PIT;
+    if (!overOk) {
+      const keepOut = closeOk ? q.pit.radius
+        : (typeof q.pit.radiusBuild === 'number' ? q.pit.radiusBuild : q.pit.radius);
+      if (distanceToBoxXZ(box, q.pit.x, q.pit.z) < keepOut) reason = REASONS.PIT;
+    }
   }
 
   if (reason === null && boxesOverlap(box, q.booth, B.overlapEpsilon)) {
