@@ -157,7 +157,7 @@ export const MACHINES = [
     tags: [],
   },
   {
-    id: 'conveyor', netId: 10, name: 'Conveyor',
+    id: 'conveyor', netId: 10, hidden: true, name: 'Conveyor',
     desc: 'Two metres of belt. Carries ducks along its length.',
     cost: 840, model: 'conveyor', footprint: [1.00, 0.65, 2.00], anchor: 'floor',
     kind: 'conveyor',
@@ -172,7 +172,7 @@ export const MACHINES = [
     tags: [],
   },
   {
-    id: 'conveyor_corner', netId: 11, name: 'Conveyor Corner',
+    id: 'conveyor_corner', netId: 11, hidden: true, name: 'Conveyor Corner',
     desc: 'Turns the belt ninety degrees.',
     cost: 990, model: 'conveyor_corner', footprint: [1.50, 0.66, 1.50], anchor: 'floor',
     kind: 'conveyor',
@@ -192,7 +192,7 @@ export const MACHINES = [
     tags: [],
   },
   {
-    id: 'conveyor_slope', netId: 12, name: 'Conveyor Ramp',
+    id: 'conveyor_slope', netId: 12, hidden: true, name: 'Conveyor Ramp',
     desc: 'Runs ducks down seven tenths of a metre. Turn it to aim the descent.',
     cost: 1150, model: 'conveyor_slope', footprint: [1.00, 1.555, 2.00], anchor: 'floor',
     kind: 'conveyor',

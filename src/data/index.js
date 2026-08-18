@@ -175,6 +175,7 @@ export const MODEL_MANIFEST = {
   diverter:         { file: 'diverter.glb',         staged: true, role: 'machine' },
   pipe_link:        { file: 'pipe_link.glb',        staged: true, role: 'machine' },
   record_board:     { file: 'record_board.glb',     staged: true, role: 'building' },
+  belt_kit:         { file: 'belt_kit.glb',         staged: true, role: 'item' },
   car_body:         { file: 'car_body.glb',         staged: true, role: 'vehicle' },
   car_bed:          { file: 'car_bed.glb',          staged: true, role: 'vehicle' },
   car_gate:         { file: 'car_gate.glb',         staged: true, role: 'vehicle' },
@@ -226,6 +227,9 @@ export const KINDS = {
   // src/data/vehicles.js and is measured off the models. Behaviour is in
   // src/sim/vehicles.js, selected by this kind.
   spawner:         { placeable: true,  needsModel: true,  block: 'spawn',    effects: false, build: true },
+  // Held in the hand, not put down: it is the thing that LAYS belt, so it is
+  // never itself an object in the world. `build: false` is what says so.
+  router:          { placeable: true,  needsModel: true,  block: null,       effects: false, build: false },
   // Splits a stream of ducks in two by value. `block: 'sort'` names nothing
   // but the throat; the threshold is a runtime setting the player turns, not
   // a number on the row, because it is a decision they make per machine.
@@ -280,6 +284,7 @@ export const KIND_TAB = {
   // question at that tab is "how do I get ducks from here to there", and a
   // truck is the answer that carries a load rather than a stream.
   spawner:         'transport',
+  router:          'transport',
   // Both belong with what MAKES ducks rather than with what moves them: the
   // player's question at that tab is "what improves my output", and a machine
   // that turns four ones into a seven is an answer to it.
@@ -1221,7 +1226,12 @@ for (const t of TABS) _byTab[t] = [];
 for (const row of CATALOG) {
   _byId.set(row.id, row);
   _byNetId.set(row.netId, row);
-  _byTab[row.tab].push(row);
+  // A HIDDEN row is placeable, netted and refundable like any other -- it
+  // simply is not for sale. The three conveyor pieces are the case this
+  // exists for: the Belt Kit lays them by the dozen and buying them one at a
+  // time is not a decision, it is typing. Deleting the rows instead would have
+  // taken the pieces out of the world, and the Belt Kit has nothing to lay.
+  if (!row.hidden) _byTab[row.tab].push(row);
 }
 for (const t of TABS) Object.freeze(_byTab[t]);
 

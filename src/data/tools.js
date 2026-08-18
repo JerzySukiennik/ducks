@@ -427,6 +427,21 @@ export const TOOLS = [
     tags: ['handheld'],
   },
   {
+    id: 'belt_kit', netId: 169, name: 'Belt Kit',
+    desc: 'Free. Click once where the belt starts, walk to where it should end, click again. It works out the corners and the climbs.',
+    // FREE, and that is the design rather than a discount. The belt is not
+    // what the player pays for -- the RUN is, at ten a piece when they confirm
+    // it -- so charging for the tool as well would be charging twice for the
+    // same decision and would put a wall in front of the only way to build
+    // transport at all.
+    cost: 0, model: 'belt_kit', footprint: [0.25, 0.545, 0.50], anchor: 'floor',
+    kind: 'router',
+    collider: { shape: 'cuboid', half: [0.125, 0.2725, 0.25], blockDucks: false },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    hand: { pos: [0.38, -0.26, -0.62], rotDeg: [-10, 0, 6], scale: 0.7 },
+    tags: ['handheld', 'starter', 'noGamble'],
+  },
+  {
     id: 'horn', netId: 161, name: 'Air Horn',
     desc: 'One blast shoves every duck around you outward. The only tool that works behind your back.',
     cost: 340, model: 'horn', footprint: [0.25, 0.685, 0.50], anchor: 'floor',

@@ -25,6 +25,7 @@ import { createVehicles } from './sim/vehicles.js';
 import { createContracts } from './sim/contracts.js';
 import { createProcessors } from './sim/processors.js';
 import { createWorldClock } from './sim/worldclock.js';
+import { createRouter } from './sim/route.js';
 import { TRUCK } from './data/vehicles.js';
 import { createBlowers } from './sim/blowers.js';
 import { createContainers, isStorageRow } from './sim/containers.js';
@@ -997,6 +998,84 @@ async function boot() {
     hud.showCap('Unjammed.');
     audio.rotated();
     return true;
+  }
+
+  // --- the Belt Kit --------------------------------------------------------------
+  //
+  // Click once where the belt starts, walk somewhere, click again. The router
+  // works out the straights, the corner and the climbs; this holds the two
+  // clicks and pays for the result.
+  //
+  // The price is quoted BEFORE the money moves and the whole run is laid or
+  // none of it is. A half-laid belt that ran out of money halfway would be the
+  // worst outcome available: it costs the player everything they had and
+  // leaves them with a belt that goes nowhere.
+  const router = createRouter({ config });
+  let routeStart = null;
+
+  function routeAimPoint() {
+    const a = view.aim();
+    const res = resolvePlacement(byId('conveyor'), a.origin, a.dir, { yaw: 0, free: false }, worldQuery);
+    if (!res) return null;
+    // A NON-FINITE AIM IS NOT A POINT. The camera can hand back nulls for a
+    // frame -- before the first update, or while a cutscene owns it -- and a NaN
+    // walked all the way into the router, came out as a plan of zero pieces and
+    // was reported to the player as "too short for a belt". A refusal that names
+    // the wrong reason is worse than a crash, because the player believes it.
+    if (!isFinite(res.position.x) || !isFinite(res.position.y) || !isFinite(res.position.z)) return null;
+    // The placement's own y, minus the piece's half-height: the router works
+    // in FLOOR heights and resolvePlacement returns a box centre.
+    return { x: res.position.x, y: res.position.y - byId('conveyor').collider.half[1], z: res.position.z };
+  }
+
+  // `end` is only ever passed by a test: in play the end of a run is wherever
+  // the player is pointing, and there is no second way to say it.
+  function routeClick(end) {
+    const at = end || routeAimPoint();
+    if (!at) return { refused: 'no_aim' };
+    if (!routeStart) {
+      routeStart = at;
+      hud.showCap('Belt start marked. Walk to the end and click again.');
+      audio.rotated();
+      return { started: true };
+    }
+    const plan = router.plan(routeStart, at);
+    if (!plan.ok) {
+      hud.showCap(plan.reason === 'too_short' ? 'Too short for a belt.'
+        : plan.reason === 'too_long' ? `That is over ${router.maxPieces()} pieces.`
+        : 'That climb is too steep for the length of the run.');
+      audio.placementRefused();
+      return { refused: plan.reason };
+    }
+    if (world.economy.money() < plan.cost) {
+      hud.showCap(`That run costs $${plan.cost}. You have $${Math.floor(world.economy.money())}.`);
+      audio.placementRefused();
+      return { refused: 'money' };
+    }
+    // Laid piece by piece through the SAME placement path a hand-placed
+    // building takes, so a run obeys the grid, the plate margin, the pit rule
+    // and every overlap test exactly as one belt would.
+    let laid = 0;
+    for (const p of plan.pieces) {
+      const item = byId(p.id);
+      if (!item) continue;
+      const res = resolvePlacement(item, { x: p.x, y: p.y + 6, z: p.z }, { x: 0, y: -1, z: 0 },
+        { yaw: p.yaw, free: false }, worldQuery);
+      if (!res.valid) continue;
+      if (placed.place(item, res)) laid++;
+    }
+    // PAID FOR WHAT WAS LAID, not for what was planned. A piece refused by an
+    // overlap is a piece the player did not get, and charging for it would be
+    // charging for the wall that was in the way.
+    const cost = laid * router.pieceCost();
+    if (cost > 0) world.economy.spend(cost, 'belt');
+    placeCount += laid;
+    hud.showCap(laid === plan.count
+      ? `${laid} belt for $${cost}.`
+      : `${laid} of ${plan.count} laid for $${cost} -- something was in the way.`);
+    audio.placed(player.position());
+    routeStart = null;
+    return { laid, cost, planned: plan.count };
   }
 
   // The Sorter or Refiner under the crosshair, if any. Uses the same focus
@@ -2245,6 +2324,9 @@ async function boot() {
       }
       if (shopUI.isOpen()) continue;
       // Q hands the item back to the world, which is how it changes hands.
+      // Q drops what is in your hand, and with the Belt Kit that means
+      // dropping the run you were half way through marking.
+      if (c === 'KeyQ' && routeStart) { routeStart = null; hud.showCap('Belt run cancelled.'); continue; }
       if (c === 'KeyQ') { throwItem(); continue; }
       if (c === 'KeyG') { rotation.reset(); continue; }
       // R and T are the keyboard equivalent of middle-click and shift+middle-click.
@@ -2783,6 +2865,9 @@ async function boot() {
       // A BUILDING in hand means the click places it, never grabs. A carryable
       // that is not a tool (an empty bucket, say) does neither, so it leaves the
       // grab button alone instead of swallowing it.
+      // The Belt Kit owns the button while it is in hand.
+      const held = hotbar.current();
+      if (held && held.kind === 'router') { routeClick(); continue; }
       if (isBuildable(hotbar.current())) { doPlace(); continue; }
       if (net.holdingLocal()) continue;
       // The wheel is HELD, not clicked. The down edge starts the hold and
@@ -4228,6 +4313,10 @@ async function boot() {
     },
     debugDropStats() { return placed.stats(); },
     debugSky: () => worldClock.sky(),
+    debugRoutePlan: (a, b) => router.plan(a, b),
+    debugRouteStart: () => routeStart,
+    debugRouteClick: (end) => routeClick(end),
+    debugRouteMark: (p) => { routeStart = p; return routeStart; },
     debugStuck: () => (producers.stuckKeys ? producers.stuckKeys() : []),
     debugUnjam: (key) => (producers.unjam ? producers.unjam(key) : null),
     debugWind: () => worldClock.wind(),

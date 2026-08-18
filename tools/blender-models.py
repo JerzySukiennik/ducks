@@ -158,6 +158,7 @@ FOOTPRINT = {
     "diverter":        (1.25, 1.00),
     "pipe_link":       (0.75, 0.75),
     "record_board":    (1.25, 0.50),
+    "belt_kit":        (0.25, 0.50),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -5044,4 +5045,30 @@ def b_record_board():
 
 BUILDERS += [
     ("record_board", b_record_board, "Budowle", "Tablica rekordow - najlepsza kaczka sesji."),
+]
+
+
+def b_belt_kit():
+    """Zestaw tasmowy - reczne narzedzie, ktore wytycza trasy tasm.
+
+    Ma wygladac na PRZYRZAD POMIAROWY, a nie na kawalek tasmy: uchwyt, szpula
+    linki i celownik. Gracz nim nie tasmuje, tylko wyznacza."""
+    P = []
+    P.append(box("grip", (0.09, 0.09, 0.22), (0, 0, 0.11), "rubber"))
+    P.append(box("body", (0.16, 0.20, 0.20), (0, 0, 0.33), "hazard"))
+    P.append(box("plate", (0.17, 0.03, 0.12), (0, -0.11, 0.34), "steel_d"))
+    P.append(cyl("spool", 0.07, 0.13, (0, 0.04, 0.36), "steel", verts=10,
+                 rot=(0, math.radians(90), 0)))
+    P.append(cyl("tape", 0.05, 0.15, (0, 0.04, 0.36), "duck", verts=10,
+                 rot=(0, math.radians(90), 0)))
+    # Celownik - dwie ramki, przez ktore sie patrzy.
+    P.append(box("sightb", (0.10, 0.02, 0.09), (0, -0.13, 0.50), "steel_d"))
+    P.append(box("sightf", (0.07, 0.02, 0.07), (0, 0.13, 0.50), "steel_d"))
+    P.append(box("beam", (0.02, 0.26, 0.02), (0, 0, 0.50), "orange"))
+    P.append(box("led", (0.04, 0.04, 0.03), (0.06, -0.11, 0.44), "white"))
+    return finish(P, "belt_kit")
+
+
+BUILDERS += [
+    ("belt_kit", b_belt_kit, "Przedmioty", "Zestaw tasmowy - wytycza trase tasm."),
 ]

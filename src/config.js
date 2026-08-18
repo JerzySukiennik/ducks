@@ -1094,6 +1094,24 @@ export const config = {
     eventJitterSeconds: 160,
   },
 
+  // --- belt routing -------------------------------------------------------------
+  // The Belt Kit: mark a start, walk somewhere, confirm. See src/sim/route.js.
+  route: {
+    // One conveyor piece is 2 m long, and the router works entirely in whole
+    // pieces -- there is no such thing as half a belt.
+    pieceLength: 2.0,
+    // TEN A PIECE, corners and climbs included. A corner costing more than a
+    // straight would make the player route around bends to save money, which
+    // is a puzzle about the price list rather than about the factory.
+    pieceCost: 10,
+    // What one sloped piece climbs. Measured off the model: the belt band drops
+    // 0.718 m over its 2 m length (src/data/machines.js, conveyor_slope).
+    slopeRise: 0.718,
+    // The longest run one confirmation may lay. A cap the player can hit is
+    // better than a frame that takes a second to draw four hundred belts.
+    maxPieces: 60,
+  },
+
   hold: {
     kp: 220,
     kdScale: 2,         // kd = kdScale * sqrt(kp) -> critically damped
@@ -3027,6 +3045,10 @@ export const REQUIRED_CONFIG_KEYS = [
   'worldclock.eventFirstSeconds',
   'worldclock.eventGapSeconds',
   'worldclock.eventJitterSeconds',
+  'route.pieceLength',
+  'route.pieceCost',
+  'route.slopeRise',
+  'route.maxPieces',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',
