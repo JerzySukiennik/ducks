@@ -154,6 +154,9 @@ FOOTPRINT = {
     "car_spawner":     (2.50, 4.50),
     "sorter":          (1.50, 1.00),
     "refiner":         (1.00, 1.00),
+    "incubator":       (1.00, 1.00),
+    "diverter":        (1.25, 1.00),
+    "pipe_link":       (0.75, 0.75),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -4939,4 +4942,78 @@ def b_refiner():
 BUILDERS += [
     ("sorter", b_sorter, "Maszyny", "Sortownik - rozdziela kaczki po wartosci."),
     ("refiner", b_refiner, "Maszyny", "Rafineria - zjada N kaczek, oddaje jedna wyzej."),
+]
+
+
+# ============================================ INKUBATOR, ZWROTNICA, RURA
+def b_incubator():
+    """Inkubator - szklana komora na jedna kaczke, ktora dojrzewa w czasie.
+
+    Cala roznica wobec rafinerii ma byc widoczna: tam byl piec i lej na wsad,
+    tu jest JEDNA przezroczysta komora, w ktorej widac, ze cos siedzi."""
+    P = []
+    P.append(box("base", (1.00, 1.00, 0.14), (0, 0, 0.07), "dark"))
+    P.append(box("plinth", (0.80, 0.80, 0.16), (0, 0, 0.22), "steel_d"))
+    P.append(cyl("glass", 0.34, 0.58, (0, 0, 0.60), "glass", verts=10))
+    for i in range(4):
+        a = math.radians(45 + i*90)
+        P.append(box("rib", (0.05, 0.05, 0.60), (math.sin(a)*0.34, math.cos(a)*0.34, 0.60), "steel"))
+    P.append(cyl("cap", 0.38, 0.09, (0, 0, 0.93), "hazard", verts=10))
+    P.append(cyl("dome", 0.22, 0.16, (0, 0, 1.03), "steel", verts=8))
+    P.append(box("pipe", (0.10, 0.34, 0.10), (0, -0.46, 0.42), "steel"))
+    P.append(cyl("outlip", 0.15, 0.07, (0, -0.62, 0.42), "hazard", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(box("panel", (0.22, 0.05, 0.16), (0.32, 0.36, 0.62), "duck"))
+    return finish(P, "incubator", merge=0.001)
+
+
+def b_diverter():
+    """Zwrotnica - jedna gardziel, dwa wyloty, i JEZYK, ktory przerzuca sie na boki.
+
+    Rozni sie od sortownika tym, ze nie ma ekranu progu - bo nie ma progu. Ma za
+    to widoczny przerzutnik posrodku."""
+    P = []
+    P.append(box("base", (1.25, 1.00, 0.10), (0, 0, 0.05), "dark"))
+    for sx in (-1, 1):
+        P.append(box("leg", (0.12, 0.12, 0.55), (sx*0.48, 0, 0.32), "steel_d"))
+    P.append(box("deck", (1.25, 1.00, 0.06), (0, 0, 0.62), "steel"))
+    P.append(box("tongue", (0.10, 0.44, 0.14), (0, 0.02, 0.72), "orange",
+                 rot=(0, 0, math.radians(22))))
+    P.append(cyl("pivot", 0.07, 0.18, (0, 0.22, 0.72), "steel_d", verts=8))
+    for sx in (-1, 1):
+        P.append(box("chute", (0.30, 0.06, 0.16), (sx*0.44, 0.10, 0.73), "steel_d"))
+        P.append(box("lip", (0.32, 0.05, 0.05), (sx*0.56, 0.10, 0.69), "hazard"))
+    P.append(box("guidel", (0.06, 0.40, 0.20), (-0.26, -0.28, 0.75), "hazard"))
+    P.append(box("guider", (0.06, 0.40, 0.20), (0.26, -0.28, 0.75), "hazard"))
+    return finish(P, "diverter", merge=0.001)
+
+
+def b_pipe_link():
+    """Rura pneumatyczna - lej u gory, gruba rura w dol, manometr.
+
+    Dwie takie to jedna rura, wiec model musi wygladac na POLOWE czegos: rura
+    ucieta u dolu, jakby szla pod plyte."""
+    P = []
+    P.append(box("base", (0.75, 0.75, 0.12), (0, 0, 0.06), "dark"))
+    P.append(cyl("body", 0.24, 0.92, (0, 0, 0.58), "steel_d", verts=10))
+    for i in range(3):
+        P.append(cyl("band", 0.27, 0.05, (0, 0, 0.28 + i*0.28), "hazard", verts=10))
+    P.append(cone("mouth", 0.34, 0.22, 0.24, (0, 0, 1.14), "steel", verts=10))
+    P.append(cyl("rim", 0.36, 0.05, (0, 0, 1.26), "hazard", verts=10))
+    # Wylot z przodu, na wysokosci tasmy.
+    P.append(cyl("out", 0.13, 0.36, (0, -0.36, 0.66), "steel", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("outlip", 0.17, 0.06, (0, -0.53, 0.66), "hazard", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("gauge", 0.09, 0.05, (0.26, -0.16, 0.86), "white", verts=8,
+                 rot=(0, math.radians(90), 0)))
+    P.append(cyl("hose", 0.05, 0.44, (-0.28, 0, 0.40), "rubber", verts=6,
+                 rot=(math.radians(90), 0, 0)))
+    return finish(P, "pipe_link", merge=0.001)
+
+
+BUILDERS += [
+    ("incubator", b_incubator, "Maszyny", "Inkubator - jedna kaczka dojrzewa w czasie."),
+    ("diverter", b_diverter, "Automatyzacja", "Zwrotnica - na przemian w lewo i w prawo."),
+    ("pipe_link", b_pipe_link, "Automatyzacja", "Rura pneumatyczna - para robi teleport."),
 ]

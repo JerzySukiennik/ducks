@@ -1069,6 +1069,9 @@ export const config = {
     refineSeconds: 1.6,
     refineMouthClear: 0.34,
     refineEjectSpeed: 1.8,
+    // How hard a pneumatic pipe spits a duck out at the far end. Fast enough
+    // that it lands clear of its own mouth and does not fall straight back in.
+    pipeExitSpeed: 3.2,
   },
 
   hold: {
@@ -2991,6 +2994,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'processors.refineSeconds',
   'processors.refineMouthClear',
   'processors.refineEjectSpeed',
+  'processors.pipeExitSpeed',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',

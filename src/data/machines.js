@@ -563,6 +563,53 @@ export const MACHINES = [
     tags: [],
   },
 
+  // --- three more processors, netId 33-35 --------------------------------------
+  {
+    id: 'incubator', netId: 33, name: 'Incubator',
+    desc: 'Put one duck in and it comes out a rung better. It charges nothing but time.',
+    // The Refiner's opposite trade, and priced against it: the Refiner costs
+    // four ducks and is instant, this costs one duck and forty seconds. A
+    // player with more ducks than patience buys the first; a player with more
+    // patience than ducks buys this.
+    cost: 2600, model: 'incubator',
+    footprint: [1.00, 1.11, 1.00], anchor: 'floor',
+    kind: 'incubator',
+    repeat: { times: 10, curve: 1.24 },
+    incubate: { seconds: 40, rungs: 1 },
+    collider: { shape: 'cuboid', half: [0.50, 0.555, 0.50], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+  {
+    id: 'diverter', netId: 34, name: 'Diverter',
+    desc: 'One belt in, two out. It throws every other duck the other way.',
+    // The cheapest machine that changes the SHAPE of a factory rather than its
+    // rate: two lines fed evenly from one is a thing you cannot build with any
+    // number of belts.
+    cost: 640, model: 'diverter',
+    footprint: [1.25, 0.85, 1.00], anchor: 'floor',
+    kind: 'diverter',
+    repeat: { times: 14, curve: 1.10 },
+    collider: { shape: 'cuboid', half: [0.625, 0.425, 0.50], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: ['cheap'],
+  },
+  {
+    id: 'pipe_link', netId: 35, name: 'Pneumatic Pipe',
+    desc: 'Buy two. A duck that goes into one comes out of the other, however far apart they are.',
+    // Expensive because distance is the thing it deletes, and distance is the
+    // only reason the yard has a shape at all. Two are needed before either
+    // does anything, which the description says outright rather than letting a
+    // player find out by buying one.
+    cost: 5400, model: 'pipe_link',
+    footprint: [0.75, 1.285, 0.75], anchor: 'floor',
+    kind: 'pipe_link',
+    repeat: { times: 8, curve: 1.22 },
+    collider: { shape: 'cuboid', half: [0.375, 0.6425, 0.375], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+
   // --- the garage, netId 30 ---------------------------------------------------
   {
     id: 'car_spawner', netId: 30, name: 'Truck Garage',

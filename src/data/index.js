@@ -171,6 +171,9 @@ export const MODEL_MANIFEST = {
   car_spawner:      { file: 'car_spawner.glb',      staged: true, role: 'machine' },
   sorter:           { file: 'sorter.glb',           staged: true, role: 'machine' },
   refiner:          { file: 'refiner.glb',          staged: true, role: 'machine' },
+  incubator:        { file: 'incubator.glb',        staged: true, role: 'machine' },
+  diverter:         { file: 'diverter.glb',         staged: true, role: 'machine' },
+  pipe_link:        { file: 'pipe_link.glb',        staged: true, role: 'machine' },
   car_body:         { file: 'car_body.glb',         staged: true, role: 'vehicle' },
   car_bed:          { file: 'car_bed.glb',          staged: true, role: 'vehicle' },
   car_gate:         { file: 'car_gate.glb',         staged: true, role: 'vehicle' },
@@ -228,6 +231,12 @@ export const KINDS = {
   sorter:          { placeable: true,  needsModel: true,  block: null,       effects: false, build: true },
   // Eats `refine.count` ducks and hands back one `refine.rungs` higher.
   refiner:         { placeable: true,  needsModel: true,  block: 'refine',   effects: false, build: true },
+  // Holds one duck and hands it back a rung better after `incubate.seconds`.
+  incubator:       { placeable: true,  needsModel: true,  block: 'incubate', effects: false, build: true },
+  // Alternates its output side every duck: one belt in, two out.
+  diverter:        { placeable: true,  needsModel: true,  block: null,       effects: false, build: true },
+  // Two of them are one pipe. A duck into either comes out of the other.
+  pipe_link:       { placeable: true,  needsModel: true,  block: null,       effects: false, build: true },
   // `modes` closes the set of behaviours a block's `mode` field may name. It is
   // how "broom sweeps, vacuum beams" is expressed as declared data instead of
   // being inferred from the arc width, and an unknown mode is a boot error.
@@ -275,6 +284,10 @@ export const KIND_TAB = {
   // that turns four ones into a seven is an answer to it.
   sorter:          'production',
   refiner:         'production',
+  incubator:       'production',
+  // These two move ducks about, which is what the transport tab is for.
+  diverter:        'transport',
+  pipe_link:       'transport',
 
   wall:            'building',
 
@@ -1060,6 +1073,14 @@ export function validateRows(rows) {
       }
       if (row.refine.rungs !== undefined && (!Number.isInteger(row.refine.rungs) || row.refine.rungs < 1)) {
         throw new DataError(`${where}: refine.rungs must be an integer >= 1`);
+      }
+    }
+    if (isObj(row.incubate)) {
+      if (!(typeof row.incubate.seconds === 'number' && row.incubate.seconds > 0)) {
+        throw new DataError(`${where}: incubate.seconds must be a positive number -- time is what this machine charges`);
+      }
+      if (row.incubate.rungs !== undefined && (!Number.isInteger(row.incubate.rungs) || row.incubate.rungs < 1)) {
+        throw new DataError(`${where}: incubate.rungs must be an integer >= 1`);
       }
     }
     if (isObj(row.spawn)) checkSpawn(where, row.spawn);
