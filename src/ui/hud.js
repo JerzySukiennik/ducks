@@ -24,6 +24,22 @@ const CSS = `
 /* THE CONTRACT BANNER. Big, red, and across the top -- it is the only thing in
    this game that is on a clock the player did not start, so it is the only
    thing allowed to shout. It sits above the money and below nothing. */
+/* THE WEATHER READOUT. Small, top-right, always there. The sky already changes
+   -- the light drops, the fog closes in -- but a player who walks into a
+   darker yard has no way to tell weather from dusk, and 'is it night or is it
+   raining' is not a question the game should be asking them. */
+#hud-weather { position: absolute; top: 10px; right: 12px; z-index: 12;
+  font: 700 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(232,238,255,0.75); text-align: right;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.65); pointer-events: none; }
+#hud-weather .w { color: #ffe9a8; }
+#hud-weather .t { opacity: 0.7; }
+/* The screen itself gets wet. One element, one colour, one opacity -- a
+   particle system for rain would cost more than the whole weather feature is
+   worth, and a tint plus a vignette is what a player actually reads as 'it is
+   raining' at this resolution. */
+#hud-sky { position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  opacity: 0; transition: opacity 1.2s linear; }
 #hud-contract { position: absolute; top: 0; left: 0; right: 0; z-index: 14;
   display: none; text-align: center; padding: 10px 12px 12px;
   background: linear-gradient(180deg, rgba(120,10,18,0.92) 0%, rgba(120,10,18,0.0) 100%);
@@ -182,6 +198,8 @@ export function createHUD(container) {
   moneyCur.className = 'cur';
   const moneyVal = el('span', null, money, '0');
   const float = el('div', 'hud-float', root, '');
+  const skyTint = el('div', 'hud-sky', root, '');
+  const weather = el('div', 'hud-weather', root, '');
   const contract = el('div', 'hud-contract', root, '');
   contract.innerHTML = '<div class="title"></div><div class="body"></div><div class="bar"><i></i></div>';
   const contractTitle = contract.querySelector('.title');
@@ -365,7 +383,12 @@ export function createHUD(container) {
     contract.classList.add('show');
   }
 
-  function renderContract() {
+  // Called every frame with the LIVE job. It used to take nothing and re-render
+  // `contractJob`, which was the snapshot handed over when the order started --
+  // so the clock on the banner sat at its opening value until a duck went in,
+  // and a player watching it had no idea the lorry was about to leave.
+  function renderContract(live) {
+    if (live) contractJob = live;
     const job = contractJob;
     if (!job) return;
     const t = Math.max(0, job.remaining);
@@ -407,7 +430,31 @@ export function createHUD(container) {
     contract.classList.toggle('urgent', left <= config.hud.contractUrgentSeconds);
   }
 
+  // WHAT THE SKY IS DOING, in the corner and over the whole screen. `sky` is
+  // the world clock's own report; nothing is computed here beyond turning it
+  // into words and a tint.
+  let lastWeather = null;
+  function setSky(sky) {
+    if (!sky) return;
+    const hh = String(sky.hour).padStart(2, '0');
+    const mm = String(sky.minute).padStart(2, '0');
+    weather.innerHTML = '<span class="w">' + sky.weatherName + '</span> <span class="t">' + hh + ':' + mm + '</span>';
+    if (sky.weather === lastWeather) return;
+    lastWeather = sky.weather;
+    // Rain is a cold wash, fog is a pale one, a storm is both and heavier.
+    const look = {
+      clear: ['transparent', 0],
+      breeze: ['transparent', 0],
+      rain: ['radial-gradient(circle at 50% 40%, rgba(80,120,180,0.10), rgba(30,50,90,0.34))', 1],
+      storm: ['radial-gradient(circle at 50% 40%, rgba(50,70,120,0.16), rgba(12,20,44,0.52))', 1],
+      fog: ['radial-gradient(circle at 50% 45%, rgba(200,206,220,0.16), rgba(150,158,176,0.42))', 1],
+    }[sky.weather] || ['transparent', 0];
+    skyTint.style.background = look[0];
+    skyTint.style.opacity = String(look[1]);
+  }
+
   return {
+    setSky,
     setEvent,
     tickEvent,
     setContract,

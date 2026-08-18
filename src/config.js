@@ -1941,6 +1941,15 @@ export const config = {
     // not know, and standing still is the true answer -- this is the bound that
     // stops a silent client's capsule walking away on its own.
     inputCoastMs: 100,
+    // How much of that coast the MOVEMENT survives. The look coasts for the
+    // whole window -- a head that snaps to centre on a dropped packet is
+    // horrible and harmless -- but the walk stops here, because the one packet
+    // whose loss matters is the frame the player let go, and coasting through
+    // it walks somebody who has stopped.
+    // 40, and it MUST be under inputCoastMs (100) or it never fires: at 110 the
+    // movement outlived the coast window that contains it and the fix did
+    // nothing at all.
+    inputCoastMoveMs: 40,
     // Rolling window for the KB/s counters on the debug overlay.
     rateWindowMs: 2000,
     // A client's own capsule is reconciled hard past this distance.
@@ -3578,6 +3587,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'net.inputBudgetMaxMs',
   'net.inputCatchUpFactor',
   'net.inputCoastMs',
+  'net.inputCoastMoveMs',
   'net.rateWindowMs',
   'net.reconcileHardMeters',
   'net.protocolVersion',

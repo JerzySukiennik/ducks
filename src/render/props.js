@@ -334,11 +334,18 @@ export function createProps({ scene, models, pitCenter }) {
     // click came from this sphere.
     wheelAimDistance(origin, dir) {
       if (!wheel) return -1;
-      // Stand-in for an occlusion test: the wheel is on one side of the
-      // cabinet, so the eye has to be on that side. Without it you could crank
-      // through the machine from the front, where the wheel is not visible.
-      if ((origin.x - wheelWorld.x) * machineRight.x
-        + (origin.z - wheelWorld.z) * machineRight.z <= 0) return -1;
+      // Stand-in for an occlusion test: you have to be on the side of the
+      // cabinet the wheel is actually on, or you would be cranking through the
+      // machine.
+      //
+      // IT TESTS FORWARD, NOT RIGHT, and that was the bug. The wheel was moved
+      // from the cabinet's side to its FRONT face a while ago -- the split
+      // predicate moved, the spin axis moved -- and this test did not. So the
+      // half of the machine you can actually see the wheel from was refused,
+      // and the only place it worked was standing to the right of a wheel that
+      // is no longer there. Reported as 'you cannot crank from the left'.
+      if ((origin.x - wheelWorld.x) * machineForward.x
+        + (origin.z - wheelWorld.z) * machineForward.z <= 0) return -1;
       const mx = origin.x - wheelWorld.x;
       const my = origin.y - wheelWorld.y;
       const mz = origin.z - wheelWorld.z;

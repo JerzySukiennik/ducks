@@ -72,6 +72,10 @@ export const EV = {
   // with each other: every purchase takes a unit, and every three minutes the
   // whole shelf turns over. Both reach a client here.
   STOCK: 'stock',
+  // The sky: which weather is running and which interruption, if any. Rolled
+  // by the host and told to everyone, because both are rolled with a random
+  // number and two machines rolling their own would be two different days.
+  SKY: 'sky',
   CRANK: 'crank',
   DUCK_SPAWNED: 'duckSpawned',
   HOTBAR: 'hotbar',

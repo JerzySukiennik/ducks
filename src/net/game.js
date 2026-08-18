@@ -64,6 +64,7 @@ export const EV_GAMBLE = EV.GAMBLE || 'gamble';
 export function createNetGame(deps) {
   const {
     world, state, placed, shop, hotbar, containers, machine, props, view, input, loop,
+    worldClock,
     player, byId, byNetId, resolvePlacement, worldQuery, isBuildable, isHandCarryable,
     onEvent, onRoster, onReject, hud,
   } = deps;
@@ -314,7 +315,27 @@ export function createNetGame(deps) {
       r.coast -= dt;
       r.debt += dt;
       r.coastSubsteps++;
-      return r.last;
+      // THE LOOK COASTS FOR THE WHOLE WINDOW; THE WALK DOES NOT.
+      //
+      // "An input is a held state" is true of a key that is still down, and it
+      // is exactly wrong about the one packet that matters most: the frame
+      // where the player LET GO. Lose that one and the honest-looking guess --
+      // still the same -- is the host walking a player who has stopped, for
+      // the whole coast window, in whatever direction they were last going.
+      // Reported as a client that randomly walks by itself, and that is
+      // precisely what it is.
+      //
+      // A lost release is indistinguishable from a held key, so this does not
+      // guess: it costs a still-walking player a few centimetres of smoothness
+      // after a dropped packet, and it costs a stopped player nothing at all.
+      // Losing the walk is recoverable; walking into the pit is not.
+      const moveFor = Math.max(0, Number(N.inputCoastMoveMs) || 0) / 1000;
+      if (r.coastSubsteps * dt <= moveFor) return r.last;
+      if (!r.lastStill || r.lastStillFrom !== r.last) {
+        r.lastStillFrom = r.last;
+        r.lastStill = { ...r.last, fwd: 0, right: 0, jump: false, sprint: false };
+      }
+      return r.lastStill;
     }
     // Standing still walks nothing, so it owes nothing: the debt stops growing
     // here rather than turning a long outage into a long stretch of frozen
@@ -1276,6 +1297,20 @@ export function createNetGame(deps) {
     // adapter holds no copy, because a copy is a second thing that can be
     // wrong about where the hole is.
     pit2Edge: () => (world && typeof world.pit2Edge === 'function' ? world.pit2Edge() : null),
+    // The sky, straight through to the clock. The host reads it to broadcast
+    // and the client writes it on arrival; neither keeps a copy, because a
+    // copy is a second thing that can be wrong about the weather.
+    skyState: () => (worldClock ? worldClock.sky() : null),
+    applySky(msg) {
+      if (!worldClock || !msg) return false;
+      if (msg.w) worldClock.setWeather(msg.w);
+      if (typeof msg.f === 'number') worldClock.setFraction(msg.f);
+      // An event the client is not already running is started; one it is
+      // running and the host is not simply expires on its own clock, which is
+      // the same length on both machines.
+      if (msg.ev && worldClock.event() !== msg.ev) worldClock.startEvent(msg.ev);
+      return true;
+    },
     setPit2Edge(edge) {
       return world && typeof world.setPit2Edge === 'function' ? world.setPit2Edge(edge) : null;
     },

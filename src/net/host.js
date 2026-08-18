@@ -307,6 +307,7 @@ export function createHost({ session, game, onEvent }) {
   // Like the prestige diff, the first pass only records: a client that has just
   // been handed the join snapshot already knows what is on the shelf.
   function reconcileStock() {
+    reconcileSky();
     const st = game.stockState ? game.stockState() : null;
     if (!st) return;
     if (st.sig === stockSeen) return;
@@ -315,6 +316,20 @@ export function createHost({ session, game, onEvent }) {
     if (first) return;
     // `el`, not `e`: `e` is already the event name on every MSG.EVENT frame.
     broadcast({ t: MSG.EVENT, e: EV.STOCK, p: st.p, el: st.e, u: st.u, r: st.r });
+  }
+
+  // THE SKY. Weather and events are ROLLED, and a roll is the one kind of
+  // fact a client can never work out for itself: two machines calling their
+  // own random number generator are two different days in the same room.
+  // Sent on change, like the shelf and the roster.
+  let skySeen = '';
+  function reconcileSky() {
+    const sky = game.skyState ? game.skyState() : null;
+    if (!sky) return;
+    const sig = sky.weather + '|' + (sky.event || '') + '|' + Math.round(sky.fraction * 200);
+    if (sig === skySeen) return;
+    skySeen = sig;
+    broadcast({ t: MSG.EVENT, e: EV.SKY, w: sky.weather, ev: sky.event, f: sky.fraction });
   }
 
   // A prestige changes three things a client cannot work out for itself: the

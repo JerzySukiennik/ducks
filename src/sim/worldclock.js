@@ -84,6 +84,11 @@ export function createWorldClock({ config, rng }) {
   let nextEventAt = C.eventFirstSeconds;
   let clock = 0;
   let events = [];
+  // A CLIENT DOES NOT ROLL. Weather and events come off a random number, and two
+  // machines calling their own generator are two different days in one room --
+  // so a client advances the clock (the day is deterministic from elapsed time)
+  // and waits to be told the rest.
+  let rolling = true;
 
   function rollWeather() {
     // Clear is weighted heavily on purpose. Weather is seasoning: a yard that is
@@ -114,7 +119,7 @@ export function createWorldClock({ config, rng }) {
     clock += dt;
     t = (t + dt) % C.dayLengthSeconds;
 
-    if (clock >= weatherUntil) {
+    if (rolling && clock >= weatherUntil) {
       rollWeather();
       weatherUntil = clock + C.weatherMinSeconds
         + random() * (C.weatherMaxSeconds - C.weatherMinSeconds);
@@ -123,7 +128,7 @@ export function createWorldClock({ config, rng }) {
       events.push({ type: 'eventEnd', event });
       event = null;
       nextEventAt = clock + C.eventGapSeconds + random() * C.eventJitterSeconds;
-    } else if (!event && clock >= nextEventAt) {
+    } else if (rolling && !event && clock >= nextEventAt) {
       startEvent(eventKinds[Math.floor(random() * eventKinds.length) % eventKinds.length]);
     }
     return sky();
@@ -194,6 +199,8 @@ export function createWorldClock({ config, rng }) {
       return weather;
     },
     startEvent,
+    setRolling(v) { rolling = !!v; return rolling; },
+    isRolling: () => rolling,
     setFraction(f) {
       const n = Number(f);
       if (!isFinite(n)) return null;

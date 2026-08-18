@@ -3063,7 +3063,7 @@ async function boot() {
     for (const e of pitEvents) {
       if (e && e.type === 'duck' && isFinite(e.value)) duckSample += (e.value - duckSample) * 0.08;
     }
-    if (contracts.active()) hud.tickContract(); else hud.tickEvent();
+    if (contracts.active()) hud.tickContract(contracts.info()); else hud.tickEvent();
     audio.notePitEvents(pitEvents);
 
     // The vendor's shelf turns over on SIMULATION time, not wall time, so
@@ -3118,8 +3118,15 @@ async function boot() {
     // config and the same elapsed time, and nothing it decides is money. Only
     // the HOST's roll of a weather change is broadcast, and that is what the
     // events below carry.
+    // The day runs everywhere -- it is deterministic from elapsed time -- but
+    // only the host ROLLS the weather and the interruptions, and tells the room.
+    worldClock.setRolling(!net.isClient());
     const sky = worldClock.update(dt);
     applySky(sky);
+    // And say what it is. The light and the fog change on their own, but a
+    // player walking into a darker yard cannot tell weather from dusk, and
+    // "is it night or is it raining" is not a question to leave them with.
+    hud.setSky(sky);
     for (const ev of worldClock.consumeEvents()) onWorldEvent(ev);
     processors.setRunning(!net.isClient());
     processors.update(dt);
@@ -3339,6 +3346,9 @@ async function boot() {
   // which hotbar slot is in your hand.
   const net = createNetGame({
     world, state, placed, shop, hotbar, containers, machine, props, view, input, loop,
+    // The sky is rolled by the host and adopted by everyone else; the adapter
+    // reads it out and writes it in.
+    worldClock,
     player, byId, byNetId, resolvePlacement, worldQuery, isBuildable, isHandCarryable,
     // The ONE wheel test, handed to the host so a remote player's press is
     // resolved by the same function the local crosshair uses -- from the host's
