@@ -62,7 +62,12 @@ export function createDuckInstances({ geometry, max, ducks }) {
   mesh.receiveShadow = false;
 
   const tierColors = [];
-  for (let i = 0; i < 7; i++) tierColors.push(new THREE.Color(config.tierColors[i]));
+  // From the ladder's own length, not from a literal. It said 7 when there were
+  // seven tiers; the ladder is 25 rungs now and a hard-coded 7 would have left
+  // eighteen of them drawn in the top colour of the old set.
+  for (let i = 0; i < config.rarity.multipliers.length; i++) {
+    tierColors.push(new THREE.Color(config.tierColors[i]));
+  }
   const topTier = tierColors.length - 1;
 
   const slotOfDuck = new Int32Array(max).fill(-1);

@@ -371,8 +371,8 @@ export const config = {
     // boxPrice is what the vendor charges for the machine. It is deliberately
     // several rolls' worth: a box that pays for itself on the first pull is not
     // a gamble, it is a purchase with extra steps.
-    rollCost: 120,
-    boxPrice: 480,
+    rollCost: 920,
+    boxPrice: 3650,
     // Cheap prizes are common, expensive ones rare: weight = 1 / cost^power.
     prizePower: 1.15,
     // A losing roll is not empty -- it pays ducks instead, so the box always
@@ -800,40 +800,93 @@ export const config = {
   },
 
   rarity: {
-    // 7 tiers. Weights sum to 8000, so the top tier is exactly 1 in 8000.
-    multipliers: [1, 3, 10, 35, 100, 350, 1000],
-    weights: [6800, 900, 220, 60, 15, 4, 1],
+    // A LADDER OF 25 RUNGS, 1 to 100000, and every rung rarer than the one
+    // below it. This replaces seven hand-authored tiers.
+    //
+    // The obvious reading of "one duck worth 1, the next 2, the next 3, each
+    // rarer, up to 100000" is a hundred thousand separate values -- and that
+    // cannot work, measured rather than argued: spread the probability over
+    // 100000 integers and either the top is one duck in sixteen BILLION, or you
+    // flatten the curve until the top is reachable and the average duck is
+    // worth 2455, which is the whole economy gone. There is no setting in
+    // between; the two requirements are in direct conflict.
+    //
+    // So the ladder MULTIPLIES instead of adding. It still starts exactly as
+    // asked -- 1, 2, 3, 4 -- and then each rung is about 1.6x the last, which
+    // is the only shape where "each next one is rarer" and "100000 is a thing
+    // that actually happens" are both true. Every rung has the same chance of
+    // being upgraded to the next (0.65), so the weights below are simply
+    // 0.65^k: strictly decreasing, exactly as promised.
+    //
+    // Measured over the whole ladder:
+    //   mean duck                 16.88   (was 2.2125 across seven tiers)
+    //   1000 or better       1 in 649
+    //   10000 or better      1 in 6241
+    //   the 100000 duck      1 in 88182
+    //
+    // Shop prices were multiplied by 7.63 in the same change, so the game
+    // is paced exactly as it was and only the numbers got bigger.
+    multipliers: [
+      1, 2, 3, 4, 7,
+      11, 18, 29, 46, 75,
+      121, 196, 316, 511, 825,
+      1334, 2154, 3481, 5623, 9085,
+      14678, 23714, 38312, 61897, 100000,
+    ],
+    weights: [
+      10000000, 6500000, 4225000, 2746250, 1785063,
+      1160291, 754189, 490223, 318645, 207119,
+      134627, 87508, 56880, 36972, 24032,
+      15621, 10153, 6600, 4290, 2788,
+      1812, 1178, 766, 498, 324,
+    ],
     // Named weight sets. A producer row names one of these in
     // produce.rarityWeights; an unknown name is fatal, never a silent fallback.
-    // w_basic IS the Phase E curve above (mean duck multiplier 2.2125).
-    // w_good is what "a better rarity roll" on the assembler row means: every
-    // tier above the first weighted 1.5x, giving a mean of 2.692 (+21.7%).
-    // w_rare and w_elite are the phase 1 catalog's "never makes a common duck"
-    // machines. A zero weight on a tier is the mechanism the catalog assumed
-    // existed and it does: rollTier() normalises over the weights it is given,
-    // so a zero simply removes that tier from the machine's roll.
-    //   w_rare  drops tier 0 and keeps the Phase E shape above it.
-    //           mean 9.083 = 4.11x a basic duck, top tier 1 in 1200.
-    //   w_elite drops everything below tier 3. mean 75.0 = 33.9x a basic duck,
-    //           top tier 1 in 80 -- one duck a minute, worth a small fortune.
-    // Neither reacts to rarityLuckMul: the stat scales every tier ABOVE the
-    // first, and in these sets every surviving tier is above it, so the whole
-    // set scales together and the mean does not move. That is correct rather
-    // than convenient -- a machine that only makes rare ducks cannot be made
-    // luckier -- but it does mean Lucky Rubber is worth nothing to a player
-    // whose income is all reactor.
+    // A zero weight removes that rung from the machine's roll -- rollTier()
+    // normalises over whatever it is handed -- which is how "never makes a
+    // common duck" is expressed without a single branch in the code.
     sets: {
-      w_basic: [6800, 900, 220, 60, 15, 4, 1],
-      w_good: [6800, 1350, 330, 90, 22.5, 6, 1.5],
-      w_rare: [0, 900, 220, 60, 15, 4, 1],
-      w_elite: [0, 0, 0, 60, 15, 4, 1],
-      // CREATIVE MODE's set. All the weight on the top tier, zero everywhere
-      // else, which is the same mechanism w_rare and w_elite already use to
-      // remove a tier -- rollTier() normalises over the weights it is handed, so
-      // a set with a single non-zero entry can only ever return that tier. It is
-      // a weight set and nothing else: no code anywhere asks "is this creative?"
-      // while rolling, it is simply handed different data.
-      w_creative: [0, 0, 0, 0, 0, 0, 1],
+      w_basic: [
+        10000000, 6500000, 4225000, 2746250, 1785063,
+        1160291, 754189, 490223, 318645, 207119,
+        134627, 87508, 56880, 36972, 24032,
+        15621, 10153, 6600, 4290, 2788,
+        1812, 1178, 766, 498, 324,
+      ],
+      // Luckier: every rung above the first weighted 1.5x, the same rule the
+      // seven-tier version used, so Lucky Rubber still means what it meant.
+      w_good: [
+        10000000, 9750000, 6337500, 4119375, 2677594,
+        1740436, 1131284, 735334, 477968, 310678,
+        201940, 131262, 85320, 55458, 36048,
+        23432, 15230, 9900, 6435, 4182,
+        2718, 1767, 1149, 747, 486,
+      ],
+      // Never a plain duck: the bottom two rungs removed.
+      w_rare: [
+        0, 0, 4225000, 2746250, 1785063,
+        1160291, 754189, 490223, 318645, 207119,
+        134627, 87508, 56880, 36972, 24032,
+        15621, 10153, 6600, 4290, 2788,
+        1812, 1178, 766, 498, 324,
+      ],
+      // Nothing below rung 8, which is a duck worth 46 at the very least.
+      w_elite: [
+        0, 0, 0, 0, 0,
+        0, 0, 0, 318645, 207119,
+        134627, 87508, 56880, 36972, 24032,
+        15621, 10153, 6600, 4290, 2788,
+        1812, 1178, 766, 498, 324,
+      ],
+      // CREATIVE MODE: all the weight on the top rung and zero everywhere else,
+      // the same mechanism w_rare and w_elite use. Every duck is the jackpot.
+      w_creative: [
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 1,
+      ],
     },
   },
 
@@ -1172,13 +1225,36 @@ export const config = {
   // Rarity colours, index-matched to rarity.multipliers. Tier 0 is plain yellow;
   // each step is richer, and the top tier is white-gold and oversized.
   tierColors: {
+    // One per rung. The hue sweeps a single turn -- yellow, green, cyan, blue,
+    // violet, magenta -- and deliberately does NOT wrap, because a rung-19 duck
+    // that looks like a rung-3 duck is worse than no colour at all. The top
+    // three break out of the ramp into golds so a jackpot is unmistakable, and
+    // rung 0 is exactly the yellow the plain duck always was.
     0: 0xf2c218,
-    1: 0x9ee34f,
-    2: 0x35c2f0,
-    3: 0xa763ff,
-    4: 0xff7a2f,
-    5: 0xff2f68,
-    6: 0xffe14a,
+    1: 0xc8c730,
+    2: 0xaccc2e,
+    3: 0x8cd12d,
+    4: 0x6bd42d,
+    5: 0x48d62e,
+    6: 0x2ed838,
+    7: 0x2fdb5d,
+    8: 0x30dd83,
+    9: 0x31dfa9,
+    10: 0x31e1d0,
+    11: 0x32cee3,
+    12: 0x33aae5,
+    13: 0x3486e7,
+    14: 0x3561e9,
+    15: 0x363ceb,
+    16: 0x5838ed,
+    17: 0x8039ef,
+    18: 0xa83af0,
+    19: 0xd13bf2,
+    20: 0xf43cee,
+    21: 0xf53ec9,
+    22: 0xffb02a,
+    23: 0xffd75e,
+    24: 0xfff6d6,
   },
 
   hud: {
@@ -1228,7 +1304,7 @@ export const config = {
     // How long one stock period lasts, and what it costs to skip the wait.
     // 180 s is the interval Jurek asked for; 100 is the price of impatience.
     stockSeconds: 180,
-    rerollCost: 100,
+    rerollCost: 760,
 
     // The stock MODEL. src/sim/stock.js turns each of these into a unit count
     // per catalog row; none of it names an item, because "rarer" is derived
@@ -1983,6 +2059,14 @@ export const config = {
     // top face is measured off the geometry's bounding box every frame rather
     // than tabulated, so it is right for a duck, a wall and the workbench alike.
     labelClearance: 0.22,
+    // A duck's label is its VALUE, and it is set in type that grows with the
+    // rarity ladder: the bottom rung reads at the same size as every other
+    // label in the game and the top rung is 34 px of gold you can read from
+    // across the yard. Only the last fifth of the ladder glows -- a glow on
+    // every duck is not a signal, it is a filter over the whole screen.
+    valueSizeMin: 12,
+    valueSizeMax: 34,
+    valueGlowFrom: 0.8,
     // A target must survive this many frames before its name is shown, so
     // sweeping the crosshair across a crowd does not strobe the label.
     stickyFrames: 2,
@@ -2932,6 +3016,24 @@ export const REQUIRED_CONFIG_KEYS = [
   'rarity.multipliers.4',
   'rarity.multipliers.5',
   'rarity.multipliers.6',
+  'rarity.multipliers.7',
+  'rarity.multipliers.8',
+  'rarity.multipliers.9',
+  'rarity.multipliers.10',
+  'rarity.multipliers.11',
+  'rarity.multipliers.12',
+  'rarity.multipliers.13',
+  'rarity.multipliers.14',
+  'rarity.multipliers.15',
+  'rarity.multipliers.16',
+  'rarity.multipliers.17',
+  'rarity.multipliers.18',
+  'rarity.multipliers.19',
+  'rarity.multipliers.20',
+  'rarity.multipliers.21',
+  'rarity.multipliers.22',
+  'rarity.multipliers.23',
+  'rarity.multipliers.24',
   'rarity.weights.0',
   'rarity.weights.1',
   'rarity.weights.2',
@@ -3449,6 +3551,9 @@ export const REQUIRED_CONFIG_KEYS = [
   'focus.labelMaxDistance',
   'focus.labelMinOpacity',
   'focus.labelClearance',
+  'focus.valueSizeMin',
+  'focus.valueSizeMax',
+  'focus.valueGlowFrom',
   'focus.stickyFrames',
   'audio.enabled',
   'audio.fetchTimeoutMs',

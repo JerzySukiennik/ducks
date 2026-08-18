@@ -12,7 +12,7 @@ export const BUILDINGS = [
   {
     id: 'wall', netId: 60, name: 'Wall',
     desc: 'Two metres of low wall. Stops ducks rolling away.',
-    cost: 35, model: 'wall', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
+    cost: 270, model: 'wall', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [1.00, 0.5325, 0.125], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -21,7 +21,7 @@ export const BUILDINGS = [
   {
     id: 'wall_high', netId: 61, name: 'High Wall',
     desc: 'Same footprint, two and a half times the height.',
-    cost: 70, model: 'wall_high', footprint: [2.00, 2.665, 0.25], anchor: 'floor',
+    cost: 530, model: 'wall_high', footprint: [2.00, 2.665, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [1.00, 1.3325, 0.125], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -30,7 +30,7 @@ export const BUILDINGS = [
   {
     id: 'rail', netId: 62, name: 'Rail',
     desc: 'Knee-high kerb. The cheapest way to fence a run.',
-    cost: 15, model: 'rail', footprint: [2.00, 0.35, 0.25], anchor: 'floor',
+    cost: 110, model: 'rail', footprint: [2.00, 0.35, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [1.00, 0.175, 0.125], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -39,7 +39,7 @@ export const BUILDINGS = [
   {
     id: 'corner', netId: 63, name: 'Corner',
     desc: 'Closes a ninety degree join without leaving a gap.',
-    cost: 40, model: 'corner', footprint: [1.00, 1.10, 1.00], anchor: 'floor',
+    cost: 310, model: 'corner', footprint: [1.00, 1.10, 1.00], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.50, 0.55, 0.50], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -48,7 +48,7 @@ export const BUILDINGS = [
   {
     id: 'pillar', netId: 64, name: 'Pillar',
     desc: 'Vertical support. Holds a bridge up.',
-    cost: 55, model: 'pillar', footprint: [0.50, 2.46, 0.50], anchor: 'floor',
+    cost: 420, model: 'pillar', footprint: [0.50, 2.46, 0.50], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.25, 1.23, 0.25], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -57,7 +57,7 @@ export const BUILDINGS = [
   {
     id: 'ramp', netId: 65, name: 'Ramp',
     desc: 'Ducks roll down it. So do you.',
-    cost: 60, model: 'ramp', footprint: [1.50, 0.92, 2.00], anchor: 'floor',
+    cost: 460, model: 'ramp', footprint: [1.50, 0.92, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0.92, run: 2.00 },
     // `half` is the PLACEMENT box: what the grid, the overlap test and the model
@@ -95,7 +95,7 @@ export const BUILDINGS = [
     // This one is a trough, and that is also what it looks like.
     id: 'chute', netId: 66, name: 'Duck Trough',
     desc: 'Half-pipe trough. Keeps a stream of ducks on one line.',
-    cost: 80, model: 'chute', footprint: [0.75, 0.53, 2.00], anchor: 'floor',
+    cost: 610, model: 'chute', footprint: [0.75, 0.53, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 2.00 },
     collider: { shape: 'cuboid', half: [0.375, 0.265, 1.00], blockDucks: true },
@@ -105,7 +105,7 @@ export const BUILDINGS = [
   {
     id: 'bridge', netId: 67, name: 'Bridge',
     desc: 'Spans three metres. Walk over the pit instead of around it.',
-    cost: 140, model: 'bridge', footprint: [1.00, 1.455, 3.00], anchor: 'floor',
+    cost: 1050, model: 'bridge', footprint: [1.00, 1.455, 3.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 3.00 },
     collider: { shape: 'cuboid', half: [0.50, 0.7275, 1.50], blockDucks: true },
@@ -136,7 +136,7 @@ export const BUILDINGS = [
     // flush by anything -- and on this grid an unclosable gap is a duck that
     // rolls out of the run forever.
     desc: 'One metre of low kerb, for the gaps a two metre rail cannot close.',
-    cost: 12, model: 'pit_kerb', footprint: [1.00, 0.38, 0.50], anchor: 'floor',
+    cost: 90, model: 'pit_kerb', footprint: [1.00, 0.38, 0.50], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.50, 0.19, 0.25], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -145,7 +145,7 @@ export const BUILDINGS = [
   {
     id: 'wall_glass', netId: 69, name: 'Glass Wall',
     desc: 'Ducks slide along it instead of piling up against it.',
-    cost: 55, model: 'wall_glass', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
+    cost: 420, model: 'wall_glass', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
     kind: 'wall',
     // friction 0.08 against the world's 0.9. THE reason this row exists rather
     // than being a texture on the wall: a duck shoved into an ordinary wall
@@ -159,7 +159,7 @@ export const BUILDINGS = [
   {
     id: 'wall_soft', netId: 70, name: 'Padded Wall',
     desc: 'Ducks hit it and drop at its foot instead of bouncing back into the lane.',
-    cost: 50, model: 'wall_soft', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
+    cost: 380, model: 'wall_soft', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: {
       shape: 'cuboid', half: [1.00, 0.5325, 0.125], blockDucks: true,
@@ -171,7 +171,7 @@ export const BUILDINGS = [
   {
     id: 'bumper', netId: 71, name: 'Bumper',
     desc: 'Throws back whatever hits it, harder than it arrived.',
-    cost: 65, model: 'bumper', footprint: [1.00, 0.885, 1.00], anchor: 'floor',
+    cost: 500, model: 'bumper', footprint: [1.00, 0.885, 1.00], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.50, 0.4425, 0.50], blockDucks: true, restitution: 1.3 },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -180,7 +180,7 @@ export const BUILDINGS = [
   {
     id: 'trampoline', netId: 72, name: 'Trampoline',
     desc: 'Ducks that land on it go back up. So do you.',
-    cost: 130, model: 'trampoline', footprint: [1.50, 0.5141, 1.50], anchor: 'floor',
+    cost: 990, model: 'trampoline', footprint: [1.50, 0.5141, 1.50], anchor: 'floor',
     kind: 'wall',
     // 1.6, not 2.0. Above about 1.7 a duck gains height every bounce and the
     // pile never settles, which reads as a physics bug rather than a toy.
@@ -191,7 +191,7 @@ export const BUILDINGS = [
   {
     id: 'ice_slide', netId: 73, name: 'Ice Slab',
     desc: 'Two metres square of almost no friction. Whatever crosses it keeps going.',
-    cost: 85, model: 'ice_slide', footprint: [2.00, 0.15, 2.00], anchor: 'floor',
+    cost: 650, model: 'ice_slide', footprint: [2.00, 0.15, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 2.00 },
     collider: { shape: 'cuboid', half: [1.00, 0.075, 1.00], blockDucks: true, friction: 0.02 },
@@ -201,7 +201,7 @@ export const BUILDINGS = [
   {
     id: 'fan_strong', netId: 74, name: 'Heavy Fan',
     desc: 'Ten metres of wind instead of six, and it pushes harder.',
-    cost: 240, model: 'fan_strong', footprint: [1.50, 1.8811, 1.00], anchor: 'floor',
+    cost: 1850, model: 'fan_strong', footprint: [1.50, 1.8811, 1.00], anchor: 'floor',
     kind: 'blower',
     repeat: { times: 6, curve: 1.18 },
     // Same friction floor as the fan and the vacuum station: mu * g = 13.2 is
@@ -220,7 +220,7 @@ export const BUILDINGS = [
   {
     id: 'fan_vertical', netId: 75, name: 'Updraft Fan',
     desc: 'Blows straight up. Lifts a duck about three metres instead of pushing it along the floor.',
-    cost: 110, model: 'fan_vertical', footprint: [1.00, 0.895, 1.00], anchor: 'floor',
+    cost: 840, model: 'fan_vertical', footprint: [1.00, 0.895, 1.00], anchor: 'floor',
     kind: 'blower',
     repeat: { times: 12, curve: 1.10 },
     // blow.pitchDegrees, measured off the PLACED pose exactly as a ramp's
@@ -241,7 +241,7 @@ export const BUILDINGS = [
   {
     id: 'vibe_floor', netId: 76, name: 'Vibrating Floor',
     desc: 'A belt with no height. Slower than a conveyor, and you can walk over it.',
-    cost: 85, model: 'vibe_floor', footprint: [1.00, 0.1412, 2.00], anchor: 'floor',
+    cost: 650, model: 'vibe_floor', footprint: [1.00, 0.1412, 2.00], anchor: 'floor',
     kind: 'conveyor',
     repeat: { times: 12, curve: 1.04 },
     // The conveyor is 0.65 m tall, so a belt run is a wall across your yard
@@ -259,7 +259,7 @@ export const BUILDINGS = [
   {
     id: 'slide', netId: 77, name: 'Slide',
     desc: 'Three metres of channel dropping seventy centimetres. Ducks arrive at the bottom moving.',
-    cost: 120, model: 'slide', footprint: [1.00, 1.4546, 3.00], anchor: 'floor',
+    cost: 920, model: 'slide', footprint: [1.00, 1.4546, 3.00], anchor: 'floor',
     kind: 'ramp',
     // MEASURED off the mesh, not read off the footprint height: the bed is a
     // 2.92 m plank at 14 degrees, so it drops 0.706 m across a 2.90 m run
@@ -277,7 +277,7 @@ export const BUILDINGS = [
   {
     id: 'platform', netId: 78, name: 'Platform',
     desc: 'Two metres square of deck at knee height. Stack machines above the floor.',
-    cost: 95, model: 'platform', footprint: [2.00, 0.63, 2.00], anchor: 'floor',
+    cost: 720, model: 'platform', footprint: [2.00, 0.63, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 2.00 },
     collider: {
@@ -293,7 +293,7 @@ export const BUILDINGS = [
   {
     id: 'stairs', netId: 79, name: 'Stairs',
     desc: 'Climbs sixty centimetres over two metres. Gentler than the ramp and half as wide.',
-    cost: 70, model: 'stairs', footprint: [1.00, 0.6025, 2.00], anchor: 'floor',
+    cost: 530, model: 'stairs', footprint: [1.00, 0.6025, 2.00], anchor: 'floor',
     kind: 'ramp',
     // 4 x 0.15 = 0.60, which is the platform deck exactly. The two pieces were
     // modelled to meet.
@@ -308,7 +308,7 @@ export const BUILDINGS = [
   {
     id: 'roof', netId: 80, name: 'Canopy',
     desc: 'A sheet of roof on two posts. Decoration; nothing falls out of this sky.',
-    cost: 75, model: 'roof', footprint: [2.00, 1.805, 2.00], anchor: 'floor',
+    cost: 570, model: 'roof', footprint: [2.00, 1.805, 2.00], anchor: 'floor',
     kind: 'wall',
     collider: {
       shape: 'cuboid', half: [1.00, 0.9025, 1.00], blockDucks: true,
@@ -323,7 +323,7 @@ export const BUILDINGS = [
   {
     id: 'lamp_post', netId: 81, name: 'Lamp Post',
     desc: 'A post with a lamp on it. Decoration.',
-    cost: 25, model: 'lamp_post', footprint: [0.50, 2.17, 0.50], anchor: 'floor',
+    cost: 190, model: 'lamp_post', footprint: [0.50, 2.17, 0.50], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.25, 1.085, 0.25], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -332,7 +332,7 @@ export const BUILDINGS = [
   {
     id: 'sign_dir', netId: 82, name: 'Direction Sign',
     desc: 'Points somewhere. Decoration; the ducks cannot read.',
-    cost: 18, model: 'sign_dir', footprint: [0.75, 1.38, 0.25], anchor: 'floor',
+    cost: 140, model: 'sign_dir', footprint: [0.75, 1.38, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [0.375, 0.69, 0.125], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },
@@ -341,7 +341,7 @@ export const BUILDINGS = [
   {
     id: 'neon_ducks', netId: 83, name: 'DUCKS Sign',
     desc: 'A lit sign that says DUCKS. Decoration.',
-    cost: 40, model: 'neon_ducks', footprint: [2.00, 1.455, 0.25], anchor: 'floor',
+    cost: 310, model: 'neon_ducks', footprint: [2.00, 1.455, 0.25], anchor: 'floor',
     kind: 'wall',
     collider: { shape: 'cuboid', half: [1.00, 0.7275, 0.125], blockDucks: true },
     snap: { grid: 0.25, yawStep: 15, freeRotate: true },

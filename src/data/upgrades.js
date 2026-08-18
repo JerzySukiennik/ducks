@@ -13,7 +13,7 @@ export const UPGRADES = [
   {
     id: 'long_arms', netId: 120, name: 'Long Arms',
     desc: 'Grab ducks from half a metre further away.',
-    cost: 180, kind: 'upgrade',
+    cost: 1350, kind: 'upgrade',
     repeat: { times: 3, curve: 1.5 },
     effects: [{ stat: 'grabRangeAdd', op: 'add', value: 0.5 }],
     tags: ['cheap'],
@@ -21,7 +21,7 @@ export const UPGRADES = [
   {
     id: 'swift_hands', netId: 121, name: 'Swift Hands',
     desc: 'Each level cuts crank clicks per duck by 15%.',
-    cost: 250, kind: 'upgrade',
+    cost: 1900, kind: 'upgrade',
     repeat: { times: 4, curve: 1.7 },
     effects: [{ stat: 'clicksPerDuckMul', op: 'mul', value: 0.85 }],
     tags: [],
@@ -29,7 +29,7 @@ export const UPGRADES = [
   {
     id: 'sturdy_boots', netId: 122, name: 'Sturdy Boots',
     desc: 'Walk 10% faster per level.',
-    cost: 300, kind: 'upgrade',
+    cost: 2300, kind: 'upgrade',
     repeat: { times: 4, curve: 1.55 },
     effects: [{ stat: 'moveSpeedMul', op: 'mul', value: 1.1 }],
     tags: [],
@@ -37,7 +37,7 @@ export const UPGRADES = [
   {
     id: 'salvage_permit', netId: 123, name: 'Salvage Permit',
     desc: 'Demolishing returns 5 more percentage points per level.',
-    cost: 400, kind: 'upgrade',
+    cost: 3050, kind: 'upgrade',
     repeat: { times: 2, curve: 2.0 },
     effects: [{ stat: 'refundFractionAdd', op: 'add', value: 0.05 }],
     tags: [],
@@ -45,7 +45,7 @@ export const UPGRADES = [
   {
     id: 'market_valuation', netId: 124, name: 'Market Valuation',
     desc: 'Every duck is worth 15% more per level.',
-    cost: 500, kind: 'upgrade',
+    cost: 3800, kind: 'upgrade',
     repeat: { times: 8, curve: 1.55 },
     effects: [{ stat: 'duckValueMul', op: 'mul', value: 1.15 }],
     tags: [],
@@ -53,7 +53,7 @@ export const UPGRADES = [
   {
     id: 'lucky_rubber', netId: 125, name: 'Lucky Rubber',
     desc: 'Rare tiers become 20% more likely per level.',
-    cost: 800, kind: 'upgrade',
+    cost: 6100, kind: 'upgrade',
     repeat: { times: 5, curve: 1.7 },
     effects: [{ stat: 'rarityLuckMul', op: 'mul', value: 1.2 }],
     tags: ['bigticket'],
@@ -61,7 +61,7 @@ export const UPGRADES = [
   {
     id: 'strong_arm', netId: 126, name: 'Strong Arm',
     desc: 'Throw ducks 25% harder. One-off.',
-    cost: 220, kind: 'upgrade',
+    cost: 1700, kind: 'upgrade',
     repeat: { times: 1, curve: 1 },
     effects: [{ stat: 'throwImpulseMul', op: 'mul', value: 1.25 }],
     tags: [],
@@ -69,7 +69,7 @@ export const UPGRADES = [
   {
     id: 'reinforced_crates', netId: 127, name: 'Reinforced Crates',
     desc: 'Every crate, bucket and container holds 30% more per level.',
-    cost: 650, kind: 'upgrade',
+    cost: 4950, kind: 'upgrade',
     repeat: { times: 3, curve: 1.8 },
     effects: [{ stat: 'storageCapacityMul', op: 'mul', value: 1.3 }],
     tags: [],

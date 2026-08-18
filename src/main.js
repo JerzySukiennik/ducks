@@ -408,6 +408,12 @@ async function boot() {
       tierMultiplier: (t) => config.rarity.multipliers[
         Math.max(0, Math.min(config.rarity.multipliers.length - 1, t | 0))
       ],
+      // How long the rarity ladder is, and what colour a rung is drawn in. The
+      // label reads both so it can size itself against the ladder and print the
+      // value in the colour the duck itself is wearing -- one source for
+      // "how rare is this", so the two can never disagree.
+      tierCount: () => config.rarity.multipliers.length,
+      tierColor: (t) => ducksView.tierColor(t),
       sceneryMeshes: () => sceneryTargets,
       // The catalog row behind a placed object, so focus.js can read the row's
       // `interact` declaration instead of keeping its own idea of which models
@@ -3941,6 +3947,17 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    // What the crosshair is on and what its label says, read back off the DOM
+    // rather than off what was asked for. A duck's label is its VALUE now, so
+    // this is how the value readout gets verified rather than assumed.
+    debugFocus() {
+      const t = focus.target();
+      return {
+        target: t,
+        labelVisible: focus.labelVisible(),
+        labelText: focus.labelText(),
+      };
+    },
     // --- the truck ------------------------------------------------------------
     debugTrucks: () => vehicles.list.map((r) => vehicles.info(r.key)),
     // What the truck's own synth is doing: whether the engine note is running,

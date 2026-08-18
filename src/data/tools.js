@@ -45,7 +45,7 @@ export const TOOLS = [
   {
     id: 'bucket', netId: 100, name: 'Bucket',
     desc: 'Holds eight ducks. Tip it into the pit.',
-    cost: 25, model: 'bucket', footprint: [0.75, 0.95, 0.75], anchor: 'floor',
+    cost: 190, model: 'bucket', footprint: [0.75, 0.95, 0.75], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 8, tipToEmpty: true,
@@ -64,7 +64,7 @@ export const TOOLS = [
   {
     id: 'box', netId: 101, name: 'Crate',
     desc: 'Holds sixteen ducks.',
-    cost: 45, model: 'box', footprint: [1.00, 0.75, 1.00], anchor: 'floor',
+    cost: 340, model: 'box', footprint: [1.00, 0.75, 1.00], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 16, tipToEmpty: true,
@@ -80,7 +80,7 @@ export const TOOLS = [
   {
     id: 'box_big', netId: 102, name: 'Large Crate',
     desc: 'Holds thirty ducks. Heavy.',
-    cost: 120, model: 'box_big', footprint: [1.25, 1.10, 1.25], anchor: 'floor',
+    cost: 920, model: 'box_big', footprint: [1.25, 1.10, 1.25], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 30, tipToEmpty: true,
@@ -93,7 +93,7 @@ export const TOOLS = [
   {
     id: 'container', netId: 103, name: 'Container',
     desc: 'Two hundred ducks in one box. The first thing worth saving for.',
-    cost: 1200, model: 'container', footprint: [2.25, 2.00, 4.50], anchor: 'floor',
+    cost: 9150, model: 'container', footprint: [2.25, 2.00, 4.50], anchor: 'floor',
     kind: 'storage',
     // The only storage row NOT resized: 2.25 x 2.00 x 4.50 already offers 576
     // places, and only containers.physicalLimit (25) of the 200 it holds are
@@ -131,7 +131,7 @@ export const TOOLS = [
   {
     id: 'cart', netId: 110, name: 'Cart',
     desc: 'Push it. Whatever is in it comes along.',
-    cost: 180, model: 'cart', footprint: [1.25, 1.01, 2.25], anchor: 'floor',
+    cost: 1350, model: 'cart', footprint: [1.25, 1.01, 2.25], anchor: 'floor',
     kind: 'carry',
     storage: {
       capacity: 24, tipToEmpty: true,
@@ -149,7 +149,7 @@ export const TOOLS = [
   {
     id: 'broom', netId: 111, name: 'Broom',
     desc: 'Sweeps a wide arc of ducks in front of you.',
-    cost: 90, model: 'broom', footprint: [0.50, 1.52, 0.25], anchor: 'floor',
+    cost: 690, model: 'broom', footprint: [0.50, 1.52, 0.25], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'sweep', reach: 1.8, arc: 110, force: 6 },
     collider: { shape: 'cuboid', half: [0.25, 0.76, 0.125], blockDucks: false },
@@ -162,7 +162,7 @@ export const TOOLS = [
   {
     id: 'vacuum', netId: 112, name: 'Handheld Vacuum',
     desc: 'Sucks ducks up one at a time, then hoses them where you point.',
-    cost: 260, model: 'vacuum', footprint: [0.25, 0.728, 1.00], anchor: 'floor',
+    cost: 2000, model: 'vacuum', footprint: [0.25, 0.728, 1.00], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'beam', reach: 4.0, arc: 20, force: 14 },
     collider: { shape: 'cuboid', half: [0.125, 0.364, 0.50], blockDucks: false },
@@ -194,7 +194,7 @@ export const TOOLS = [
   {
     id: 'bucket_leaky', netId: 104, name: 'Leaky Bucket',
     desc: 'Holds ten, but dribbles ducks onto the floor whenever you move it.',
-    cost: 20, model: 'bucket_leaky', footprint: [0.75, 0.8629, 0.75], anchor: 'floor',
+    cost: 150, model: 'bucket_leaky', footprint: [0.75, 0.8629, 0.75], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 10, tipToEmpty: true,
@@ -219,7 +219,7 @@ export const TOOLS = [
   {
     id: 'sack', netId: 105, name: 'Sack',
     desc: 'Holds five ducks and does not spill any of them. The cheapest thing that beats your arms.',
-    cost: 18, model: 'sack', footprint: [0.75, 1.0442, 0.75], anchor: 'floor',
+    cost: 140, model: 'sack', footprint: [0.75, 1.0442, 0.75], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 5, tipToEmpty: true,
@@ -234,7 +234,7 @@ export const TOOLS = [
   {
     id: 'crate_wood', netId: 106, name: 'Wooden Crate',
     desc: 'Holds twenty two. The slats let a duck out now and then while you carry it.',
-    cost: 75, model: 'crate_wood', footprint: [1.00, 0.70, 1.00], anchor: 'floor',
+    cost: 570, model: 'crate_wood', footprint: [1.00, 0.70, 1.00], anchor: 'floor',
     kind: 'storage',
     storage: {
       capacity: 22, tipToEmpty: true,
@@ -250,7 +250,7 @@ export const TOOLS = [
   {
     id: 'dumper', netId: 107, name: 'Tipper',
     desc: 'Push it. Holds thirty four and tips the lot in one go.',
-    cost: 260, model: 'dumper', footprint: [1.25, 0.985, 1.75], anchor: 'floor',
+    cost: 2000, model: 'dumper', footprint: [1.25, 0.985, 1.75], anchor: 'floor',
     kind: 'carry',
     storage: {
       capacity: 34, tipToEmpty: true,
@@ -265,7 +265,7 @@ export const TOOLS = [
   {
     id: 'pallet_jack', netId: 108, name: 'Pallet Jack',
     desc: 'Forty four ducks on the forks. Slow to turn, and it does not tip.',
-    cost: 560, model: 'pallet_jack', footprint: [0.75, 1.2871, 2.00], anchor: 'floor',
+    cost: 4250, model: 'pallet_jack', footprint: [0.75, 1.2871, 2.00], anchor: 'floor',
     kind: 'carry',
     storage: {
       // tipToEmpty false, like the container: you unload it a duck at a time.
@@ -282,7 +282,7 @@ export const TOOLS = [
   {
     id: 'plank', netId: 109, name: 'Plank',
     desc: 'Two metres of board. Drop it over a gap and carry it to the next one.',
-    cost: 14, model: 'plank', footprint: [0.25, 0.115, 2.00], anchor: 'floor',
+    cost: 110, model: 'plank', footprint: [0.25, 0.115, 2.00], anchor: 'floor',
     kind: 'ramp',
     slope: { rise: 0, run: 2.00 },
     collider: { shape: 'cuboid', half: [0.125, 0.0575, 1.00], blockDucks: true },
@@ -310,7 +310,7 @@ export const TOOLS = [
   {
     id: 'fan_handheld', netId: 113, name: 'Handheld Fan',
     desc: 'A wide gentle puff a few metres ahead. Nudges ducks; will not move a pile.',
-    cost: 40, model: 'fan_handheld', footprint: [0.50, 0.825, 0.25], anchor: 'floor',
+    cost: 310, model: 'fan_handheld', footprint: [0.50, 0.825, 0.25], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'sweep', reach: 3.0, arc: 55, force: 3 },
     collider: { shape: 'cuboid', half: [0.25, 0.4125, 0.125], blockDucks: false },
@@ -321,7 +321,7 @@ export const TOOLS = [
   {
     id: 'pusher', netId: 114, name: 'Push Blade',
     desc: 'A blade nearly two metres wide. Shoves everything right in front of you a short way.',
-    cost: 150, model: 'pusher', footprint: [1.25, 1.005, 0.50], anchor: 'floor',
+    cost: 1150, model: 'pusher', footprint: [1.25, 1.005, 0.50], anchor: 'floor',
     kind: 'tool',
     // The widest arc in the game and the shortest reach: this is the tool for
     // clearing a jam at your feet, where the broom's 110 degrees leaves ducks
@@ -335,7 +335,7 @@ export const TOOLS = [
   {
     id: 'broom_wide', netId: 115, name: 'Wide Broom',
     desc: 'The broom with half again the reach and a much wider sweep.',
-    cost: 220, model: 'broom_wide', footprint: [1.00, 1.57, 0.25], anchor: 'floor',
+    cost: 1700, model: 'broom_wide', footprint: [1.00, 1.57, 0.25], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'sweep', reach: 2.4, arc: 150, force: 7 },
     collider: { shape: 'cuboid', half: [0.50, 0.785, 0.125], blockDucks: false },
@@ -346,7 +346,7 @@ export const TOOLS = [
   {
     id: 'leaf_blower', netId: 116, name: 'Leaf Blower',
     desc: 'A narrow jet five metres long. Drives a line of ducks ahead of you.',
-    cost: 300, model: 'leaf_blower', footprint: [0.25, 0.7291, 1.00], anchor: 'floor',
+    cost: 2300, model: 'leaf_blower', footprint: [0.25, 0.7291, 1.00], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'sweep', reach: 5.0, arc: 35, force: 9 },
     collider: { shape: 'cuboid', half: [0.125, 0.36455, 0.50], blockDucks: false },
@@ -357,7 +357,7 @@ export const TOOLS = [
   {
     id: 'fire_hose', netId: 117, name: 'Fire Hose',
     desc: 'Eight metres of hard, narrow water. The longest push in the game.',
-    cost: 480, model: 'fire_hose', footprint: [0.75, 0.5662, 0.75], anchor: 'floor',
+    cost: 3650, model: 'fire_hose', footprint: [0.75, 0.5662, 0.75], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'sweep', reach: 8.0, arc: 18, force: 12 },
     collider: { shape: 'cuboid', half: [0.375, 0.2831, 0.375], blockDucks: false },
@@ -368,7 +368,7 @@ export const TOOLS = [
   {
     id: 'vacuum_industrial', netId: 118, name: 'Industrial Vacuum',
     desc: 'The handheld vacuum with seven metres of reach and a harder hose.',
-    cost: 620, model: 'vacuum_industrial', footprint: [0.75, 1.2332, 0.75], anchor: 'floor',
+    cost: 4750, model: 'vacuum_industrial', footprint: [0.75, 1.2332, 0.75], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'beam', reach: 7.0, arc: 26, force: 20 },
     collider: { shape: 'cuboid', half: [0.375, 0.6166, 0.375], blockDucks: false },
@@ -381,7 +381,7 @@ export const TOOLS = [
   {
     id: 'rake', netId: 119, name: 'Rake',
     desc: 'Drags ducks towards you instead of pushing them away.',
-    cost: 130, model: 'rake', footprint: [0.75, 1.5409, 0.25], anchor: 'floor',
+    cost: 990, model: 'rake', footprint: [0.75, 1.5409, 0.25], anchor: 'floor',
     kind: 'tool',
     // tool.pull inverts the direction the sweep drives towards. Everything
     // else about it is the broom, which is the point: pulling is the missing
@@ -395,7 +395,7 @@ export const TOOLS = [
   {
     id: 'magnet', netId: 160, name: 'Duck Magnet',
     desc: 'Pulls a narrow line of ducks in from five metres away.',
-    cost: 340, model: 'magnet', footprint: [0.50, 0.8504, 0.25], anchor: 'floor',
+    cost: 2600, model: 'magnet', footprint: [0.50, 0.8504, 0.25], anchor: 'floor',
     kind: 'tool',
     // The rake pulls wide and near, this pulls narrow and far -- the same axis
     // the broom and the leaf blower are separated along, in the other
@@ -409,7 +409,7 @@ export const TOOLS = [
   {
     id: 'horn', netId: 161, name: 'Air Horn',
     desc: 'One blast shoves every duck around you outward. The only tool that works behind your back.',
-    cost: 45, model: 'horn', footprint: [0.25, 0.685, 0.50], anchor: 'floor',
+    cost: 340, model: 'horn', footprint: [0.25, 0.685, 0.50], anchor: 'floor',
     kind: 'tool',
     // arc 360 makes the cone test pass everywhere, which is how "all round
     // you" is expressed without a new mode: cos(180 deg) = -1 and every dot
@@ -423,7 +423,7 @@ export const TOOLS = [
   {
     id: 'dustpan', netId: 162, name: 'Dustpan',
     desc: 'Scoops up to five ducks off the floor in one movement. No container needed.',
-    cost: 60, model: 'dustpan', footprint: [0.50, 0.7447, 0.75], anchor: 'floor',
+    cost: 460, model: 'dustpan', footprint: [0.50, 0.7447, 0.75], anchor: 'floor',
     kind: 'tool',
     // The 'scoop' mode. force 0 on purpose: a scoop does not push, it takes.
     tool: { mode: 'scoop', reach: 1.2, arc: 90, force: 0, capacity: 5 },
@@ -435,7 +435,7 @@ export const TOOLS = [
   {
     id: 'lasso', netId: 163, name: 'Lasso',
     desc: 'Scoops three ducks from four metres off. Range instead of volume.',
-    cost: 280, model: 'lasso', footprint: [0.50, 0.2361, 0.50], anchor: 'floor',
+    cost: 2150, model: 'lasso', footprint: [0.50, 0.2361, 0.50], anchor: 'floor',
     kind: 'tool',
     tool: { mode: 'scoop', reach: 4.0, arc: 20, force: 0, capacity: 3 },
     collider: { shape: 'cuboid', half: [0.25, 0.11805, 0.25], blockDucks: false },

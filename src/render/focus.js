@@ -57,6 +57,18 @@ const CSS = `
   text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 #focus-label.show { display: block; }
 #focus-label em { font-style: normal; color: rgba(232,238,255,0.6); font-weight: 500; }
+/* A DUCK'S PRICE IS THE LABEL, not a footnote on it. The rarity ladder runs
+   from 1 to 100000 and the whole point of drawing from it is that the player
+   can see what landed, so a duck's label is set in a size that grows with the
+   rung: rung 0 reads at the same 12 px everything else does, and the top of the
+   ladder is 34 px of gold you can read across the yard. The size comes from a
+   custom property so the rung sets it and this file states no ladder. */
+#focus-label.value { padding: 4px 12px;
+  font-size: var(--focus-value-size, 12px);
+  color: var(--focus-value-color, #ffe9a8);
+  border-color: var(--focus-value-color, rgba(255,225,74,0.5));
+  text-shadow: 0 2px 0 rgba(0,0,0,0.75), 0 0 12px var(--focus-value-glow, transparent); }
+#focus-label.value em { font-size: 11px; }
 `;
 
 const _ray = new THREE.Raycaster();
@@ -234,8 +246,17 @@ export function createFocus({ scene, container, sources }) {
     mesh.getMatrixAt(bestSlot, _m);
     return {
       key: 'd' + id,
-      name: 'Duck',
-      sub: 'x' + mul,
+      // THE NUMBER IS THE NAME. It used to read "Duck / x3" -- the word every
+      // duck shares in the big type and the one thing that differs in the small
+      // grey type. With a 25-rung ladder that is exactly backwards: what the
+      // player wants to know across a yard of two hundred ducks is what THIS
+      // one is worth.
+      name: mul.toLocaleString('en-US'),
+      sub: 'duck',
+      value: mul,
+      rung: tier,
+      rungs: sources.tierCount ? sources.tierCount() : 1,
+      color: sources.tierColor ? sources.tierColor(tier) : null,
       distance: bestT,
       geometry: geo,
       matrix: _m.clone(),
@@ -399,6 +420,25 @@ export function createFocus({ scene, container, sources }) {
       label.innerHTML = target.sub
         ? escapeHtml(target.name) + ' <em>' + escapeHtml(target.sub) + '</em>'
         : escapeHtml(target.name);
+      // A duck says how much it is worth, in type that grows with the rung and
+      // in the colour the duck itself is drawn in -- so the label and the thing
+      // it is pointing at cannot disagree about how rare this one is.
+      if (target.value !== undefined) {
+        const t2 = target.rungs > 1 ? target.rung / (target.rungs - 1) : 0;
+        const px = f.valueSizeMin + (f.valueSizeMax - f.valueSizeMin) * t2;
+        label.style.setProperty('--focus-value-size', px.toFixed(1) + 'px');
+        if (target.color !== null && target.color !== undefined) {
+          const hex = '#' + target.color.toString(16).padStart(6, '0');
+          label.style.setProperty('--focus-value-color', hex);
+          // Only the top of the ladder glows. A glow on every duck is not a
+          // signal, it is a filter over the whole screen.
+          label.style.setProperty('--focus-value-glow',
+            t2 >= f.valueGlowFrom ? hex : 'transparent');
+        }
+        label.classList.add('value');
+      } else {
+        label.classList.remove('value');
+      }
       label.classList.add('show');
     }
     current = target;

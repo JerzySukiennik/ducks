@@ -32,7 +32,7 @@ export const MACHINES = [
     desc: 'Hold the wheel and it fills; a duck drops out every few seconds. The only duck source you start with.',
     // 10, not 0. You are GIVEN one at spawn; this price is for a second bench,
     // and a cost of 0 made the shop refuse the row outright as 'not for sale'.
-    cost: 10, model: 'crank', footprint: [2.096, 2.256, 2.128], anchor: 'floor',
+    cost: 75, model: 'crank', footprint: [2.096, 2.256, 2.128], anchor: 'floor',
     kind: 'producer_manual',
     // The starter workbench is drawn at config.machine.scale = 1.6, and a bought
     // one has to be the same machine: same size, same crank, same wheel. The
@@ -79,7 +79,7 @@ export const MACHINES = [
   {
     id: 'press', netId: 2, name: 'Duck Press',
     desc: 'Stamps out a duck every few seconds without you.',
-    cost: 200, model: 'press', footprint: [1.00, 1.80, 0.75], anchor: 'floor',
+    cost: 1550, model: 'press', footprint: [1.00, 1.80, 0.75], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 16, curve: 1.28 },
     produce: { secondsPerDuck: 4.5, rarityWeights: 'w_basic' },
@@ -112,7 +112,7 @@ export const MACHINES = [
     // so it sits above the press and well below the assembler. The repeat curve
     // is steeper than the press's 1.28 for the same reason: copies on one wheel
     // multiply against a shared flywheel.
-    cost: 340, model: 'crank_bot', footprint: [0.75, 1.00, 0.75], anchor: 'floor',
+    cost: 2600, model: 'crank_bot', footprint: [0.75, 1.00, 0.75], anchor: 'floor',
     // A KIND OF ITS OWN, and deliberately not `producer_auto`: this thing makes
     // no ducks. It puts a hand on a wheel, and the wheel makes the ducks under
     // exactly the rules a player's hand obeys. Behaviour is in main.js
@@ -126,7 +126,7 @@ export const MACHINES = [
   {
     id: 'machine', netId: 3, name: 'Duck Assembler',
     desc: 'Faster automatic producer with a better rarity roll.',
-    cost: 650, model: 'machine', footprint: [1.50, 2.10, 1.25], anchor: 'floor',
+    cost: 4950, model: 'machine', footprint: [1.50, 2.10, 1.25], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 16, curve: 1.32 },
     produce: { secondsPerDuck: 2.0, rarityWeights: 'w_good' },
@@ -137,7 +137,7 @@ export const MACHINES = [
   {
     id: 'vacuum_station', netId: 4, name: 'Vacuum Station',
     desc: 'Pulls loose ducks in from a few metres and feeds them onward.',
-    cost: 450, model: 'vacuum_station', footprint: [1.00, 1.28, 1.00], anchor: 'floor',
+    cost: 3450, model: 'vacuum_station', footprint: [1.00, 1.28, 1.00], anchor: 'floor',
     kind: 'collector_auto',
     repeat: { times: 4, curve: 1.55 },
     // force must beat static friction on concrete or the station does nothing
@@ -152,7 +152,7 @@ export const MACHINES = [
   {
     id: 'conveyor', netId: 10, name: 'Conveyor',
     desc: 'Two metres of belt. Carries ducks along its length.',
-    cost: 110, model: 'conveyor', footprint: [1.00, 0.65, 2.00], anchor: 'floor',
+    cost: 840, model: 'conveyor', footprint: [1.00, 0.65, 2.00], anchor: 'floor',
     kind: 'conveyor',
     repeat: { times: 60, curve: 1.035 },
     belt: { speed: 1.6, turn: 0, rise: 0 },
@@ -167,7 +167,7 @@ export const MACHINES = [
   {
     id: 'conveyor_corner', netId: 11, name: 'Conveyor Corner',
     desc: 'Turns the belt ninety degrees.',
-    cost: 130, model: 'conveyor_corner', footprint: [1.50, 0.66, 1.50], anchor: 'floor',
+    cost: 990, model: 'conveyor_corner', footprint: [1.50, 0.66, 1.50], anchor: 'floor',
     kind: 'conveyor',
     repeat: { times: 12, curve: 1.05 },
     belt: { speed: 1.6, turn: 90, rise: 0 },
@@ -187,7 +187,7 @@ export const MACHINES = [
   {
     id: 'conveyor_slope', netId: 12, name: 'Conveyor Ramp',
     desc: 'Runs ducks down seven tenths of a metre. Turn it to aim the descent.',
-    cost: 150, model: 'conveyor_slope', footprint: [1.00, 1.555, 2.00], anchor: 'floor',
+    cost: 1150, model: 'conveyor_slope', footprint: [1.00, 1.555, 2.00], anchor: 'floor',
     kind: 'conveyor',
     repeat: { times: 8, curve: 1.05 },
     // THE NUMBERS BELOW ARE MEASURED OFF assets/models/conveyor_slope.glb, off
@@ -262,7 +262,7 @@ export const MACHINES = [
   {
     id: 'fan', netId: 13, name: 'Fan',
     desc: 'Blows ducks forward. Ducks pass straight through the blades.',
-    cost: 60, model: 'fan', footprint: [1.25, 1.63, 0.75], anchor: 'floor',
+    cost: 460, model: 'fan', footprint: [1.25, 1.63, 0.75], anchor: 'floor',
     kind: 'blower',
     repeat: { times: 24, curve: 1.08 },
     // Same trap as the vacuum station, in a different row: 9 is BELOW the static
@@ -308,7 +308,7 @@ export const MACHINES = [
   {
     id: 'machine_slow', netId: 14, name: 'Slow Automat',
     desc: 'Makes a duck every nine seconds on its own. The cheapest machine that works without you.',
-    cost: 165, model: 'machine_slow', footprint: [1.00, 1.315, 1.00], anchor: 'floor',
+    cost: 1250, model: 'machine_slow', footprint: [1.00, 1.315, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.45 },
     produce: { secondsPerDuck: 9.0, rarityWeights: 'w_basic' },
@@ -319,7 +319,7 @@ export const MACHINES = [
   {
     id: 'condenser', netId: 15, name: 'Condensation Tank',
     desc: 'Slow, but the ducks it drips out are worth more than average.',
-    cost: 225, model: 'condenser', footprint: [1.00, 1.60, 1.00], anchor: 'floor',
+    cost: 1700, model: 'condenser', footprint: [1.00, 1.60, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.42 },
     // The first w_good source in the game, six hundred dollars before the
@@ -334,7 +334,7 @@ export const MACHINES = [
   {
     id: 'hive', netId: 16, name: 'Duck Hive',
     desc: 'Quiet for twenty four seconds, then three ducks at once.',
-    cost: 195, model: 'hive', footprint: [1.00, 1.23, 1.00], anchor: 'floor',
+    cost: 1500, model: 'hive', footprint: [1.00, 1.23, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.42 },
     produce: { secondsPerDuck: 24.0, rarityWeights: 'w_basic', count: 3 },
@@ -345,7 +345,7 @@ export const MACHINES = [
   {
     id: 'duckomat', netId: 17, name: 'Duckomat',
     desc: 'Vends one duck every four seconds.',
-    cost: 620, model: 'duckomat', footprint: [1.00, 1.78, 0.75], anchor: 'floor',
+    cost: 4750, model: 'duckomat', footprint: [1.00, 1.78, 0.75], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.34 },
     produce: { secondsPerDuck: 4.0, rarityWeights: 'w_basic' },
@@ -356,7 +356,7 @@ export const MACHINES = [
   {
     id: 'incubator_double', netId: 18, name: 'Double Incubator',
     desc: 'Two ducks every seven seconds, out of both doors.',
-    cost: 720, model: 'incubator_double', footprint: [1.50, 1.30, 1.00], anchor: 'floor',
+    cost: 5500, model: 'incubator_double', footprint: [1.50, 1.30, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.34 },
     produce: { secondsPerDuck: 7.0, rarityWeights: 'w_basic', count: 2 },
@@ -367,7 +367,7 @@ export const MACHINES = [
   {
     id: 'hatchery', netId: 19, name: 'Hatchery',
     desc: 'A duck every three seconds, low enough to sit under a belt.',
-    cost: 860, model: 'hatchery', footprint: [1.25, 0.855, 1.00], anchor: 'floor',
+    cost: 6550, model: 'hatchery', footprint: [1.25, 0.855, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.33 },
     produce: { secondsPerDuck: 3.0, rarityWeights: 'w_basic' },
@@ -378,7 +378,7 @@ export const MACHINES = [
   {
     id: 'printer3d', netId: 20, name: 'Duck Printer',
     desc: 'Prints one duck every fifteen seconds and never prints a common one.',
-    cost: 900, model: 'printer3d', footprint: [1.00, 1.285, 1.00], anchor: 'floor',
+    cost: 6850, model: 'printer3d', footprint: [1.00, 1.285, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     // w_rare has a zero on tier 0. The cheap way into rare-only output: four
     // ducks a minute, each worth about four normal ones, and almost nothing to
@@ -392,7 +392,7 @@ export const MACHINES = [
   {
     id: 'feeder_vibe', netId: 21, name: 'Vibratory Feeder',
     desc: 'Shakes out five ducks every twelve seconds.',
-    cost: 1050, model: 'feeder_vibe', footprint: [1.00, 1.2602, 1.50], anchor: 'floor',
+    cost: 8000, model: 'feeder_vibe', footprint: [1.00, 1.2602, 1.50], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.33 },
     produce: { secondsPerDuck: 12.0, rarityWeights: 'w_basic', count: 5 },
@@ -403,7 +403,7 @@ export const MACHINES = [
   {
     id: 'press_belt', netId: 22, name: 'Belt Press',
     desc: 'Stamps five ducks at a time and rolls them off the end.',
-    cost: 1300, model: 'press_belt', footprint: [1.00, 1.50, 2.00], anchor: 'floor',
+    cost: 9900, model: 'press_belt', footprint: [1.00, 1.50, 2.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 8, curve: 1.33 },
     produce: { secondsPerDuck: 10.0, rarityWeights: 'w_basic', count: 5 },
@@ -420,7 +420,7 @@ export const MACHINES = [
   {
     id: 'slot_machine', netId: 23, name: 'Duck Slots',
     desc: 'Every eight seconds it pays out somewhere between one duck and ten.',
-    cost: 1680, model: 'slot_machine', footprint: [0.75, 1.52, 0.75], anchor: 'floor',
+    cost: 13000, model: 'slot_machine', footprint: [0.75, 1.52, 0.75], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.35 },
     // The [min, max] form of produce.count, rolled fresh every emission. Mean
@@ -443,7 +443,7 @@ export const MACHINES = [
   {
     id: 'geyser', netId: 24, name: 'Duck Geyser',
     desc: 'Erupts every forty five seconds and thirty ducks come out at once.',
-    cost: 2400, model: 'geyser', footprint: [1.50, 1.0043, 1.50], anchor: 'floor',
+    cost: 18500, model: 'geyser', footprint: [1.50, 1.0043, 1.50], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 4, curve: 1.50 },
     // Thirty at once against a 300-duck yard ceiling. An emission at a full
@@ -458,7 +458,7 @@ export const MACHINES = [
   {
     id: 'press_gold', netId: 25, name: 'Gold Press',
     desc: 'A duck every six seconds, and never a common one.',
-    cost: 2850, model: 'press_gold', footprint: [1.00, 1.645, 0.75], anchor: 'floor',
+    cost: 21500, model: 'press_gold', footprint: [1.00, 1.645, 0.75], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.40 },
     produce: { secondsPerDuck: 6.0, rarityWeights: 'w_rare' },
@@ -474,7 +474,7 @@ export const MACHINES = [
   {
     id: 'reactor', netId: 26, name: 'Rarity Reactor',
     desc: 'One duck a minute, from the top four tiers only.',
-    cost: 3000, model: 'reactor', footprint: [1.50, 1.53, 1.50], anchor: 'floor',
+    cost: 23000, model: 'reactor', footprint: [1.50, 1.53, 1.50], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 4, curve: 1.50 },
     // w_elite: tiers 0-2 weigh nothing, so the worst duck this makes is a 35x
@@ -489,7 +489,7 @@ export const MACHINES = [
   {
     id: 'factory', netId: 27, name: 'Duck Factory',
     desc: 'Ten ducks every eight seconds. Takes up as much room as it sounds.',
-    cost: 4800, model: 'factory', footprint: [2.50, 2.61, 2.00], anchor: 'floor',
+    cost: 36500, model: 'factory', footprint: [2.50, 2.61, 2.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 6, curve: 1.40 },
     produce: { secondsPerDuck: 8.0, rarityWeights: 'w_basic', count: 10 },
@@ -500,7 +500,7 @@ export const MACHINES = [
   {
     id: 'pipe_endless', netId: 28, name: 'Endless Pipe',
     desc: 'Ducks come out of it continuously. Three a second, forever.',
-    cost: 12600, model: 'pipe_endless', footprint: [1.00, 1.4194, 1.00], anchor: 'floor',
+    cost: 96000, model: 'pipe_endless', footprint: [1.00, 1.4194, 1.00], anchor: 'floor',
     kind: 'producer_auto',
     repeat: { times: 3, curve: 1.60 },
     // "Continuous stream" as data is simply a very small secondsPerDuck. The
@@ -516,7 +516,7 @@ export const MACHINES = [
   {
     id: 'car_spawner', netId: 30, name: 'Truck Garage',
     desc: 'Puts a tipper truck on the plate. Drive it, back it under a belt, tip the load out where you want it.',
-    cost: 1450, model: 'car_spawner',
+    cost: 11000, model: 'car_spawner',
     // Measured off assets/models/car_spawner.glb: a 2.50 x 4.50 pad with a
     // gantry at one end, 2.44 tall. Both horizontal numbers are exact multiples
     // of config.build.grid, which is what lets it butt up against anything else.

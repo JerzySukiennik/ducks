@@ -137,8 +137,8 @@ function resolveDucks(c) {
     sleepAngularEps: num(c, 'ducks.sleepAngularEps'),
     parkY: num(c, 'ducks.parkY'),
     useConvexHull: num(c, 'ducks.useConvexHull') !== 0,
-    multipliers: numArray(c, 'rarity.multipliers', 7),
-    weights: numArray(c, 'rarity.weights', 7),
+    multipliers: numArray(c, 'rarity.multipliers', 25),
+    weights: numArray(c, 'rarity.weights', 25),
   };
 }
 
