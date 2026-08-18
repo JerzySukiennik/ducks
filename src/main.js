@@ -417,6 +417,22 @@ async function boot() {
       // "how rare is this", so the two can never disagree.
       tierCount: () => config.rarity.multipliers.length,
       tierColor: (t) => ducksView.tierColor(t),
+      // What a Record Board says. Read live off the same collector the end-of-
+      // session summary renders from, so the board and the summary can never
+      // disagree about what the best duck was.
+      boardText: (kind) => {
+        if (kind !== 'record') return null;
+        const s3 = sessionStats.collect({ money: world.economy.money() });
+        const r = s3 && s3.rarest;
+        if (!r) return { title: 'RECORD BOARD', line: 'nothing down the pit yet' };
+        const value = config.rarity.multipliers[
+          Math.max(0, Math.min(config.rarity.multipliers.length - 1, r.tier))
+        ];
+        return {
+          title: value.toLocaleString('en-US'),
+          line: 'best duck this session' + (r.count > 1 ? ' (x' + r.count + ')' : ''),
+        };
+      },
       sceneryMeshes: () => sceneryTargets,
       // The catalog row behind a placed object, so focus.js can read the row's
       // `interact` declaration instead of keeping its own idea of which models

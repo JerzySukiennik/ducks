@@ -407,6 +407,26 @@ export const TOOLS = [
     tags: ['handheld'],
   },
   {
+    id: 'lure_horn', netId: 168, name: 'Duck Call',
+    desc: 'The Air Horn backwards: one long note and every loose duck around you comes to you.',
+    // It needed no new code at all. `tool.pull` already inverts a sweep's drive
+    // -- it is what the rake and the magnet are built on -- and arc 360 already
+    // means "all round you", which is what the Air Horn is built on. A call is
+    // those two facts in the same row, and the fact that it fell out of the
+    // existing data rather than needing a mode is the argument that the modes
+    // are the right ones.
+    cost: 900, model: 'horn', footprint: [0.25, 0.685, 0.50], anchor: 'floor',
+    kind: 'tool',
+    // Longer reach and weaker than the horn, deliberately: shoving is a panic
+    // button and gathering is a chore you want done tidily, not a duck
+    // catapulted into your face from five metres.
+    tool: { mode: 'sweep', reach: 5.0, arc: 360, force: 2.2, pull: true },
+    collider: { shape: 'cuboid', half: [0.125, 0.3425, 0.25], blockDucks: false },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    hand: { pos: [0.40, -0.24, -0.68], rotDeg: [-14, 0, 8], scale: 0.6 },
+    tags: ['handheld'],
+  },
+  {
     id: 'horn', netId: 161, name: 'Air Horn',
     desc: 'One blast shoves every duck around you outward. The only tool that works behind your back.',
     cost: 340, model: 'horn', footprint: [0.25, 0.685, 0.50], anchor: 'floor',

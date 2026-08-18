@@ -149,10 +149,16 @@ export function createFocus({ scene, container, sources }) {
     const row = sources.rowOf ? sources.rowOf(rec.id) : null;
     if (row && row.interact) return null;
     rec.pool.get(rec.slot, _m);
+    // A BOARD reads its own subtitle. Everything else placed says 'built',
+    // which is a fact about how it got there; a Record Board's only job is to
+    // say something about the SESSION, so the row declares `board` and the
+    // source answers with whatever that board is for.
+    const boardText = row && row.board && sources.boardText
+      ? sources.boardText(row.board) : null;
     return {
       key: 'b' + rec.key,
-      name: rec.name,
-      sub: 'built',
+      name: boardText ? boardText.title : rec.name,
+      sub: boardText ? boardText.line : 'built',
       distance: hit.distance,
       geometry: rec.pool.mesh.geometry,
       matrix: _m.clone(),

@@ -157,6 +157,7 @@ FOOTPRINT = {
     "incubator":       (1.00, 1.00),
     "diverter":        (1.25, 1.00),
     "pipe_link":       (0.75, 0.75),
+    "record_board":    (1.25, 0.50),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -5016,4 +5017,31 @@ BUILDERS += [
     ("incubator", b_incubator, "Maszyny", "Inkubator - jedna kaczka dojrzewa w czasie."),
     ("diverter", b_diverter, "Automatyzacja", "Zwrotnica - na przemian w lewo i w prawo."),
     ("pipe_link", b_pipe_link, "Automatyzacja", "Rura pneumatyczna - para robi teleport."),
+]
+
+
+def b_record_board():
+    """Tablica rekordow - slup, blacha i miejsce na liczbe.
+
+    To jest trofeum, wiec ma wygladac na cos, co ktos POSTAWIL, a nie na kolejny
+    panel maszyny: drewniany slup, blaszany szyld i lampka nad nim."""
+    P = []
+    P.append(box("foot", (0.60, 0.40, 0.10), (0, 0, 0.05), "dark"))
+    P.append(cyl("post", 0.07, 1.40, (0, 0, 0.80), "wood", verts=8))
+    P.append(box("board", (1.10, 0.07, 0.62), (0, 0, 1.42), "steel"))
+    P.append(box("frame", (1.18, 0.05, 0.70), (0, 0.03, 1.42), "hazard"))
+    P.append(box("plate", (0.92, 0.04, 0.34), (0, -0.06, 1.46), "dark"))
+    for i in range(5):                       # cyfry-atrapy: rzad ciemnych okienek
+        P.append(box("digit", (0.13, 0.03, 0.24), (-0.34 + i*0.17, -0.09, 1.46), "duck"))
+    P.append(box("title", (0.60, 0.03, 0.10), (0, -0.06, 1.66), "hazard"))
+    P.append(box("lamp", (0.26, 0.14, 0.07), (0, -0.14, 1.80), "steel_d"))
+    P.append(box("bulb", (0.18, 0.08, 0.04), (0, -0.18, 1.77), "white"))
+    for sx in (-1, 1):
+        P.append(box("brace", (0.05, 0.05, 0.30), (sx*0.22, 0, 1.14), "wood_lt",
+                     rot=(0, math.radians(sx*20), 0)))
+    return finish(P, "record_board", merge=0.001)
+
+
+BUILDERS += [
+    ("record_board", b_record_board, "Budowle", "Tablica rekordow - najlepsza kaczka sesji."),
 ]

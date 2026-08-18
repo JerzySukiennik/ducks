@@ -174,6 +174,7 @@ export const MODEL_MANIFEST = {
   incubator:        { file: 'incubator.glb',        staged: true, role: 'machine' },
   diverter:         { file: 'diverter.glb',         staged: true, role: 'machine' },
   pipe_link:        { file: 'pipe_link.glb',        staged: true, role: 'machine' },
+  record_board:     { file: 'record_board.glb',     staged: true, role: 'building' },
   car_body:         { file: 'car_body.glb',         staged: true, role: 'vehicle' },
   car_bed:          { file: 'car_bed.glb',          staged: true, role: 'vehicle' },
   car_gate:         { file: 'car_gate.glb',         staged: true, role: 'vehicle' },

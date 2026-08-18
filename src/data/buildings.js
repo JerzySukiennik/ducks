@@ -10,6 +10,24 @@
 
 export const BUILDINGS = [
   {
+    id: 'record_board', netId: 84, name: 'Record Board',
+    desc: 'Stands in your yard and remembers the best duck you have ever put down the pit. Look at it to read it.',
+    // A TROPHY, and the only object in the game that is worth nothing and does
+    // nothing. That is deliberate: everything else here is bought because of
+    // what it produces, and a yard where every object is justified by its
+    // output is a spreadsheet. This one is justified by being looked at.
+    cost: 450, model: 'record_board',
+    footprint: [1.25, 1.835, 0.50], anchor: 'floor',
+    kind: 'wall',
+    // `board` is the whole feature: src/render/focus.js reads it and puts the
+    // session's best duck in the label instead of the word 'built'.
+    board: 'record',
+    repeat: { times: 4, curve: 1.2 },
+    collider: { shape: 'cuboid', half: [0.625, 0.9175, 0.25], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+  {
     id: 'wall', netId: 60, name: 'Wall',
     desc: 'Two metres of low wall. Stops ducks rolling away.',
     cost: 270, model: 'wall', footprint: [2.00, 1.065, 0.25], anchor: 'floor',
