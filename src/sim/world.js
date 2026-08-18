@@ -181,11 +181,52 @@ function resolveHold(c) {
   };
 }
 
-export async function createWorld(cfg) {
+// The second pit's shape is the FIRST pit's, with only the handful of things
+// config.pit2 actually states overridden. Two copies of a shaft's geometry
+// would drift apart the first time either was tuned, and the drift would show
+// up as a hole that eats ducks slightly differently from the other hole.
+//
+// `edge` is which side of the plate it sits on, 0..3, and `along` is where it
+// sits on that side, -1..1. Both come from the caller -- the host rolls them
+// and tells its clients -- because a hole that is somewhere else on every
+// machine is not the same world.
+// Where the second pit MAY be: the middle of each of the four plate edges,
+// out at config.pit2.distance from the middle -- see that key for why it is a
+// distance and not an inset. Four ends of the map, which is how the choice is
+// described to the player, so there is no position along an edge to get wrong.
+export function pit2Sockets(cfg) {
+  const d = num(cfg, 'pit2.distance');
+  //  0 north (-z)   1 east (+x)   2 south (+z)   3 west (-x)
+  return [
+    { x: 0, z: -d }, { x: d, z: 0 }, { x: 0, z: d }, { x: -d, z: 0 },
+  ];
+}
+
+function resolvePit2(cfg, base, edge, along) {
+  const c2 = cfg.pit2;
+  if (!c2 || !c2.enabled) return null;
+  const e = ((Math.round(edge) % 4) + 4) % 4;
+  const centre = pit2Sockets(cfg)[e];
+  return {
+    ...base,
+    center: { x: centre.x, y: base.center.y, z: centre.z },
+    radius: num(cfg, 'pit2.radius'),
+    plateHoleHalf: num(cfg, 'pit2.plateHoleHalf'),
+    payMul: num(cfg, 'pit2.payMul'),
+    name: 'pit2',
+    edge: e,
+  };
+}
+
+export async function createWorld(cfg, opts) {
   await RAPIER.init();
   const P = resolveCfg(cfg);
   const DCFG = resolveDucks(cfg);
   const PITCFG = resolvePit(cfg, P.plateThickness * 0.5);
+  const o = opts || {};
+  const PIT2CFG = resolvePit2(cfg, PITCFG,
+    o.pit2Edge === undefined ? 0 : o.pit2Edge,
+    o.pit2Along === undefined ? 0 : o.pit2Along);
   const HCFG = resolveHold(cfg);
 
   const world = new RAPIER.World({ x: 0, y: P.gravity, z: 0 });
@@ -218,11 +259,70 @@ export async function createWorld(cfg) {
       plateBody
     );
   }
-  // North / south bands span the full width; east / west fill the middle row.
-  plateSlab(-S, S, cz + h, S);
-  plateSlab(-S, S, -S, cz - h);
-  plateSlab(cx + h, S, cz - h, cz + h);
-  plateSlab(-S, cx - h, cz - h, cz + h);
+  // THE PLATE IS A GRID CUT AROUND EVERY HOLE, not four bands around one.
+  //
+  // It used to be exactly four slabs: two full-width bands north and south of
+  // the pit and two fillers either side of it. That is the smallest possible
+  // description of a floor with ONE hole in it, and it stops working the moment
+  // there are two -- which there now are, because the second pit lands at a
+  // randomly chosen edge every run and could be anywhere along it.
+  //
+  // So the cut lines of every hole are collected on each axis, the plate is
+  // divided into the grid those lines make, and any cell whose centre falls
+  // inside a hole is simply not built. One hole gives back the same four bands
+  // (as a 3x3 grid with the middle missing); two give at most twenty-four
+  // cells. They are colliders on one static body either way, so the cost is a
+  // handful of boxes and not a rigid body each.
+  const plateHoles = [{ x: cx, z: cz, h }];
+  // ALL FOUR SOCKETS ARE CUT, and three of them are lidded.
+  //
+  // The second pit lands on one of the four edges and the choice is rolled
+  // every run -- but the plate is built once, at boot, before anyone has
+  // rolled anything or joined a room. Cutting the hole where the pit turned
+  // out to be would mean rebuilding the floor mid-session. So every candidate
+  // is cut, a LID is dropped into each, and the run simply lifts one. Moving
+  // the pit is then two collider flags and sixty-four translations, with no
+  // geometry built or destroyed at all.
+  const sockets = PIT2CFG ? pit2Sockets(cfg) : [];
+  for (const sk of sockets) plateHoles.push({ x: sk.x, z: sk.z, h: PIT2CFG.plateHoleHalf });
+
+  function cutLines(axis) {
+    const set = [-S, S];
+    for (const hole of plateHoles) {
+      const c = axis === 'x' ? hole.x : hole.z;
+      // A hole that runs off the plate edge contributes only the cut that is
+      // actually on the plate; clamping keeps the grid inside its own bounds.
+      set.push(Math.max(-S, Math.min(S, c - hole.h)));
+      set.push(Math.max(-S, Math.min(S, c + hole.h)));
+    }
+    return Array.from(new Set(set.map((v) => Math.round(v * 1e6) / 1e6))).sort((a, b) => a - b);
+  }
+
+  const xs = cutLines('x');
+  const zs = cutLines('z');
+  let plateSlabCount = 0;
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (let j = 0; j < zs.length - 1; j++) {
+      const mx = (xs[i] + xs[i + 1]) / 2;
+      const mz = (zs[j] + zs[j + 1]) / 2;
+      let inHole = false;
+      for (const hole of plateHoles) {
+        if (Math.abs(mx - hole.x) < hole.h && Math.abs(mz - hole.z) < hole.h) { inHole = true; break; }
+      }
+      if (inHole) continue;
+      if (plateSlab(xs[i], xs[i + 1], zs[j], zs[j + 1])) plateSlabCount++;
+    }
+  }
+
+  // One lid per socket, filling its hole exactly. All four start solid; the
+  // run opens the one it rolled.
+  const socketLids = sockets.map((sk) => world.createCollider(
+    RAPIER.ColliderDesc.cuboid(PIT2CFG.plateHoleHalf, plateHalfThickness, PIT2CFG.plateHoleHalf)
+      .setTranslation(sk.x, 0, sk.z)
+      .setFriction(P.plateFriction)
+      .setCollisionGroups(worldGroups),
+    plateBody
+  ));
 
   // Machine registration. A machine is scenery with a solid box: it gets a
   // collider on the EXISTING plate body rather than a body of its own, so the
@@ -301,6 +401,14 @@ export async function createWorld(cfg) {
     RAPIER, world, cfg: PITCFG, groups: GROUPS, ducks, economy, players,
     plate: { halfThickness: plateHalfThickness, friction: 0.9 },
   });
+  // The same module again. It was already parameterised by its cfg, so a second
+  // hole needed no new code inside it -- only a payout multiplier, which is the
+  // one thing the two holes genuinely disagree about.
+  let pit2Edge = PIT2CFG ? PIT2CFG.edge : null;
+  const pit2 = PIT2CFG ? createPit({
+    RAPIER, world, cfg: PIT2CFG, groups: GROUPS, ducks, economy, players,
+    plate: { halfThickness: plateHalfThickness, friction: 0.9 },
+  }) : null;
 
   // Aim defaults to the first player's eye and look direction, so the grab
   // controller works headlessly and needs nothing from the UI layer.
@@ -432,6 +540,7 @@ export async function createWorld(cfg) {
       for (let i = 0; i < holds.length; i++) holds[i]._postStep();
       ducks._postStep(P.fixedDt);
       pit._postStep(P.fixedDt);
+      if (pit2) pit2._postStep(P.fixedDt);
       for (let i = 0; i < players.length; i++) players[i]._postStep();
       accumulator -= P.fixedDt;
       simTime += P.fixedDt;
@@ -525,6 +634,24 @@ export async function createWorld(cfg) {
     // G1 additions
     ducks,
     pit,
+    // The second hole, or null when config.pit2.enabled is 0.
+    pit2,
+    pitAll: () => (pit2 ? [pit, pit2] : [pit]),
+    // WHICH END OF THE MAP the second hole is at this run. Every caller goes
+    // through here -- the host rolls it and tells its clients, and both sides
+    // land on the same floor because the floor is the same four sockets on
+    // every machine.
+    pit2Edge: () => (pit2 ? pit2Edge : null),
+    pit2Sockets: () => sockets.slice(),
+    setPit2Edge(edge) {
+      if (!pit2 || !sockets.length) return null;
+      const e = ((Math.round(Number(edge) || 0) % 4) + 4) % 4;
+      pit2Edge = e;
+      pit2.relocate(sockets[e]);
+      for (let i = 0; i < socketLids.length; i++) socketLids[i].setEnabled(i !== e);
+      return e;
+    },
+    plateSlabs: () => plateSlabCount,
     hold,
     // G4: the hold is per player. `hold` above stays what it was (slot 0, this
     // keyboard); everything below exists so a second player can carry a duck.

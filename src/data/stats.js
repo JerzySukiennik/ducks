@@ -20,6 +20,11 @@ export const STATS = {
   moveSpeedMul:      { base: 1,   ops: ['mul', 'set'], reads: 'player.walkSpeed',     desc: 'Multiplies walk speed.' },
   grabRangeAdd:      { base: 0,   ops: ['add', 'set'], reads: 'hold.grabRange',       desc: 'Metres added to grab range.' },
   refundFractionAdd: { base: 0,   ops: ['add', 'set'], reads: 'shop.refundFraction',  desc: 'Added to the demolish refund fraction.' },
+  // The SECOND pit's payout, and only the second pit's: the far hole is the
+  // one you have to carry ducks to, so paying it better is the reward for
+  // building transport rather than a flat raise on every duck. It seeds from
+  // config.pit2.payMul, which is the 1.25 it starts at.
+  pit2PayMul:        { base: 1,   ops: ['mul', 'set'], reads: 'pit2.payMul',          desc: 'Multiplies what the far pit pays on top of its own bonus.' },
 };
 
 export const STAT_NAMES = Object.keys(STATS);

@@ -11,6 +11,18 @@
 
 export const UPGRADES = [
   {
+    id: 'far_pit_deal', netId: 128, name: 'Haulage Contract',
+    desc: 'The far pit pays 20% more per level. Only the far one -- it is the one you have to reach.',
+    // Priced against the thing it improves rather than against the other
+    // upgrades: a level is worth 20% of everything you carry all the way out
+    // there, so it is only worth buying once you have transport that goes,
+    // and it is worth a great deal the moment you do.
+    cost: 2400, kind: 'upgrade',
+    repeat: { times: 4, curve: 1.6 },
+    effects: [{ stat: 'pit2PayMul', op: 'mul', value: 1.2 }],
+    tags: [],
+  },
+  {
     id: 'long_arms', netId: 120, name: 'Long Arms',
     desc: 'Grab ducks from half a metre further away.',
     cost: 1350, kind: 'upgrade',

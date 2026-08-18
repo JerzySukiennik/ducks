@@ -27,6 +27,11 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
 
   const wallColliders = [];
   const rimColliders = [];
+  // Every collider's offset from the pit's CENTRE, in the same order it was
+  // created. A pit that can move needs this: the second pit is rolled onto one
+  // of four edges at the start of every run, and rebuilding sixty-four
+  // colliders is a great deal more work than moving them.
+  const offsets = [];
   const t = cfg.wallThickness;
   const halfDepth = cfg.shaftDepth * 0.5;
   const tangHalfWall = (R + t) * Math.tan(Math.PI / N) * 1.25 + 0.05;
@@ -40,6 +45,7 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
 
     // Rim: tangent half-plane slab forming the plate's 32-gon hole.
     const rimHalf = cfg.rimReach;
+    offsets.push({ x: nx * (R + rimHalf), y: -plate.halfThickness, z: nz * (R + rimHalf) });
     rimColliders.push(world.createCollider(
       RAPIER.ColliderDesc.cuboid(rimHalf, plate.halfThickness, rimHalf * 2)
         .setTranslation(
@@ -54,6 +60,7 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
     ));
 
     // Shaft wall: thin vertical cuboid just outside the 32-gon edge.
+    offsets.push({ x: nx * (R + t), y: -halfDepth, z: nz * (R + t) });
     wallColliders.push(world.createCollider(
       RAPIER.ColliderDesc.cuboid(t, halfDepth, tangHalfWall)
         .setTranslation(C.x + nx * (R + t), C.y - halfDepth, C.z + nz * (R + t))
@@ -63,6 +70,27 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
         .setCollisionGroups(worldGroups),
       shaftBody
     ));
+  }
+
+  // MOVE THE WHOLE SHAFT. Rapier lets a collider be re-translated in place, so
+  // relocating a pit is sixty-four writes rather than sixty-four rebuilds --
+  // and, more importantly, nothing that holds a reference to this pit has to be
+  // told, because it is the same pit.
+  function relocate(centre) {
+    const nx = Number(centre.x);
+    const nz = Number(centre.z);
+    if (!isFinite(nx) || !isFinite(nz)) return false;
+    C.x = nx;
+    C.z = nz;
+    const all = rimColliders.concat(wallColliders);
+    // offsets was filled rim-then-wall per segment; rebuild that interleaving.
+    for (let k = 0; k < N; k++) {
+      const o1 = offsets[k * 2];
+      const o2 = offsets[k * 2 + 1];
+      rimColliders[k].setTranslation({ x: C.x + o1.x, y: o1.y, z: C.z + o1.z });
+      wallColliders[k].setTranslation({ x: C.x + o2.x, y: o2.y, z: C.z + o2.z });
+    }
+    return all.length;
   }
 
   const scorePlaneY = C.y - cfg.scoreDepth;
@@ -78,6 +106,11 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
   // host's call alone -- a client releasing one locally would hand the pool a
   // body the host still believes in.
   let scoring = true;
+  // 1 for the main pit; the second pit is created with its own and the shop
+  // upgrade raises it. Held here rather than read off cfg every duck so the
+  // upgrade can move it at runtime without rebuilding a shaft.
+  let payMul = typeof cfg.payMul === 'number' && isFinite(cfg.payMul) ? cfg.payMul : 1;
+  const name = cfg.name || 'pit';
   let events = [];
   let scored = 0;
   let paid = 0;
@@ -101,8 +134,14 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
       const dx = x - C.x;
       const dz = z - C.z;
       if (dx * dx + dz * dz > captureR2) return;
-      const value = ducks.value(id, economy.duckBaseValue, economy.duckValueMul);
-      events.push({ type: 'duck', id, value, tier: ducks.tier(id) });
+      // WHAT THIS HOLE PAYS. The main pit's multiplier is 1 and never appears;
+      // the second pit's starts at config.pit2.payMul and is raised by the shop
+      // upgrade through setPayMul(). It multiplies the duck's own value, so a
+      // better hole is worth more on a rare duck than on a plain one -- which
+      // is what makes "carry the good ones further" a decision rather than a
+      // chore.
+      const value = ducks.value(id, economy.duckBaseValue, economy.duckValueMul) * payMul;
+      events.push({ type: 'duck', id, value, tier: ducks.tier(id), pit: name });
       scored++;
       if (!scoring) return;
       economy.add(value, 'pit');
@@ -153,6 +192,15 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
     pendingEvents: () => events.length,
     // Set false on a client, true everywhere else; see `scoring` above.
     setScoring(v) { scoring = !!v; return scoring; },
+    payMul: () => payMul,
+    setPayMul(v) {
+      const n = Number(v);
+      payMul = isFinite(n) && n > 0 ? n : payMul;
+      return payMul;
+    },
+    name: () => name,
+    relocate,
+    edge: () => (cfg.edge === undefined ? null : cfg.edge),
     isScoring: () => scoring,
     totalScored: () => scored,
     totalPaid: () => paid,

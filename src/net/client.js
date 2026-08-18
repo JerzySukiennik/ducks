@@ -205,6 +205,11 @@ export function createClient({ session, game, onEvent }) {
         // inferred from whether a cutscene event happened to show up.
         if (typeof game.setPhase === 'function') game.setPhase(msg.phase === 'playing' ? 'playing' : 'lobby');
         if (typeof game.setCreative === 'function') game.setCreative(!!msg.creative);
+        // The host's roll, adopted before the first frame is drawn. Null means
+        // a host with the second pit switched off, and the client leaves its
+        // own alone rather than guessing.
+        if (msg.pit2Edge !== null && msg.pit2Edge !== undefined
+          && typeof game.setPit2Edge === 'function') game.setPit2Edge(msg.pit2Edge);
         emit({ type: 'welcome', slot: msg.slot, hostNick: msg.hostNick, stateHz: msg.stateHz, phase: msg.phase });
         return;
       case MSG.SNAPSHOT_BEGIN: beginSnapshot(msg); return;

@@ -988,6 +988,36 @@ export const config = {
     respawnZ: 6,
   },
 
+  // --- the second pit ---------------------------------------------------------
+  // A second hole, at one of the four plate edges, and WHICH edge is rolled
+  // fresh every run. It pays more than the main pit, so a factory built for one
+  // layout is not the right factory next time -- which is the whole point of
+  // rolling it: the yard stops being a puzzle you solve once.
+  //
+  // Everything about its shape is the main pit's, read from config.pit, except
+  // what is listed here. Two copies of a shaft's geometry would drift the first
+  // time either was tuned.
+  pit2: {
+    enabled: 1,
+    // Smaller than the main pit (1.5): it pays better, so it should be harder
+    // to hit, and a smaller mouth is the honest way to say that.
+    radius: 1.1,
+    // HOW FAR OUT, in metres from the middle -- and it is a distance rather
+    // than an inset from the plate edge, because the plate is 180 m across and
+    // everything a player actually uses (the pit, the booth, the tube, the
+    // spawn) is inside ten. Measured from the plate edge it landed 84 m away,
+    // which is half a minute of walking over empty concrete each way.
+    //
+    // 28 m is four seconds in the truck and about six on foot: far enough that
+    // "it is at the north end" is a real journey and a reason the truck exists,
+    // near enough that you can see which end it is from the middle.
+    distance: 28.0,
+    plateHoleHalf: 3.2,
+    // WHAT IT PAYS, as a multiplier on the duck's own value. 1.25 to start, and
+    // the shop sells four steps of it -- see stats.js `pit2Mul`.
+    payMul: 1.25,
+  },
+
   hold: {
     kp: 220,
     kdScale: 2,         // kd = kdScale * sqrt(kp) -> critically damped
@@ -2880,6 +2910,11 @@ export const REQUIRED_CONFIG_KEYS = [
   'gamble.flashHzStart',
   'gamble.flashHzEnd',
   'gamble.cooldownSeconds',
+  'pit2.enabled',
+  'pit2.radius',
+  'pit2.distance',
+  'pit2.plateHoleHalf',
+  'pit2.payMul',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',

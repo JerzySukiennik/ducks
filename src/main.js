@@ -930,6 +930,21 @@ async function boot() {
     }
   }
 
+  // WHICH END OF THE MAP the second hole is at, rolled once per run.
+  //
+  // It is deliberately not rolled at boot: a run is what gets a fresh layout,
+  // and a player who presses Play twice should get two different yards. In a
+  // room only the host rolls -- the choice travels in the welcome, because a
+  // client that rolled its own would be standing on a floor whose hole is
+  // somewhere else, which is the worst kind of desync there is: the one where
+  // both machines are internally consistent and disagree.
+  function rollPit2Edge() {
+    if (!world.setPit2Edge) return null;
+    if (net.isClient && net.isClient()) return world.pit2Edge();
+    const e = Math.floor(Math.random() * 4) % 4;
+    return world.setPit2Edge(e);
+  }
+
   // A container is a DROPPED PROP with a real dynamic body -- a placed building
   // is a collider on the shared plate and could never be tipped. Registration is
   // therefore reconciled against placed.props rather than hooked onto the
@@ -1010,6 +1025,15 @@ async function boot() {
     if (player.setMoveSpeedMul) player.setMoveSpeedMul(s.moveSpeedMul);
     if (world.hold && world.hold.setGrabRangeAdd) world.hold.setGrabRangeAdd(s.grabRangeAdd);
     if (world.hold && world.hold.setThrowImpulseMul) world.hold.setThrowImpulseMul(s.throwImpulseMul);
+    // The far pit's payout: the hole's OWN bonus times whatever the Haulage
+    // Contracts add. The stat starts at 1 like every other multiplier stat --
+    // its `reads` key names where the base lives but nothing seeds from it, and
+    // handing setPayMul the stat alone measured 1.00 a duck where the config
+    // says 1.25, i.e. the upgrade silently deleted the bonus it was meant to
+    // improve. Multiplying is both correct and what the shop row promises.
+    if (world.pit2 && world.pit2.setPayMul) {
+      world.pit2.setPayMul(config.pit2.payMul * s.pit2PayMul);
+    }
     return s;
   }
   applyStats();
@@ -1314,6 +1338,7 @@ async function boot() {
       // Solo takes the mode the lobby is showing, so pressing Play in creative is
       // creative.
       applyCreative(lobby.creative ? lobby.creative() : false);
+      rollPit2Edge();
       Promise.resolve(cutscene.prepare()).then(() => {
         cutscene.start({ elapsed: 0, info: { role: 'solo' } });
       });
@@ -3947,6 +3972,24 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    // The second hole: which end it is at, where that is, what it pays, and
+    // how many slabs the plate ended up as once the sockets were cut.
+    debugPit2() {
+      const p2 = world.pit2;
+      if (!p2) return null;
+      return {
+        edge: world.pit2Edge(),
+        center: p2.center(),
+        radius: p2.radius(),
+        payMul: p2.payMul(),
+        scored: p2.totalScored(),
+        paid: p2.totalPaid(),
+        sockets: world.pit2Sockets(),
+        plateSlabs: world.plateSlabs ? world.plateSlabs() : null,
+      };
+    },
+    debugRollPit2: () => rollPit2Edge(),
+    debugSetPit2Edge: (e) => world.setPit2Edge(e),
     // What the crosshair is on and what its label says, read back off the DOM
     // rather than off what was asked for. A duck's label is its VALUE now, so
     // this is how the value readout gets verified rather than assumed.

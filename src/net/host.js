@@ -676,6 +676,12 @@ export function createHost({ session, game, onEvent }) {
         // The room's mode travels with the welcome, so a joining client adopts it
         // before it can buy anything.
         creative: typeof game.creative === 'function' ? game.creative() : false,
+        // WHICH END OF THE MAP the second hole is at. It is rolled fresh every
+        // run, so it is a fact about THIS session and not about the build --
+        // a client that guessed its own would be standing on a floor with the
+        // hole in a different place, which is the worst kind of desync: the
+        // one where both machines are internally consistent.
+        pit2Edge: typeof game.pit2Edge === 'function' ? game.pit2Edge() : null,
       });
       // Everything the client needs to exist in this world, in one format that
       // is also debugSnapshot() and also crash recovery.

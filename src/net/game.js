@@ -1272,6 +1272,13 @@ export function createNetGame(deps) {
     phase: () => phase,
     creative: () => creative,
     setCreative(on) { creative = !!on; return creative; },
+    // The second pit's end of the map. Straight through to the world: this
+    // adapter holds no copy, because a copy is a second thing that can be
+    // wrong about where the hole is.
+    pit2Edge: () => (world && typeof world.pit2Edge === 'function' ? world.pit2Edge() : null),
+    setPit2Edge(edge) {
+      return world && typeof world.setPit2Edge === 'function' ? world.setPit2Edge(edge) : null;
+    },
     // Written by src/net/client.js off the host's WELCOME. The host never calls
     // it -- there, phase is written by performing REQ.START.
     setPhase(p) {
