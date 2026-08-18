@@ -420,6 +420,36 @@ export function createView(aspect) {
     scene, camera, setAspect, updateCamera, addBox, setPose, add, aim,
     plate, decals, sky, horizon, blackHole, dispose,
     sun, hemi,
+    // THE SKY, SET FROM OUTSIDE. src/sim/worldclock.js decides what time it is
+    // and what the weather is doing; this turns those numbers into a light
+    // rig. It is deliberately dumb -- it does not know what a storm is, only
+    // that something asked for less light and more fog.
+    setSky(v) {
+      if (!v) return null;
+      if (typeof v.sunIntensity === 'number') sun.intensity = Math.max(0, v.sunIntensity);
+      if (typeof v.hemiIntensity === 'number') hemi.intensity = Math.max(0, v.hemiIntensity);
+      // The sun goes round the yard once a day, and rises and sets by
+      // ELEVATION rather than by dipping below the plate -- a light under the
+      // floor lights the underside of everything standing on it.
+      if (typeof v.sunYaw === 'number') {
+        const d = config.world.sunDir;
+        const r = Math.hypot(d.x, d.z) || 1;
+        const e = typeof v.elevation === 'number' ? Math.max(0.12, v.elevation) : 1;
+        sun.position.set(
+          Math.cos(v.sunYaw) * r * 60,
+          Math.max(6, d.y * 60 * e),
+          Math.sin(v.sunYaw) * r * 60
+        );
+        sun.target.position.set(0, 0, 0);
+        sun.target.updateMatrixWorld();
+      }
+      if (typeof v.fogMul === 'number' && scene.fog) {
+        // Denser fog for a lower multiplier: the clock reports how far you can
+        // SEE, and density is the reciprocal of that.
+        scene.fog.density = config.render.fogDensity / Math.max(0.05, v.fogMul);
+      }
+      return true;
+    },
     shadowsEnabled: shadowsOn,
     shadowInfo: () => ({
       enabled: shadowsOn,

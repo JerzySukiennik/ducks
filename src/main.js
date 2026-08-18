@@ -24,6 +24,7 @@ import { createConveyors } from './sim/conveyors.js';
 import { createVehicles } from './sim/vehicles.js';
 import { createContracts } from './sim/contracts.js';
 import { createProcessors } from './sim/processors.js';
+import { createWorldClock } from './sim/worldclock.js';
 import { TRUCK } from './data/vehicles.js';
 import { createBlowers } from './sim/blowers.js';
 import { createContainers, isStorageRow } from './sim/containers.js';
@@ -530,6 +531,9 @@ async function boot() {
     ducks: world.ducks, applyImpulse: world.applyImpulse, list: automationList,
     byId, config, economy: world.economy,
   });
+  // The day, the weather and the interruptions. It decides and reports; the
+  // renderer reads sky() and the wind is applied like any other push.
+  const worldClock = createWorldClock({ config });
   const attention = createAttention({
     ducks: world.ducks, list: automationList, byId, config,
   });
@@ -678,6 +682,12 @@ async function boot() {
       // distance the solver moved the truck LAST step. Both inside the substep,
       // because a truck that only moved once a frame would leave its passengers
       // behind at every frame boundary.
+      // THE WIND, and it is the only thing the weather does to the simulation.
+      // It pushes LOOSE ducks only -- one held, carried or riding a belt is
+      // being acted on by something with a stronger claim -- and it never
+      // touches money. A storm that halved your income would be a punishment
+      // for playing at the wrong time, and the player did not choose the time.
+      applyWind(h);
       if (!net.isClient()) vehicles.fixedUpdate(h);
       carryRiders();
       // The slot spring and the broom are springs like the grab controller: the
@@ -971,6 +981,30 @@ async function boot() {
       + value.toLocaleString('en-US') + ' and up');
     audio.rotated();
     return next;
+  }
+
+  // One substep of weather. Cheap by construction: on a clear day the clock
+  // reports a speed of zero and this returns before touching the duck pool at
+  // all, which is most of the time by design.
+  const _wind = { x: 0, z: 0 };
+  function applyWind(dt) {
+    const w = worldClock.wind();
+    if (!w.speed) return 0;
+    _wind.x = w.x;
+    _wind.z = w.z;
+    let pushed = 0;
+    world.ducks.forEach((id, x, y, z) => {
+      const body = world.ducks.body(id);
+      if (!body) return;
+      // Asleep is left asleep. A wind that woke three hundred sleeping ducks
+      // every substep would cost more than every machine in the game put
+      // together, and a duck asleep in a crate is not being blown anywhere.
+      if (typeof body.isSleeping === 'function' && body.isSleeping()) return;
+      const mass = (typeof world.ducks.massOf === 'function' && world.ducks.massOf(id)) || 0.11;
+      world.applyImpulse(body, { x: _wind.x * mass * dt, y: 0, z: _wind.z * mass * dt });
+      pushed++;
+    });
+    return pushed;
   }
 
   // --- the contract lorry ------------------------------------------------------
@@ -2227,6 +2261,37 @@ async function boot() {
     }
   }
 
+  // THE SKY, APPLIED. Everything here is a number the clock handed over; this
+  // function knows what time it is only in the sense that a lamp knows.
+  const sunBase = { sun: config.world.sunIntensity, hemi: config.world.hemiIntensity };
+  function applySky(sky) {
+    if (!sky || !view.setSky) return;
+    view.setSky({
+      sunIntensity: sunBase.sun * sky.light,
+      hemiIntensity: sunBase.hemi * (0.55 + 0.45 * sky.light),
+      sunYaw: sky.sunYaw,
+      elevation: sky.elevation,
+      fogMul: sky.fog,
+    });
+  }
+
+  function onWorldEvent(ev) {
+    if (!ev) return;
+    if (ev.type === 'weather') {
+      hud.showCap(ev.spec.name);
+      return;
+    }
+    if (ev.type === 'eventStart') {
+      // An event borrows the contract banner rather than growing a second one:
+      // there is one place on this screen that means "something is happening
+      // that you did not start", and two would teach the player to read neither.
+      hud.setEvent(ev.spec.name, ev.spec.line, ev.spec.seconds);
+      if (audio.contractAlarm) audio.contractAlarm();
+      return;
+    }
+    if (ev.type === 'eventEnd') hud.setEvent(null);
+  }
+
   let frameNo = 0;
   let simTime = 0;
   let lastNow = 0;
@@ -2873,7 +2938,7 @@ async function boot() {
     for (const e of pitEvents) {
       if (e && e.type === 'duck' && isFinite(e.value)) duckSample += (e.value - duckSample) * 0.08;
     }
-    if (contracts.active()) hud.tickContract();
+    if (contracts.active()) hud.tickContract(); else hud.tickEvent();
     audio.notePitEvents(pitEvents);
 
     // The vendor's shelf turns over on SIMULATION time, not wall time, so
@@ -2924,6 +2989,13 @@ async function boot() {
     if (!net.isClient()) producers.update(dt);
     // Sorting is a shove and is safe anywhere; EATING a duck is the host's,
     // like every other place a body goes back to the pool.
+    // The clock runs on every machine -- it is deterministic from the same
+    // config and the same elapsed time, and nothing it decides is money. Only
+    // the HOST's roll of a weather change is broadcast, and that is what the
+    // events below carry.
+    const sky = worldClock.update(dt);
+    applySky(sky);
+    for (const ev of worldClock.consumeEvents()) onWorldEvent(ev);
     processors.setRunning(!net.isClient());
     processors.update(dt);
     for (const ev of processors.consumeEvents()) {
@@ -4115,6 +4187,11 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    debugSky: () => worldClock.sky(),
+    debugWind: () => worldClock.wind(),
+    debugSetWeather: (w) => worldClock.setWeather(w),
+    debugStartEvent: (e) => worldClock.startEvent(e),
+    debugSetDayFraction: (f) => worldClock.setFraction(f),
     debugProcessors: () => ({ units: processors.info(), sorted: processors.sortedTotal(), refined: processors.refinedTotal() }),
     debugStepProcessor: (key, dir) => processors.stepThreshold(key, dir === undefined ? 1 : dir),
     // Contracts: what is being asked for, what has gone in, and the two levers

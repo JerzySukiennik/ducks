@@ -378,7 +378,38 @@ export function createHUD(container) {
     contract.classList.toggle('urgent', t <= config.hud.contractUrgentSeconds);
   }
 
+  // A WORLD EVENT borrows the contract banner. There is one place on this
+  // screen that means 'something is happening that you did not start', and two
+  // would teach the player to read neither. It shows a name, a line and a bar
+  // that empties, and a contract starting while one runs simply takes it over.
+  let eventUntil = 0;
+  let eventTotal = 0;
+  function setEvent(name, line, seconds) {
+    if (!name) {
+      eventUntil = 0;
+      if (!contractJob) contract.classList.remove('show');
+      return;
+    }
+    eventTotal = Math.max(0.001, seconds || 0);
+    eventUntil = (performance.now() / 1000) + eventTotal;
+    contract.classList.remove('done');
+    contractTitle.textContent = name.toUpperCase();
+    contractBody.textContent = line || '';
+    contractBar.style.width = '100%';
+    contract.classList.add('show');
+  }
+
+  function tickEvent() {
+    if (!eventUntil || contractJob) return;
+    const left = eventUntil - (performance.now() / 1000);
+    if (left <= 0) { setEvent(null); return; }
+    contractBar.style.width = ((left / eventTotal) * 100).toFixed(1) + '%';
+    contract.classList.toggle('urgent', left <= config.hud.contractUrgentSeconds);
+  }
+
   return {
+    setEvent,
+    tickEvent,
     setContract,
     tickContract: renderContract,
     root,

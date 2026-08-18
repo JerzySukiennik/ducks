@@ -1074,6 +1074,26 @@ export const config = {
     pipeExitSpeed: 3.2,
   },
 
+  // --- the world clock ---------------------------------------------------------
+  // Day length, weather turnover and how often something interrupts. See
+  // src/sim/worldclock.js -- one clock, because three would disagree.
+  worldclock: {
+    // Twelve minutes a day. Long enough that noon and dusk are different
+    // sessions to build in, short enough that a player sees both in one sitting.
+    dayLengthSeconds: 720,
+    // Where a run starts: 0.25 is dawn, which is what a factory day looks like.
+    startFraction: 0.25,
+    // How dark midnight gets, as a fraction of full daylight. NOT zero: the
+    // yard has to stay playable, and a factory you cannot see is a factory you
+    // stop working at.
+    nightFloor: 0.40,
+    weatherMinSeconds: 90,
+    weatherMaxSeconds: 240,
+    eventFirstSeconds: 300,
+    eventGapSeconds: 280,
+    eventJitterSeconds: 160,
+  },
+
   hold: {
     kp: 220,
     kdScale: 2,         // kd = kdScale * sqrt(kp) -> critically damped
@@ -2995,6 +3015,14 @@ export const REQUIRED_CONFIG_KEYS = [
   'processors.refineMouthClear',
   'processors.refineEjectSpeed',
   'processors.pipeExitSpeed',
+  'worldclock.dayLengthSeconds',
+  'worldclock.startFraction',
+  'worldclock.nightFloor',
+  'worldclock.weatherMinSeconds',
+  'worldclock.weatherMaxSeconds',
+  'worldclock.eventFirstSeconds',
+  'worldclock.eventGapSeconds',
+  'worldclock.eventJitterSeconds',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',
