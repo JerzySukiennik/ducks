@@ -23,6 +23,7 @@ import { createCollectors, createAttention } from './sim/collectors.js';
 import { createConveyors } from './sim/conveyors.js';
 import { createVehicles } from './sim/vehicles.js';
 import { createContracts } from './sim/contracts.js';
+import { createProcessors } from './sim/processors.js';
 import { TRUCK } from './data/vehicles.js';
 import { createBlowers } from './sim/blowers.js';
 import { createContainers, isStorageRow } from './sim/containers.js';
@@ -523,6 +524,12 @@ async function boot() {
     isBusy: (id) => (world.holderOfDuck ? world.holderOfDuck(id) !== null
       : world.hold.heldDuck() === id),
   });
+  // The Sorter and the Refiner. Same shape as the producers and collectors:
+  // they read the placed list, act on ducks, and know nothing about renderers.
+  const processors = createProcessors({
+    ducks: world.ducks, applyImpulse: world.applyImpulse, list: automationList,
+    byId, config, economy: world.economy,
+  });
   const attention = createAttention({
     ducks: world.ducks, list: automationList, byId, config,
   });
@@ -944,6 +951,26 @@ async function boot() {
     if (net.isClient && net.isClient()) return world.pit2Edge();
     const e = Math.floor(Math.random() * 4) % 4;
     return world.setPit2Edge(e);
+  }
+
+  // The Sorter or Refiner under the crosshair, if any. Uses the same focus
+  // target every other prompt reads, so what is outlined is what answers.
+  function processorTarget() {
+    const t = focus.target();
+    if (!t || typeof t.key !== 'number') return null;
+    const rec = placed.objects.find((o) => o.key === t.key);
+    if (!rec) return null;
+    return rec.kind === 'sorter' || rec.kind === 'refiner' ? rec : null;
+  }
+
+  function stepProcessor(rec) {
+    const next = processors.stepThreshold(rec.key, 1);
+    if (next === null) return null;
+    const value = config.rarity.multipliers[next];
+    hud.showCap((rec.kind === 'sorter' ? 'Sorting at ' : 'Refining from ')
+      + value.toLocaleString('en-US') + ' and up');
+    audio.rotated();
+    return next;
   }
 
   // --- the contract lorry ------------------------------------------------------
@@ -2118,6 +2145,11 @@ async function boot() {
         // A truck you are standing next to answers E before anything else on
         // the plate does: it is three metres of vehicle, so if it is in range
         // it is unambiguously what the player meant.
+        // A processor under the crosshair takes E to step its threshold. It
+        // comes before the truck and the garage because it is a small thing
+        // you are pointing AT, where those two are large things you are
+        // standing NEXT to.
+        else if (processorTarget()) stepProcessor(processorTarget());
         else if (vehicles.nearest(player.position())) enterTruck();
         // A garage sells another truck for config.vehicle.spawnCost. The first
         // one came with the building; this is how you get a second.
@@ -2890,6 +2922,13 @@ async function boot() {
     // pit made until it was told to stop scoring on a client. The gate belongs
     // beside pumpDeliveries and updateCranks, which have always had one.
     if (!net.isClient()) producers.update(dt);
+    // Sorting is a shove and is safe anywhere; EATING a duck is the host's,
+    // like every other place a body goes back to the pool.
+    processors.setRunning(!net.isClient());
+    processors.update(dt);
+    for (const ev of processors.consumeEvents()) {
+      if (ev.type === 'refineOut' && audio.machineEject) audio.machineEject();
+    }
     // Collectors only apply impulses to bodies that already exist, so they are
     // harmless in either role and stay ungated.
     collectors.update(dt);
@@ -4076,6 +4115,8 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    debugProcessors: () => ({ units: processors.info(), sorted: processors.sortedTotal(), refined: processors.refinedTotal() }),
+    debugStepProcessor: (key, dir) => processors.stepThreshold(key, dir === undefined ? 1 : dir),
     // Contracts: what is being asked for, what has gone in, and the two levers
     // a test needs -- start one now, and give up on it.
     debugContract: () => ({ info: contracts.info(), stats: contracts.stats(), lorry: lorryKey }),

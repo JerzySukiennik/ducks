@@ -1046,6 +1046,31 @@ export const config = {
     leaveSeconds: 6,
   },
 
+  // --- processors -------------------------------------------------------------
+  // The Sorter and the Refiner: machines that act on ducks already made.
+  // See src/sim/processors.js for what each is for.
+  processors: {
+    // Sideways shove, in metres per second of velocity change. It has to beat
+    // what the belt under the duck is doing or the belt simply drags it back.
+    sortPush: 2.4,
+    // And a little UP with it, for the same reason: a duck shoved flat along a
+    // belt stays on the belt.
+    sortLift: 1.6,
+    // Once a duck is already moving this fast towards its side, the machine
+    // stops pushing. Without it the shove is an accelerator rather than a
+    // nudge -- see the note in processors.js.
+    sortMaxSpeed: 2.2,
+    // How high above its own base a processor's throat reaches. A duck riding
+    // a belt is at 0.65 and a duck on the floor is at 0.13, so this catches
+    // both without catching a player's boots.
+    sortHeight: 1.10,
+    // How long a full refiner takes to hand back the upgraded duck. Long
+    // enough to be a machine working rather than a swap.
+    refineSeconds: 1.6,
+    refineMouthClear: 0.34,
+    refineEjectSpeed: 1.8,
+  },
+
   hold: {
     kp: 220,
     kdScale: 2,         // kd = kdScale * sqrt(kp) -> critically damped
@@ -2959,6 +2984,13 @@ export const REQUIRED_CONFIG_KEYS = [
   'contracts.payPerDuck',
   'contracts.bonusMul',
   'contracts.leaveSeconds',
+  'processors.sortPush',
+  'processors.sortLift',
+  'processors.sortMaxSpeed',
+  'processors.sortHeight',
+  'processors.refineSeconds',
+  'processors.refineMouthClear',
+  'processors.refineEjectSpeed',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',

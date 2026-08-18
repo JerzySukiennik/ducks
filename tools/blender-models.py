@@ -152,6 +152,8 @@ FOOTPRINT = {
     # footprint entry would scale each one by its own bounding box and pull them
     # apart. Their sizes are authored exactly instead.
     "car_spawner":     (2.50, 4.50),
+    "sorter":          (1.50, 1.00),
+    "refiner":         (1.00, 1.00),
     "pallet_jack":     (0.75, 2.00),
     # handhelds: the thin axis gets 0.25 like broom/vacuum already do
     "broom_wide":      (1.00, 0.25),
@@ -4861,4 +4863,80 @@ BUILDERS += [
     ("car_bed", b_car_bed, "Pojazdy", "Wywrotka - paka, zawias w origin."),
     ("car_gate", b_car_gate, "Pojazdy", "Wywrotka - klapa tylna, zawias w origin."),
     ("car_spawner", b_car_spawner, "Pojazdy", "Garaz - spawner samochodu."),
+]
+
+
+# ============================================ SORTOWNIK I RAFINERIA
+# Dwie maszyny, ktore dzialaja na JUZ ZROBIONYCH kaczkach. Obie musza sie czytac
+# jako "cos tu wjezdza i wyjezdza", a nie jako kolejna skrzynia z lampka -- wiec
+# obie maja widoczna gardziel na wysokosci tasmy (0.65) i widoczne wyjscie.
+
+def b_sorter():
+    """Sortownik - gardziel na wysokosci tasmy i dwa wyloty na boki.
+
+    Rozwidlenie jest CALYM modelem: gracz musi zobaczyc, ze to sie rozdziela na
+    dwa, zanim postawi to na tasmie. Strzalki po bokach mowia, w ktora strone
+    ida drogie (prawa w lokalnym +X) i tanie."""
+    P = []
+    W, D = 1.50, 1.00
+    # Rama i gardziel.
+    P.append(box("base", (W, D, 0.10), (0, 0, 0.05), "dark"))
+    for sx in (-1, 1):
+        P.append(box("leg", (0.12, 0.12, 0.55), (sx*0.60, 0, 0.32), "steel_d"))
+    P.append(box("deck", (W, D, 0.06), (0, 0, 0.62), "steel"))
+    # Wlot: dwie prowadnice zwezajace sie do srodka, na wysokosci tasmy.
+    for sx in (-1, 1):
+        P.append(box("guide", (0.06, 0.44, 0.22), (sx*0.30, -0.26, 0.76), "hazard",
+                     rot=(0, 0, math.radians(sx*16))))
+    # Rozdzielacz: klin w srodku, ktory jest cala historia tej maszyny.
+    P.append(cone("split", 0.02, 0.30, 0.44, (0, 0.16, 0.87), "orange", verts=3,
+                  rot=(math.radians(90), 0, 0)))
+    # Dwa wyloty na boki, z rynienkami.
+    for sx in (-1, 1):
+        P.append(box("chute", (0.34, 0.06, 0.16), (sx*0.52, 0.16, 0.74), "steel_d",
+                     rot=(0, math.radians(sx*-10), 0)))
+        P.append(box("lip", (0.36, 0.05, 0.05), (sx*0.66, 0.16, 0.70), "hazard"))
+        # Strzalka: trzy klocki schodzace w bok. Jedyny sposob, zeby z 10 m bylo
+        # widac, ktora strona jest ktora.
+        for i in range(3):
+            P.append(box("arr", (0.07, 0.07, 0.03), (sx*(0.34+i*0.10), 0.16, 0.93), "duck"))
+    # Slupek z wyswietlaczem progu - to jest rzecz, ktora gracz przestawia.
+    P.append(box("post", (0.14, 0.14, 0.62), (0, 0.40, 0.93), "steel_d"))
+    P.append(box("screen", (0.30, 0.05, 0.20), (0, 0.32, 1.14), "glass"))
+    P.append(box("bezel", (0.34, 0.04, 0.24), (0, 0.35, 1.14), "steel"))
+    return finish(P, "sorter", merge=0.001)
+
+
+def b_refiner():
+    """Rafineria - lej wlotowy u gory, piec w srodku, rura wylotowa z przodu.
+
+    Sylwetka ma mowic "wchodzi duzo, wychodzi malo": szeroki lej na gorze,
+    waska rura na dole. To jest cala umowa tej maszyny narysowana z boku."""
+    P = []
+    W, D = 1.00, 1.00
+    P.append(box("base", (W, D, 0.12), (0, 0, 0.06), "dark"))
+    P.append(box("body", (0.86, 0.86, 0.74), (0, 0, 0.49), "steel_d"))
+    for i in range(3):
+        P.append(box("band", (0.90, 0.90, 0.04), (0, 0, 0.26 + i*0.24), "hazard"))
+    # Lej: szeroki u gory, zwezajacy sie w dol.
+    P.append(cone("hopper", 0.52, 0.20, 0.42, (0, 0, 1.07), "steel", verts=8))
+    P.append(cyl("rim", 0.54, 0.05, (0, 0, 1.26), "hazard", verts=8))
+    # Okno pieca - swieci, wiec widac, ze cos sie w srodku dzieje.
+    P.append(box("window", (0.30, 0.05, 0.24), (0, -0.44, 0.58), "duck"))
+    P.append(box("wframe", (0.36, 0.04, 0.30), (0, -0.46, 0.58), "steel"))
+    # Rura wylotowa z przodu, na wysokosci tasmy.
+    P.append(cyl("out", 0.13, 0.40, (0, -0.60, 0.68), "steel", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    P.append(cyl("outlip", 0.17, 0.07, (0, -0.80, 0.68), "hazard", verts=8,
+                 rot=(math.radians(90), 0, 0)))
+    # Licznik wsadu z boku.
+    P.append(box("gauge", (0.05, 0.22, 0.30), (0.45, 0.18, 0.72), "glass"))
+    P.append(box("gframe", (0.04, 0.26, 0.34), (0.47, 0.18, 0.72), "steel_d"))
+    P.append(cyl("stack", 0.09, 0.46, (-0.30, 0.30, 1.10), "steel_d", verts=8))
+    return finish(P, "refiner", merge=0.001)
+
+
+BUILDERS += [
+    ("sorter", b_sorter, "Maszyny", "Sortownik - rozdziela kaczki po wartosci."),
+    ("refiner", b_refiner, "Maszyny", "Rafineria - zjada N kaczek, oddaje jedna wyzej."),
 ]

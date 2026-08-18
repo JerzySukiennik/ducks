@@ -169,6 +169,8 @@ export const MODEL_MANIFEST = {
   // garage that makes them -- so they are named here and loaded by name, the
   // same exception `avatar` has. Their geometry is in src/data/vehicles.js.
   car_spawner:      { file: 'car_spawner.glb',      staged: true, role: 'machine' },
+  sorter:           { file: 'sorter.glb',           staged: true, role: 'machine' },
+  refiner:          { file: 'refiner.glb',          staged: true, role: 'machine' },
   car_body:         { file: 'car_body.glb',         staged: true, role: 'vehicle' },
   car_bed:          { file: 'car_bed.glb',          staged: true, role: 'vehicle' },
   car_gate:         { file: 'car_gate.glb',         staged: true, role: 'vehicle' },
@@ -220,6 +222,12 @@ export const KINDS = {
   // src/data/vehicles.js and is measured off the models. Behaviour is in
   // src/sim/vehicles.js, selected by this kind.
   spawner:         { placeable: true,  needsModel: true,  block: 'spawn',    effects: false, build: true },
+  // Splits a stream of ducks in two by value. `block: 'sort'` names nothing
+  // but the throat; the threshold is a runtime setting the player turns, not
+  // a number on the row, because it is a decision they make per machine.
+  sorter:          { placeable: true,  needsModel: true,  block: null,       effects: false, build: true },
+  // Eats `refine.count` ducks and hands back one `refine.rungs` higher.
+  refiner:         { placeable: true,  needsModel: true,  block: 'refine',   effects: false, build: true },
   // `modes` closes the set of behaviours a block's `mode` field may name. It is
   // how "broom sweeps, vacuum beams" is expressed as declared data instead of
   // being inferred from the arc width, and an unknown mode is a boot error.
@@ -262,6 +270,11 @@ export const KIND_TAB = {
   // question at that tab is "how do I get ducks from here to there", and a
   // truck is the answer that carries a load rather than a stream.
   spawner:         'transport',
+  // Both belong with what MAKES ducks rather than with what moves them: the
+  // player's question at that tab is "what improves my output", and a machine
+  // that turns four ones into a seven is an answer to it.
+  sorter:          'production',
+  refiner:         'production',
 
   wall:            'building',
 
@@ -1039,6 +1052,14 @@ export function validateRows(rows) {
         if (p.drive === 'stroke' && !isObj(row.produce)) {
           throw new DataError(`${where}: moving.drive 'stroke' needs a 'produce' block -- the pulse is one emission`);
         }
+      }
+    }
+    if (isObj(row.refine)) {
+      if (!Number.isInteger(row.refine.count) || row.refine.count < 2) {
+        throw new DataError(`${where}: refine.count must be an integer >= 2 -- a refiner that eats one duck is a repaint`);
+      }
+      if (row.refine.rungs !== undefined && (!Number.isInteger(row.refine.rungs) || row.refine.rungs < 1)) {
+        throw new DataError(`${where}: refine.rungs must be an integer >= 1`);
       }
     }
     if (isObj(row.spawn)) checkSpawn(where, row.spawn);

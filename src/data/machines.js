@@ -519,6 +519,50 @@ export const MACHINES = [
     tags: ['bigticket'],
   },
 
+  // --- the two processors, netId 31 and 32 -------------------------------------
+  {
+    id: 'sorter', netId: 31, name: 'Sorter',
+    desc: 'Splits a stream of ducks in two by value. Press E to set the line; turn it to swap which side is which.',
+    // Cheap on purpose. It makes nothing, so it only pays for itself through
+    // what the player builds AROUND it -- and a machine that has to be bought
+    // twice before the idea lands is a machine whose idea never lands.
+    cost: 900, model: 'sorter',
+    // Measured off assets/models/sorter.glb.
+    footprint: [1.50, 1.26, 1.00], anchor: 'floor',
+    kind: 'sorter',
+    repeat: { times: 10, curve: 1.12 },
+    // The threshold is a runtime setting, not a row field: it is a decision the
+    // player makes per machine, and two sorters set to different lines is the
+    // entire point of owning two.
+    // NO `interact` block: that field means "only this NAMED PART of the model
+    // answers the crosshair", and on both of these the whole machine is the
+    // button. A row that stays silent gets its whole model outlined, which is
+    // the promise that matches what the E key actually acts on.
+    collider: { shape: 'cuboid', half: [0.75, 0.63, 0.50], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+  {
+    id: 'refiner', netId: 32, name: 'Refiner',
+    desc: 'Eats four ducks and hands back one a rung better. It will not touch anything below the line you set.',
+    cost: 3200, model: 'refiner',
+    footprint: [1.00, 1.33, 1.00], anchor: 'floor',
+    kind: 'refiner',
+    repeat: { times: 8, curve: 1.30 },
+    // Four in, one out, one rung up. Four is the number that makes the ladder
+    // climbable without making it free: each rung is about 1.6x the last, so
+    // four of a rung is worth about 2.5 of the next one -- you lose value and
+    // gain rarity, which is the trade the machine exists to offer.
+    refine: { count: 4, rungs: 1 },
+    // NO `interact` block: that field means "only this NAMED PART of the model
+    // answers the crosshair", and on both of these the whole machine is the
+    // button. A row that stays silent gets its whole model outlined, which is
+    // the promise that matches what the E key actually acts on.
+    collider: { shape: 'cuboid', half: [0.50, 0.665, 0.50], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+
   // --- the garage, netId 30 ---------------------------------------------------
   {
     id: 'car_spawner', netId: 30, name: 'Truck Garage',
