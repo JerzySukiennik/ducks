@@ -610,6 +610,51 @@ export const MACHINES = [
     tags: [],
   },
 
+  // --- two machines with a promise and a catch, netId 36-37 --------------------
+  {
+    id: 'sure_press', netId: 36, name: 'Certified Press',
+    desc: 'A duck every five seconds, and never more than twelve in a row below rung 8.',
+    // The whole product is the SECOND half of that sentence. Every other
+    // producer is a probability the player has to take on faith over a long
+    // enough run; this one is a floor, and a floor is worth paying for.
+    cost: 6800, model: 'press_gold',
+    footprint: [1.00, 1.645, 0.75], anchor: 'floor',
+    kind: 'producer_auto',
+    repeat: { times: 6, curve: 1.38 },
+    // Rung 8 is a duck worth 46 -- about twenty times a plain one -- so twelve
+    // cycles is at most a minute of waiting for something worth having.
+    produce: { secondsPerDuck: 5.0, rarityWeights: 'w_basic', guarantee: { every: 12, rung: 8 } },
+    moving: [{
+      model: 'press_gold_ram', motion: 'slide',
+      axis: [0, -1, 0], travel: 0.075, seconds: 0.50, drive: 'stroke',
+    }],
+    collider: { shape: 'cuboid', half: [0.50, 0.8225, 0.375], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: ['bigticket'],
+  },
+  {
+    id: 'hot_press', netId: 37, name: 'Overdriven Press',
+    desc: 'Twice the speed of a Duck Press, and it seizes. Press E on it to get it going again.',
+    // Priced BELOW the press it doubles, which is the point: it is not an
+    // upgrade, it is a different deal. A player who is in the yard anyway gets
+    // a bargain; a player who builds a wall of them and walks away gets a wall
+    // of stopped machines.
+    cost: 1100, model: 'press',
+    footprint: [1.00, 1.80, 0.75], anchor: 'floor',
+    kind: 'producer_auto',
+    repeat: { times: 12, curve: 1.26 },
+    // One cycle in nine, so roughly every twenty seconds of running. Often
+    // enough to matter, rare enough that walking over is a chore and not a job.
+    produce: { secondsPerDuck: 2.25, rarityWeights: 'w_basic', jamChance: 0.11 },
+    moving: [{
+      model: 'press_ram', motion: 'slide',
+      axis: [0, -1, 0], travel: 0.090, seconds: 0.45, drive: 'stroke',
+    }],
+    collider: { shape: 'cuboid', half: [0.50, 0.90, 0.375], blockDucks: true },
+    snap: { grid: 0.25, yawStep: 15, freeRotate: true },
+    tags: [],
+  },
+
   // --- the garage, netId 30 ---------------------------------------------------
   {
     id: 'car_spawner', netId: 30, name: 'Truck Garage',

@@ -105,7 +105,7 @@ export function mouthOf(row, rec, P) {
   };
 }
 
-export function createProducers({ ducks, applyImpulse, list, byId, config, statsOf, rng }) {
+export function createProducers({ ducks, applyImpulse, list, byId, config, statsOf, rng, rungBonus }) {
   if (!ducks) throw new Error('[producers] a duck pool is required');
   if (typeof list !== 'function') throw new Error('[producers] list() is required');
   if (typeof byId !== 'function') throw new Error('[producers] byId() is required');
@@ -121,6 +121,7 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
     maxSpawnsPerUpdate: num(config.producers.maxSpawnsPerUpdate, 'producers.maxSpawnsPerUpdate'),
     rateMulMin: num(config.producers.rateMulMin, 'producers.rateMulMin'),
     rateMulMax: num(config.producers.rateMulMax, 'producers.rateMulMax'),
+    jamSeconds: num(config.producers.jamSeconds, 'producers.jamSeconds'),
     luckMin: num(config.producers.luckMin, 'producers.luckMin'),
     luckMax: num(config.producers.luckMax, 'producers.luckMax'),
     spawnSeed: num(config.producers.spawnSeed, 'producers.spawnSeed'),
@@ -171,6 +172,15 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
           timer: 0,
           produced: 0,
           jammed: false,
+          // The pity counter, for a row with `produce.guarantee`. It counts
+          // emissions since the last one at or above the promised rung, and
+          // the promise is kept by FORCING the roll rather than by weighting
+          // it -- a weight is a hope, and a machine that says 'guaranteed'
+          // must not be hoping.
+          sinceGood: 0,
+          // Seconds left stuck, for a row with `produce.jamChance`. A jammed
+          // machine is not slower, it is STOPPED until somebody walks over.
+          stuck: 0,
           base: resolveWeightSet(config, row.produce.rarityWeights),
           scratch: new Array(config.rarity.multipliers.length),
         };
@@ -193,7 +203,22 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
       P.luckMin, P.luckMax
     );
     const w = luckWeights(u.base, luck, u.scratch);
-    const tier = rollTier(w, rnd);
+    let tier = rollTier(w, rnd);
+    // THE GUARANTEE. `produce.guarantee: { every, rung }` means: at most
+    // `every` emissions can pass without one at `rung` or better. It is a
+    // floor placed under the roll, not a thumb on it, so the machine's promise
+    // is true rather than likely -- which is the only reason to print it on a
+    // shop row at all.
+    const g = u.row.produce.guarantee;
+    if (g) {
+      if (tier >= g.rung) u.sinceGood = 0;
+      else if (++u.sinceGood >= g.every) { tier = g.rung; u.sinceGood = 0; }
+    }
+    // And the Golden Minute, or whatever the world clock is running. It nudges
+    // the rung as the duck is MADE, so it lifts everything a factory produces
+    // during the window and nothing it produced before.
+    const bonus = typeof rungBonus === 'function' ? rungBonus() : 0;
+    if (bonus > 0) tier = Math.min(config.rarity.multipliers.length - 1, tier + bonus);
     const id = ducks.spawn({
       x: m.x + (rnd() - 0.5) * P.ejectSpread,
       y: m.y,
@@ -263,6 +288,15 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
       // emission it is owed. Counting ducks here would silently truncate every
       // batch larger than the budget, which would look like a balance bug.
       let budget = P.maxSpawnsPerUpdate;
+      // STUCK. A machine with `produce.jamChance` seizes now and then and does
+      // nothing at all until a player walks over and presses E on it. That is
+      // the trade its row is sold on: faster than the machine beside it, and
+      // it needs you in the building.
+      if (u.stuck > 0) {
+        u.stuck = Math.max(0, u.stuck - dt);
+        if (u.stuck === 0) announce(jamListeners, { key: u.key, id: u.id, jammed: false, stuck: false });
+        continue;
+      }
       let jam = false;
       while (u.timer >= interval && budget > 0) {
         const want = countFor(u);
@@ -285,6 +319,16 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
         }
         u.timer -= interval;
         budget--;
+        // The seize is rolled AFTER a successful batch, never before: a
+        // machine that jams on the cycle it was about to produce would eat a
+        // duck the player watched it start, and that reads as the game
+        // cheating rather than as a machine breaking.
+        const jc = u.row.produce.jamChance;
+        if (jc && rnd() < jc) {
+          u.stuck = P.jamSeconds;
+          announce(jamListeners, { key: u.key, id: u.id, jammed: false, stuck: true });
+          break;
+        }
       }
       // A dt so long that the budget ran out must not bank an ever-growing
       // debt either; clamp what is carried into the next update.
@@ -368,6 +412,17 @@ export function createProducers({ ducks, applyImpulse, list, byId, config, stats
     jamState,
     onEmit(cb) { if (typeof cb === 'function') emitListeners.push(cb); },
     onJam(cb) { if (typeof cb === 'function') jamListeners.push(cb); },
+    // Somebody walked over and hit it. Returns false when that machine was not
+    // stuck, so the caller can tell 'fixed it' from 'pressed E at a wall'.
+    unjam(key) {
+      const u = units.get(key);
+      if (!u || u.stuck <= 0) return false;
+      u.stuck = 0;
+      announce(jamListeners, { key: u.key, id: u.id, jammed: false, stuck: false });
+      return true;
+    },
+    isStuck: (key) => { const u = units.get(key); return !!(u && u.stuck > 0); },
+    stuckKeys: () => Array.from(units.values()).filter((u) => u.stuck > 0).map((u) => u.key),
     count: () => units.size,
     producedTotal: () => produced,
     refusedAtCap: () => refusedAtCap,

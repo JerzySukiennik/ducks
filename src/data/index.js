@@ -1044,6 +1044,21 @@ export function validateRows(rows) {
     // not only on the kind that requires it, so a `blow` block on the wrong row
     // still cannot carry a broken pitch.
     const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+    if (isObj(row.produce) && isObj(row.produce.guarantee)) {
+      const g = row.produce.guarantee;
+      if (!Number.isInteger(g.every) || g.every < 2) {
+        throw new DataError(`${where}: produce.guarantee.every must be an integer >= 2`);
+      }
+      if (!Number.isInteger(g.rung) || g.rung < 1) {
+        throw new DataError(`${where}: produce.guarantee.rung must be an integer >= 1 -- guaranteeing rung 0 guarantees nothing`);
+      }
+    }
+    if (isObj(row.produce) && row.produce.jamChance !== undefined) {
+      const j = row.produce.jamChance;
+      if (!(typeof j === 'number' && j > 0 && j < 1)) {
+        throw new DataError(`${where}: produce.jamChance must be between 0 and 1 exclusive`);
+      }
+    }
     if (isObj(row.produce) && row.produce.count !== undefined) {
       checkProduceCount(where, row.produce.count);
     }

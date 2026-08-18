@@ -501,6 +501,9 @@ async function boot() {
   // keyed by its placement key, so a bought bench is held on its own without
   // touching the starter one's state.
   const benches = createBenches({ list: automationList, byId, machine: MACHINE_TUNING });
+  // The day, the weather and the interruptions. Created before the producers
+  // because they read its rung bonus as each duck is made.
+  const worldClock = createWorldClock({ config });
   const producers = createProducers({
     ducks: world.ducks,
     applyImpulse: world.applyImpulse,
@@ -508,6 +511,9 @@ async function boot() {
     byId,
     config,
     statsOf: () => shop.stats(),
+    // The Golden Minute, read at the moment a duck is made. Producers are
+    // created before the clock is, so this is a function rather than a value.
+    rungBonus: () => (worldClock ? worldClock.rungBonus() : 0),
   });
   // A press presses when a duck actually comes out of it. The stroke is driven
   // from the SAME event the eject sound is (src/audio/wire.js), so a machine
@@ -533,7 +539,6 @@ async function boot() {
   });
   // The day, the weather and the interruptions. It decides and reports; the
   // renderer reads sky() and the wind is applied like any other push.
-  const worldClock = createWorldClock({ config });
   const attention = createAttention({
     ducks: world.ducks, list: automationList, byId, config,
   });
@@ -961,6 +966,21 @@ async function boot() {
     if (net.isClient && net.isClient()) return world.pit2Edge();
     const e = Math.floor(Math.random() * 4) % 4;
     return world.setPit2Edge(e);
+  }
+
+  // A seized machine under the crosshair. Same focus target every other prompt
+  // reads, so what is outlined is what answers the key.
+  function stuckTarget() {
+    const t = focus.target();
+    if (!t || typeof t.key !== 'number') return null;
+    return producers.isStuck && producers.isStuck(t.key) ? t.key : null;
+  }
+
+  function doUnjam(key) {
+    if (!producers.unjam || !producers.unjam(key)) return false;
+    hud.showCap('Unjammed.');
+    audio.rotated();
+    return true;
   }
 
   // The Sorter or Refiner under the crosshair, if any. Uses the same focus
@@ -2183,6 +2203,10 @@ async function boot() {
         // comes before the truck and the garage because it is a small thing
         // you are pointing AT, where those two are large things you are
         // standing NEXT to.
+        // A seized machine takes E before anything else on the plate: the
+        // player is standing in front of a stopped press and there is exactly
+        // one thing they mean by pressing a key at it.
+        else if (stuckTarget()) doUnjam(stuckTarget());
         else if (processorTarget()) stepProcessor(processorTarget());
         else if (vehicles.nearest(player.position())) enterTruck();
         // A garage sells another truck for config.vehicle.spawnCost. The first
@@ -4188,6 +4212,8 @@ async function boot() {
     },
     debugDropStats() { return placed.stats(); },
     debugSky: () => worldClock.sky(),
+    debugStuck: () => (producers.stuckKeys ? producers.stuckKeys() : []),
+    debugUnjam: (key) => (producers.unjam ? producers.unjam(key) : null),
     debugWind: () => worldClock.wind(),
     debugSetWeather: (w) => worldClock.setWeather(w),
     debugStartEvent: (e) => worldClock.startEvent(e),

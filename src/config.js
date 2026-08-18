@@ -1642,6 +1642,10 @@ export const config = {
     minSecondsPerDuck: 0.05, // floor on the interval however large machineRateMul gets
     maxSpawnsPerUpdate: 8,   // one long dt may not dump a whole minute of ducks at once
     rateMulMin: 0.05,
+    // How long a machine with produce.jamChance stays seized. It is a wall,
+    // not a delay: nothing happens until a player presses E on it, and this is
+    // only the ceiling for a machine nobody comes to.
+    jamSeconds: 45,
     rateMulMax: 20,
     luckMin: 1,
     luckMax: 40,
@@ -3466,6 +3470,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'producers.maxSpawnsPerUpdate',
   'producers.rateMulMin',
   'producers.rateMulMax',
+  'producers.jamSeconds',
   'producers.luckMin',
   'producers.luckMax',
   'collectors.intakeHeightFrac',
