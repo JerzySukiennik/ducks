@@ -640,6 +640,11 @@ export function createGameAudio(deps) {
     // --- the truck -----------------------------------------------------------
     // Driven from the frame loop in main.js, because that is where the truck's
     // speed and the two lever positions are known.
+    // The contract siren and its two answers. They live on the truck's synth
+    // because the thing making the noise is a lorry.
+    contractAlarm: () => truckSynth.alarm(),
+    contractLoad: (done, of) => truckSynth.load(done, of),
+    contractEnd: (ok) => truckSynth.result(ok),
     truckEngineOn: () => truckSynth.engineOn(),
     truckEngineOff: () => truckSynth.stopAll(),
     truckSpeed: (frac, dt) => truckSynth.setSpeed(frac, dt),

@@ -22,6 +22,7 @@ import { createProducers } from './sim/producers.js';
 import { createCollectors, createAttention } from './sim/collectors.js';
 import { createConveyors } from './sim/conveyors.js';
 import { createVehicles } from './sim/vehicles.js';
+import { createContracts } from './sim/contracts.js';
 import { TRUCK } from './data/vehicles.js';
 import { createBlowers } from './sim/blowers.js';
 import { createContainers, isStorageRow } from './sim/containers.js';
@@ -944,6 +945,68 @@ async function boot() {
     const e = Math.floor(Math.random() * 4) % 4;
     return world.setPit2Edge(e);
   }
+
+  // --- the contract lorry ------------------------------------------------------
+  //
+  // A contract sends a lorry to one end of the map and you load it. The lorry
+  // is an ordinary tipper truck, parked: it already has a bed that holds ducks
+  // physically, so 'what has been delivered' is 'what is standing in the back',
+  // and the player can watch the load go up instead of watching a counter.
+  //
+  // It parks at one of the same four ends the far pit uses, and never the end
+  // the far pit is at this run -- two things to run to in the same corner is
+  // one thing with a queue.
+  let lorryKey = null;
+
+  function lorryArrive() {
+    const sockets = world.pit2Sockets ? world.pit2Sockets() : [];
+    if (!sockets.length || !vehicles) return null;
+    const taken = world.pit2Edge ? world.pit2Edge() : null;
+    const choices = sockets.map((s2, i) => i).filter((i) => i !== taken);
+    const edge = choices[Math.floor(Math.random() * choices.length) % choices.length];
+    const at = sockets[edge];
+    // Facing the middle, so the open back of it is what you walk up to.
+    const yaw = Math.atan2(-(0 - at.x), -(0 - at.z)) + Math.PI;
+    const rec = vehicles.spawn({ x: at.x, y: 0.35, z: at.z }, yaw);
+    if (!rec) return null;
+    rec.contract = true;
+    vehicles.setDriver(rec.key, null);       // parked, handbrake on
+    attachTruck(rec);
+    lorryKey = rec.key;
+    return { x: at.x, z: at.z, edge };
+  }
+
+  function lorryLeave() {
+    if (lorryKey === null) return false;
+    const parts = truckMeshes.get(lorryKey) || [];
+    for (const m of parts) placed.detachBody(m);
+    truckMeshes.delete(lorryKey);
+    vehicles.remove(lorryKey);
+    lorryKey = null;
+    return true;
+  }
+
+  // Which ducks are standing in the lorry's bed right now. The vehicle module
+  // already owns that test -- it is the same one that decides whether a PLAYER
+  // is riding on the back -- so the contract asks it rather than keeping a
+  // second idea of where the bed is.
+  function lorryContents() {
+    if (lorryKey === null) return null;
+    const rec = vehicles.byKey(lorryKey);
+    if (!rec) return null;
+    const out = [];
+    world.ducks.forEach((id, x, y, z) => {
+      if (vehicles.onBed(rec, { x, y, z })) out.push(id);
+    });
+    return out;
+  }
+
+  const contracts = createContracts({
+    config,
+    ducks: world.ducks,
+    economy: world.economy,
+    lorry: { arrive: lorryArrive, leave: lorryLeave, contents: lorryContents },
+  });
 
   // A container is a DROPPED PROP with a real dynamic body -- a placed building
   // is a collider on the shared plate and could never be tipped. Registration is
@@ -2107,6 +2170,31 @@ async function boot() {
     }
   }
 
+  // A rolling idea of what one duck is worth in this yard, used only to decide
+  // how demanding the next contract should be. Seeded at the base value so the
+  // first order is askable before anything has been scored.
+  let duckSample = config.economy.duckBaseValue;
+  function contractSample() { return duckSample; }
+
+  // What happens on screen when a contract starts, loads and ends.
+  function onContractEvent(ev) {
+    if (!ev) return;
+    if (ev.type === 'contractStart') {
+      hud.setContract(ev.job);
+      if (audio.contractAlarm) audio.contractAlarm();
+      return;
+    }
+    if (ev.type === 'contractLoad') {
+      hud.setContract(contracts.info());
+      if (audio.contractLoad) audio.contractLoad(ev.delivered, ev.of);
+      return;
+    }
+    if (ev.type === 'contractDone' || ev.type === 'contractFailed') {
+      hud.setContract(null, ev.type === 'contractDone' ? 'done' : 'failed');
+      if (audio.contractEnd) audio.contractEnd(ev.type === 'contractDone');
+    }
+  }
+
   let frameNo = 0;
   let simTime = 0;
   let lastNow = 0;
@@ -2747,6 +2835,13 @@ async function boot() {
     // both readers. Two callers would each get half the events.
     const pitEvents = world.pit.consumeEvents();
     sessionStats.notePitEvents(pitEvents);
+    // What a duck is worth around here, as a slow average of what the pit has
+    // actually been paying. It is the only input a contract's difficulty takes,
+    // so an order is asked of the factory that exists rather than of a table.
+    for (const e of pitEvents) {
+      if (e && e.type === 'duck' && isFinite(e.value)) duckSample += (e.value - duckSample) * 0.08;
+    }
+    if (contracts.active()) hud.tickContract();
     audio.notePitEvents(pitEvents);
 
     // The vendor's shelf turns over on SIMULATION time, not wall time, so
@@ -2755,6 +2850,15 @@ async function boot() {
     // open. The second argument is the multiplayer rule: only a host rolls.
     // A client ticks the same clock so its countdown is live, and its units
     // change only when EV.STOCK arrives.
+    // Contracts. The host runs them and a client watches: spawning the lorry,
+    // consuming ducks and paying out are the host's alone, for exactly the
+    // reason the pit's payout is.
+    contracts.setRunning(!net.isClient());
+    // The sample is what a duck is worth AROUND HERE right now -- the mean of
+    // what the pit has been paying -- so an order is asked of the factory that
+    // exists rather than of a table written before it did.
+    contracts.update(dt, contractSample());
+    for (const ev of contracts.consumeEvents()) onContractEvent(ev);
     stock.advance(dt, !net.isClient());
     // The panel's countdown is live while it is open, and tick() re-renders the
     // rows only when the shelf actually changed -- which covers the period
@@ -3972,6 +4076,12 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    // Contracts: what is being asked for, what has gone in, and the two levers
+    // a test needs -- start one now, and give up on it.
+    debugContract: () => ({ info: contracts.info(), stats: contracts.stats(), lorry: lorryKey }),
+    debugStartContract: (sample) => contracts.start(sample === undefined ? duckSample : sample),
+    debugAbandonContract: () => contracts.abandon(),
+    debugLorryContents: () => (lorryContents() || []).length,
     // The second hole: which end it is at, where that is, what it pays, and
     // how many slabs the plate ended up as once the sockets were cut.
     debugPit2() {

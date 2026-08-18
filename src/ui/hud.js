@@ -21,6 +21,26 @@ const CSS = `
   transition: transform ${CRT.fast} ${CRT.ease}; transform-origin: 50% 0%; }
 #hud-money.bump { transform: translateX(-50%) scale(1.16); }
 #hud-money .cur { font-size: 26px; color: ${CRT.dim}; }
+/* THE CONTRACT BANNER. Big, red, and across the top -- it is the only thing in
+   this game that is on a clock the player did not start, so it is the only
+   thing allowed to shout. It sits above the money and below nothing. */
+#hud-contract { position: absolute; top: 0; left: 0; right: 0; z-index: 14;
+  display: none; text-align: center; padding: 10px 12px 12px;
+  background: linear-gradient(180deg, rgba(120,10,18,0.92) 0%, rgba(120,10,18,0.0) 100%);
+  pointer-events: none; }
+#hud-contract.show { display: block; }
+#hud-contract .title { font: 800 26px/1.05 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #ff5a5a; letter-spacing: 0.06em; text-shadow: 0 2px 0 rgba(0,0,0,0.7); }
+#hud-contract .body { margin-top: 3px;
+  font: 700 14px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #ffd7d7; text-shadow: 0 2px 0 rgba(0,0,0,0.7); }
+#hud-contract .bar { margin: 6px auto 0; width: min(420px, 60vw); height: 7px;
+  background: rgba(0,0,0,0.45); border: 1px solid rgba(255,90,90,0.5); }
+#hud-contract .bar i { display: block; height: 100%; background: #ff5a5a; width: 0%; }
+#hud-contract.urgent .title { animation: hud-flash 0.5s steps(2) infinite; }
+#hud-contract.done .title { color: #7fe08a; }
+#hud-contract.done { background: linear-gradient(180deg, rgba(16,90,40,0.92) 0%, rgba(16,90,40,0.0) 100%); }
+@keyframes hud-flash { 0% { opacity: 1; } 100% { opacity: 0.35; } }
 #hud-float { position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
   font: 700 20px/1 ${CRT.data}; color: ${CRT.ok}; opacity: 0;
   text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
@@ -162,6 +182,12 @@ export function createHUD(container) {
   moneyCur.className = 'cur';
   const moneyVal = el('span', null, money, '0');
   const float = el('div', 'hud-float', root, '');
+  const contract = el('div', 'hud-contract', root, '');
+  contract.innerHTML = '<div class="title"></div><div class="body"></div><div class="bar"><i></i></div>';
+  const contractTitle = contract.querySelector('.title');
+  const contractBody = contract.querySelector('.body');
+  const contractBar = contract.querySelector('.bar i');
+  let contractJob = null;
   const cross = el('div', 'hud-cross', root, '<i></i><i></i><i></i><i></i>');
   const prompt = el('div', 'hud-prompt', root, '');
   const crank = el('div', 'hud-crank', root, '<i></i>');
@@ -313,7 +339,48 @@ export function createHUD(container) {
     crankFill.style.width = p + '%';
   }
 
+  // THE CONTRACT BANNER. `job` null with a result string ends it; null with no
+  // result simply hides it. Everything shown is read off the job rather than
+  // accumulated here, so the banner cannot disagree with the lorry.
+  function setContract(job, result) {
+    contractJob = job || null;
+    if (!job) {
+      if (result) {
+        contract.classList.toggle('done', result === 'done');
+        contract.classList.remove('urgent');
+        contractTitle.textContent = result === 'done' ? 'ORDER COMPLETE' : 'ORDER LOST';
+        contractBody.textContent = result === 'done'
+          ? 'The lorry is leaving loaded.' : 'The lorry left without it.';
+        contractBar.style.width = result === 'done' ? '100%' : '0%';
+        contract.classList.add('show');
+        setTimeout(() => contract.classList.remove('show'), config.hud.contractEndMs);
+        return;
+      }
+      contract.classList.remove('show');
+      return;
+    }
+    contract.classList.remove('done');
+    contractTitle.textContent = 'ORDER: ' + job.count + ' DUCKS';
+    renderContract();
+    contract.classList.add('show');
+  }
+
+  function renderContract() {
+    const job = contractJob;
+    if (!job) return;
+    const t = Math.max(0, job.remaining);
+    const mm = Math.floor(t / 60);
+    const ss = Math.floor(t % 60);
+    contractBody.textContent = job.delivered + ' / ' + job.count
+      + '  worth ' + job.minValue.toLocaleString('en-US') + ' or more'
+      + '  -  lorry leaves in ' + mm + ':' + String(ss).padStart(2, '0');
+    contractBar.style.width = ((job.delivered / job.count) * 100).toFixed(1) + '%';
+    contract.classList.toggle('urgent', t <= config.hud.contractUrgentSeconds);
+  }
+
   return {
+    setContract,
+    tickContract: renderContract,
     root,
     setMoney,
     showCap,

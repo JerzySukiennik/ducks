@@ -1018,6 +1018,34 @@ export const config = {
     payMul: 1.25,
   },
 
+  // --- contracts --------------------------------------------------------------
+  // Somebody wants a load of ducks by a deadline and sends a lorry for them.
+  // The first thing in the game that asks for something SPECIFIC rather than
+  // just more -- see the header of src/sim/contracts.js.
+  contracts: {
+    enabled: 1,
+    // Long enough that a new player has a factory before the first siren, and
+    // the gap after that is long enough to rebuild for the next one.
+    firstDelaySeconds: 240,
+    gapSeconds: 200,
+    gapJitterSeconds: 120,
+    // The deadline is derived from the SIZE of the order rather than fixed, so
+    // a big order is not simply an impossible one.
+    secondsPerDuck: 2.2,
+    minSeconds: 60,
+    maxSeconds: 180,
+    countMin: 12,
+    countMax: 40,
+    // Money per delivered duck, as a multiple of the contract's own minimum
+    // value: a lorry pays better than the pit for the same duck, which is what
+    // makes stopping what you are doing and running the load out worth it.
+    payPerDuck: 1.6,
+    // And filling the WHOLE order pays this much again on top. A half-filled
+    // lorry keeps what it already earned; only a full one gets the bonus.
+    bonusMul: 1.5,
+    leaveSeconds: 6,
+  },
+
   hold: {
     kp: 220,
     kdScale: 2,         // kd = kdScale * sqrt(kp) -> critically damped
@@ -1288,6 +1316,10 @@ export const config = {
   },
 
   hud: {
+    // The contract banner: how long the result stays up after the lorry goes,
+    // and when the clock starts flashing.
+    contractEndMs: 3200,
+    contractUrgentSeconds: 20,
     moneyPulseMs: 320,
     capMessageMs: 3200,
     floatMs: 900,
@@ -2915,6 +2947,18 @@ export const REQUIRED_CONFIG_KEYS = [
   'pit2.distance',
   'pit2.plateHoleHalf',
   'pit2.payMul',
+  'contracts.enabled',
+  'contracts.firstDelaySeconds',
+  'contracts.gapSeconds',
+  'contracts.gapJitterSeconds',
+  'contracts.secondsPerDuck',
+  'contracts.minSeconds',
+  'contracts.maxSeconds',
+  'contracts.countMin',
+  'contracts.countMax',
+  'contracts.payPerDuck',
+  'contracts.bonusMul',
+  'contracts.leaveSeconds',
   'gamble.rollCost',
   'gamble.boxPrice',
   'gamble.prizePower',
@@ -3238,6 +3282,8 @@ export const REQUIRED_CONFIG_KEYS = [
   'tierColors.4',
   'tierColors.5',
   'tierColors.6',
+  'hud.contractEndMs',
+  'hud.contractUrgentSeconds',
   'hud.moneyPulseMs',
   'hud.capMessageMs',
   'hud.floatMs',

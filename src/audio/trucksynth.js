@@ -271,7 +271,64 @@ export function createTruckSynth({ params, audio }) {
     }
   }
 
+  // --- the contract siren -----------------------------------------------------
+  //
+  // Two tones alternating, three times. It is the only sound in the game that
+  // is not caused by something the player just did, so it is the only one
+  // allowed to be an interruption -- and a two-tone alternation is what an
+  // alarm is, where a single repeated note is a doorbell.
+  function alarm() {
+    const n = ctxOf();
+    if (!n) return false;
+    const P2 = P;
+    try {
+      const ctx = n.ctx;
+      const t0 = ctx.currentTime;
+      for (let i = 0; i < 6; i++) {
+        const hz = i % 2 === 0 ? 740 : 554;
+        const at = t0 + i * 0.19;
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(hz, at);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.30 * gainOf(), at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
+        osc.connect(g).connect(n.destination);
+        osc.start(at);
+        osc.stop(at + 0.2);
+      }
+      note({ kind: 'contract_alarm', gain: 0.30 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // One duck into the lorry. The pitch CLIMBS with the load, so a player
+  // shovelling ducks in hears how close the order is without reading the bar.
+  function load(done, of) {
+    const t = of > 0 ? Math.max(0, Math.min(1, done / of)) : 0;
+    return ping(440 + 660 * t, 0.22, 0.12, 'triangle');
+  }
+
+  // The result: a rising pair for a full lorry, a falling one for a lost order.
+  function result(ok) {
+    if (ok) {
+      ping(523, 0.34, 0.24, 'triangle');
+      ping(784, 0.30, 0.42, 'triangle');
+    } else {
+      ping(392, 0.30, 0.30, 'square');
+      ping(262, 0.28, 0.50, 'square');
+    }
+    note({ kind: ok ? 'contract_done' : 'contract_failed', gain: 0.3 });
+    return true;
+  }
+
   return {
+    alarm,
+    load,
+    result,
     engineOn,
     engineOff,
     setSpeed,
