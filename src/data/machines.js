@@ -32,7 +32,14 @@ export const MACHINES = [
     desc: 'Hold the wheel and it fills; a duck drops out every few seconds. The only duck source you start with.',
     // 10, not 0. You are GIVEN one at spawn; this price is for a second bench,
     // and a cost of 0 made the shop refuse the row outright as 'not for sale'.
-    cost: 75, model: 'crank', footprint: [2.096, 2.256, 2.128], anchor: 'floor',
+    //
+    // AND IT IS THE ONE PRICE THE x7.63 RESCALE DOES NOT TOUCH. Every other
+    // price in the game was multiplied when the rarity ladder went from a top
+    // of 1000 to a top of 100000, because they all buy things that earn from
+    // that ladder. This one buys the thing a player who has NOTHING reaches
+    // for, and its job is to be affordable before the ladder has paid out once.
+    // Scaled to 75 it stopped being that, so it is pinned here by hand.
+    cost: 10, model: 'crank', footprint: [2.096, 2.256, 2.128], anchor: 'floor',
     kind: 'producer_manual',
     // The starter workbench is drawn at config.machine.scale = 1.6, and a bought
     // one has to be the same machine: same size, same crank, same wheel. The
