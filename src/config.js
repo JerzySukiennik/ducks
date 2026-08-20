@@ -2916,6 +2916,26 @@ export const config = {
     // for the same reason the pit payoff is: a shake that has to last exactly as
     // long as config.gamble.shakeSeconds cannot be a fixed-length recording, and
     // a payout chime that says "you won something big" has to know what it paid.
+    // THE PIT COMBO. Every duck that goes down plays one hit, and the pitch
+    // climbs with the run. Jurek's numbers, straight across from the spec he
+    // wrote them in.
+    combo: {
+      // 0 puts the synthesized rising note back. They are alternatives, never
+      // both: two things climbing in pitch at once is mud, not twice the
+      // payoff.
+      enabled: 1,
+      basePitch: 1.0,
+      pitchIncrement: 0.02,
+      maxPitch: 4.0,
+      // A combo is a run without a gap. Nothing else ends it -- not a cheap
+      // duck, not the wrong pit -- because what the pitch measures is whether
+      // the ducks are still coming.
+      breakSeconds: 2.5,
+      // Below this many hits the break sound is not played. A stinger after
+      // two ducks is nagging.
+      breakMinHits: 5,
+    },
+
     // The tipper truck. Synthesized rather than sampled because AN ENGINE IS NOT
     // AN EVENT: its pitch is the speedometer, and the speed is a number that
     // changes sixty times a second. See src/audio/trucksynth.js.
@@ -3850,6 +3870,12 @@ export const REQUIRED_CONFIG_KEYS = [
   'audio.master.attackSeconds',
   'audio.master.releaseSeconds',
   'audio.master.makeup',
+  'audio.combo.enabled',
+  'audio.combo.basePitch',
+  'audio.combo.pitchIncrement',
+  'audio.combo.maxPitch',
+  'audio.combo.breakSeconds',
+  'audio.combo.breakMinHits',
   'audio.truck.idleHz',
   'audio.truck.revHz',
   'audio.truck.engineGain',

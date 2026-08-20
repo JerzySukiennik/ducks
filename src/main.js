@@ -4322,6 +4322,7 @@ async function boot() {
       return doDemolish(rec);
     },
     debugDropStats() { return placed.stats(); },
+    debugCombo: () => (audio.comboState ? audio.comboState() : null),
     debugSky: () => worldClock.sky(),
     debugRoutePlan: (a, b) => router.plan(a, b),
     debugRouteStart: () => routeStart,

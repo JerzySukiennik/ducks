@@ -134,6 +134,14 @@ export function createSfx({ bus, config, listener, facing }) {
       const voice = bus.start(name, scale, { loop: false, pan, distance });
       if (!voice) return null;
 
+      // PITCH. A clip played at a different playback rate is the cheapest
+      // musical instrument there is, and it is the only way one recording can
+      // say 'this is the fourteenth one in a row'. Applied after start rather
+      // than passed through the bus because it is a property of THIS voice,
+      // not of the clip or of the room.
+      if (typeof o.rate === 'number' && isFinite(o.rate) && o.rate > 0) {
+        try { voice.source.playbackRate.value = o.rate; } catch (_) { /* no rate on this node */ }
+      }
       const rec = { clip: name, voice, done: false, at: now };
       perClip[name] = (perClip[name] || 0) + 1;
       lastAt[name] = now;

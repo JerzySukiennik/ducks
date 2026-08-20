@@ -20,6 +20,10 @@ import { createTruckSynth } from './trucksynth.js';
 // from CLIPS. coverage() reports them separately so "no file" reads as a design
 // decision rather than a hole.
 export const SYNTH_MAP = {
+  combo_hit: "every duck that reaches the bottom of a pit, pitched up with the "
+    + 'run: base 1.0, +0.02 a duck, capped at 4.0 (config.audio.combo)',
+  combo_break: 'the run ended -- breakSeconds with no duck, after at least '
+    + 'breakMinHits of them',
   duck_pit: "pit.consumeEvents() returned a 'duck', or containers.consumeEvents() "
     + "returned a 'score' -- synthesized in pitsynth.js, one scale step higher per "
     + 'duck of the run, sliding back down when scoring stops',
@@ -314,13 +318,52 @@ export function createGameAudio(deps) {
   // the game was quieter than dropping the same ducks one at a time, which is
   // exactly backwards: the reward for building the machine was less feedback than
   // doing it by hand.
+  // THE COMBO. One duck into the pit, one hit, and the pitch climbs with the
+  // run: base 1.0, +0.02 a duck, capped at 4.0 -- Jurek's numbers, and the
+  // reason they are here rather than in the file is that they are the FEEL of
+  // scoring and everything else about feel lives in config.
+  //
+  // A combo is a run without a gap in it. Nothing else ends it: not a bad duck,
+  // not a wrong pit, not standing still -- only silence, because the thing the
+  // rising pitch is measuring is whether the ducks are still coming.
+  let comboCount = 0;
+  let comboAt = -1e9;
+  function comboHit() {
+    const A2 = config.audio.combo;
+    const now = bus.timeMs() / 1000;
+    if (now - comboAt > A2.breakSeconds) {
+      // Long enough gone that the last run is over. Say so once, if it was a
+      // run worth having -- a break sound after two ducks is nagging.
+      if (comboCount >= A2.breakMinHits) sfx.play('combo_break', { gain: 1, force: true });
+      comboCount = 0;
+    }
+    comboAt = now;
+    const rate = Math.min(A2.maxPitch, A2.basePitch + A2.pitchIncrement * comboCount);
+    comboCount++;
+    // force: the retrigger window exists to collapse a wall of identical
+    // sounds, and this is the one case where twelve in a frame must be twelve
+    // notes going up. That is what the pitch is FOR.
+    sfx.play('combo_hit', { rate, force: true });
+    return { count: comboCount, rate };
+  }
+
   function payoff(tier) {
+    // The sample, and the synth only if the sample is switched off. Two things
+    // climbing in pitch at once is mud, not twice the payoff.
+    if (config.audio.combo.enabled) { comboHit(); return payoffTail(tier); }
     // Not sfx.play(): this one is built out of oscillators so it can climb. The
     // distance gain is computed the way a sample's would be, and the retrigger
     // window is deliberately NOT applied -- twelve ducks in a frame must be
     // twelve notes going up, which is exactly the case the sample limiter exists
     // to collapse. pitsynth has its own voice cap and spaces the notes out.
     pitSynth.duck(simClock, { attenuation: sfx.attenuation(pitAt.x, pitAt.y, pitAt.z) });
+    return payoffTail(tier);
+  }
+
+  // Everything the payoff does BESIDES making the note: the factory duck, the
+  // rare sting, the burp. Shared by both paths so switching the note off cannot
+  // silently take the rest with it.
+  function payoffTail(tier) {
     // Dip the FACTORY under it. Every machine, fan, conveyor and cart the
     // player bought runs on the loop bus, and the sound they bought them for
     // was arriving on top of that rather than through it -- the better the
@@ -652,6 +695,13 @@ export function createGameAudio(deps) {
     truckRam: (active, frac) => truckSynth.ram(active, frac),
     truckDump: () => truckSynth.dump(),
     truckState: () => ({ running: truckSynth.running(), rev: truckSynth.rev(), voices: truckSynth.voices() }),
+    // The combo, read back: how many in a row and what the next hit's pitch
+    // will be. Verification reads this rather than trusting the call.
+    comboState: () => ({
+      count: comboCount,
+      nextRate: Math.min(config.audio.combo.maxPitch,
+        config.audio.combo.basePitch + config.audio.combo.pitchIncrement * comboCount),
+    }),
     gambleStarted: (seconds) => gambleSynth.start(simClock, seconds),
     // `size` is 0..1: how big the prize was against the best the table can pay.
     // It makes the arpeggio longer and start higher -- the only sound in the game

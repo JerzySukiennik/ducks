@@ -38,6 +38,9 @@ const CTOR = (typeof window !== 'undefined')
 // never hears it. The clip stays on disk and putting the string back on this
 // list plus the setAmbient line in wire.js is the whole of bringing it back.
 export const CLIPS = [
+  // The pit combo: one hit a duck, pitched up with the run, and a break when
+  // the run ends. See config.audio.combo.
+  'combo_hit', 'combo_break',
   'achievement', 'box_spill', 'broom', 'build_demolish', 'build_invalid',
   'build_place', 'build_rotate', 'buy_fail', 'buy_ok', 'cart_loop', 'cash',
   'conveyor_loop', 'crank_click', 'duck_impact', 'duck_rare',
