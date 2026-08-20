@@ -190,35 +190,35 @@ export function floorTexture() {
   ctx.fillRect(0, 0, S, S);
   // A PHOTOGRAPH UNDER THE PAINTING, not instead of it.
   //
-  // Everything below this line -- the blotches, the joints, the cracks, the
-  // grain, the scuffs -- is authored and tuned, and it is what makes this floor
-  // belong to this game rather than to a texture pack. What it cannot do is
-  // material: the fine, irregular tooth of real concrete, at a scale no
-  // reasonable number of canvas operations will draw.
+  // Everything else this function draws -- the blotches, the cracks, the grain,
+  // the scuffs -- is authored and tuned, and it is what makes this floor belong
+  // to this game rather than to a texture pack. What a canvas cannot draw is
+  // MATERIAL: the fine irregular tooth of real concrete.
   //
-  // So the photograph goes down first, multiplied into the plate's own colour so
-  // it darkens and roughens rather than recolouring, and every authored pass
-  // then runs on top of it exactly as before. It arrives LATE -- an image
-  // decode is asynchronous and this function is not -- and that is fine: the
-  // canvas is already a valid floor, and the texture is simply told to upload
-  // itself again when the photograph lands.
+  // IT IS DRAWN AT A SIZE IN METRES, which is the whole fix. One canvas covers
+  // floorTileMeters (30 m) of plate, so a 256 px photograph drawn once fills
+  // thirty metres with a single 256-pixel image -- every blemish in it becomes
+  // a stain several metres across, and the dark ones read as black patches on
+  // the yard. Drawn at floorPhotoMeters instead, one tile of it is about a
+  // metre and a half of floor and it reads as concrete.
   const photo = new Image();
   photo.onload = () => {
     try {
+      // A FULL REDRAW, in order: colour, photograph, then every authored pass
+      // exactly once. Compositing onto the already-painted canvas would run
+      // the paint passes twice and double the density of everything in them.
+      ctx.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`;
+      ctx.fillRect(0, 0, S, S);
+      const px = Math.max(8, Math.round(S * (w.floorPhotoMeters / w.floorTileMeters)));
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
       ctx.globalAlpha = w.floorPhotoStrength;
-      for (let ty = 0; ty < S; ty += photo.height) {
-        for (let tx = 0; tx < S; tx += photo.width) ctx.drawImage(photo, tx, ty);
+      for (let ty = 0; ty < S; ty += px) {
+        for (let tx = 0; tx < S; tx += px) ctx.drawImage(photo, tx, ty, px, px);
       }
       ctx.restore();
-      // The authored passes again, on top of the photograph this time. They are
-      // cheap and deterministic (one seeded generator), so running them twice
-      // costs a few milliseconds once and keeps the joints and cracks ON the
-      // concrete rather than under it.
       const rnd2 = seeded(w.floorTextureSeed);
       paintBlotches(ctx, S, rnd2, w.floorBlotches);
-      paintJoints(ctx, S);
       paintCracks(ctx, S, rnd2, w.floorCracks);
       paintGrain(ctx, S, rnd2, w.floorGrain);
       paintScuffs(ctx, S, rnd2);
@@ -227,7 +227,10 @@ export function floorTexture() {
   };
   photo.src = w.floorPhoto;
   paintBlotches(ctx, S, rnd, w.floorBlotches);
-  paintJoints(ctx, S);
+  // NO paintJoints. It drew the slab grid across the whole yard, and the yard
+  // is meant to be concrete rather than paving: asked for and removed. The
+  // function stays -- nothing else calls it, but deleting a tuned drawing pass
+  // to turn it off is how it comes back wrong when somebody wants it again.
   paintCracks(ctx, S, rnd, w.floorCracks);
   paintGrain(ctx, S, rnd, w.floorGrain);
   paintScuffs(ctx, S, rnd);
@@ -266,7 +269,12 @@ export function concrete() {
   const nm = new THREE.TextureLoader().load(config.world.floorNormal, (t) => {
     t.wrapS = THREE.RepeatWrapping;
     t.wrapT = THREE.RepeatWrapping;
-    const rep = config.world.plateSize / config.world.floorTileMeters;
+    // The SAME grain size as the colour photograph, in metres. The colour map is
+    // a canvas that already contains the photo tiled at floorPhotoMeters, so the
+    // normal map -- which is the same photograph, applied directly -- has to
+    // repeat at that scale itself or the relief and the colour would be two
+    // different concretes lying on top of each other.
+    const rep = config.world.plateSize / config.world.floorPhotoMeters;
     t.repeat.set(rep, rep);
     concreteMat.normalMap = t;
     concreteMat.normalScale = new THREE.Vector2(

@@ -628,6 +628,12 @@ export const config = {
     // pulled against each other.
     floorPhoto: './assets/textures/concrete.png',
     floorPhotoStrength: 0.35,
+    // HOW BIG ONE TILE OF THE PHOTOGRAPH IS, in metres of floor. Not a pixel
+    // count and not a repeat: the plate is measured in metres and so is this,
+    // so the grain stays the same size if any of the other numbers move.
+    // At floorTileMeters (30) it was one 256-pixel image stretched over thirty
+    // metres, which is what produced the black patches.
+    floorPhotoMeters: 1.5,
     floorNormal: './assets/textures/concrete_normal.png',
     // Relief is the half of a material a colour map cannot carry, and this plate
     // has exactly one directional light on it to catch it.
@@ -3141,6 +3147,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'world.floorTileMeters',
   'world.floorTextureSize',
   'world.floorPhotoStrength',
+  'world.floorPhotoMeters',
   'world.floorNormalStrength',
   'world.floorTextureSeed',
   'world.floorBlotches',
