@@ -90,6 +90,13 @@ export function measure(frames) {
 // these would answer half the question. setup() leaves the world in `idle`;
 // wake() puts it back into `busy` without respawning anything, so both numbers
 // come off an identical world.
+// WAKING A STILL DUCK DOES NOT MAKE IT BUSY, and finding that out cost an hour.
+// ducks.postStep() keeps its own idle timer, and a duck that has been asleep has
+// that timer pinned at cfg.sleepAfter -- so a wakeUp() with no velocity behind it
+// falls straight through the backstop and is put back to sleep in the SAME
+// substep. Measured: 304 awake immediately after waking all 300, 4 awake one
+// frame later. That is correct behaviour (a real impulse comes with velocity),
+// but it means the busy case has to be made of ducks that are actually moving.
 export function wake() {
   const g = window.GAME;
   let n = 0;
@@ -97,10 +104,10 @@ export function wake() {
   return n;
 }
 
-export function both(frames) {
-  const g = window.GAME;
-  const idle = measure(frames);
-  wake();
-  const busy = measure(frames);
-  return { idle, busy, awakeAfter: g.debugStats().awake };
+// The busy world: the same factory with the ducks still in the air. settle 0
+// leaves them mid-fall and mid-collision, which is what a running factory looks
+// like and is the case a host actually pays for.
+export function setupBusy(opts) {
+  const o = opts || {};
+  return setup({ ducks: o.ducks, settle: 0 });
 }
