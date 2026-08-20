@@ -355,15 +355,106 @@ function bandTexture() {
   return tex;
 }
 
+// --- the wind, as streaks ------------------------------------------------------
+//
+// Ported from Jurek's own fan_wind_shader.gdshader. The Godot original is a
+// spatial shader with nothing Godot-specific in the maths at all -- it reads UV
+// and TIME and writes ALBEDO and ALPHA -- so the port is a rename of four
+// identifiers and a wrapper. The logic below is his, comment for comment:
+// N trails, each at a pseudo-random x from a hash of its index, flowing along
+// v, each with its own width, length and brightness, under a capsule-shaped
+// fade so the stream does not end in a rectangle.
+//
+// It replaces a scrolling band texture. The bands said "something is moving
+// this way" and nothing else; streaks say how FAST, because a streak has a
+// length and a band does not.
+const WIND_VERT = `
+varying vec2 vUvW;
+varying vec3 vColW;
+void main() {
+  vUvW = uv;
+  vColW = color;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const WIND_FRAG = `
+precision mediump float;
+uniform float uTime;
+uniform float uSpeed;
+uniform float uStrength;
+uniform vec3  uColor;
+uniform float uTrails;
+uniform float uWidth;
+uniform float uLength;
+uniform float uRandom;
+uniform float uSpawn;
+varying vec2 vUvW;
+varying vec3 vColW;
+
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+void main() {
+  vec2 uv = vUvW;
+  float trails = 0.0;
+  for (int i = 0; i < 30; i++) {
+    if (float(i) >= uTrails) break;
+    float id = float(i);
+    vec2 seed = vec2(id * 12.345, id * 67.891);
+
+    float rx = hash(seed.x + seed.y);
+    float tv = hash(seed.x * 3.14159) * 0.2;
+    rx = fract(rx + tv * sin(uTime * uSpawn * 0.3));
+    rx = mix(id / uTrails, rx, uRandom);
+
+    float toff = hash(seed.y * 19.753) * 3.0;
+    float anim = fract(uv.y - uTime * uSpeed + toff);
+
+    float w = uWidth * (0.7 + 0.6 * hash(seed.x * 7.321));
+    float line = smoothstep(w, 0.0, abs(uv.x - rx));
+
+    float len = uLength * (0.8 + 0.4 * hash(seed.y * 5.123));
+    float vis = smoothstep(0.0, 0.1, anim) * smoothstep(len, 0.0, anim);
+
+    float fade = smoothstep(0.5, 0.7, uv.y);
+    line *= vis * (1.0 - fade) * (0.6 + 0.5 * hash(seed.x * 13.579));
+    trails += line;
+  }
+
+  // The capsule fade: away at the edges and away at the far end, so a stream
+  // stops looking like a billboard with a hard border.
+  float cx = (uv.x - 0.5) * 2.0;
+  float radial = (1.0 - smoothstep(0.7, 1.0, abs(cx))) * (1.0 - smoothstep(0.7, 1.0, uv.y));
+
+  float a = trails * radial * uStrength;
+  // vColW is the per-vertex tint the stream geometry already carries, which is
+  // how one material draws every fan on the plate at its own strength.
+  gl_FragColor = vec4(uColor * vColW, a);
+  if (a < 0.002) discard;
+}
+`;
+
 export function createAirMaterial() {
   const A = config.render.airflow;
   const map = bandTexture();
-  const mat = new THREE.MeshBasicMaterial({
-    color: A.color,
-    map,
+  const W = A.wind;
+  const uniforms = {
+    uTime: { value: 0 },
+    uSpeed: { value: W.speed },
+    uStrength: { value: W.strength * A.opacity },
+    uColor: { value: new THREE.Color(A.color) },
+    uTrails: { value: W.trails },
+    uWidth: { value: W.width },
+    uLength: { value: W.length },
+    uRandom: { value: W.randomness },
+    uSpawn: { value: W.spawnRate },
+  };
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: WIND_VERT,
+    fragmentShader: WIND_FRAG,
     vertexColors: true,
     transparent: true,
-    opacity: A.opacity,
     depthWrite: false,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
@@ -375,11 +466,13 @@ export function createAirMaterial() {
   return {
     material: mat,
     advance(dt) {
-      const bands = config.render.airflow.bands;
-      mat.map.repeat.set(1, bands);
-      // Bands travel AWAY from the fan (+v), which means the offset goes down.
-      scroll = (scroll - dt * config.render.airflow.scrollPerSecond) % 1;
-      mat.map.offset.y = scroll;
+      // ONE clock for every fan on the plate. The streaks are generated in the
+      // fragment shader from uv and this number, so a hundred fans cost one
+      // uniform write a frame and no per-object work at all -- which is the
+      // same property the scrolling band texture had and the reason the port
+      // was worth doing rather than switching to particles.
+      scroll = (scroll + dt * config.render.airflow.wind.speed) % 1000;
+      mat.uniforms.uTime.value = scroll;
       return scroll;
     },
     scroll: () => scroll,

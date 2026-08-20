@@ -29,7 +29,7 @@ const CSS = `
    darker yard has no way to tell weather from dusk, and 'is it night or is it
    raining' is not a question the game should be asking them. */
 #hud-weather { position: absolute; top: 10px; right: 12px; z-index: 12;
-  font: 700 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 12px/1.35 "PublicPixel", "VT323", ui-monospace, SFMono-Regular, Menlo, monospace;
   color: rgba(232,238,255,0.75); text-align: right;
   text-shadow: 0 2px 0 rgba(0,0,0,0.65); pointer-events: none; }
 #hud-weather .w { color: #ffe9a8; }
@@ -45,10 +45,10 @@ const CSS = `
   background: linear-gradient(180deg, rgba(120,10,18,0.92) 0%, rgba(120,10,18,0.0) 100%);
   pointer-events: none; }
 #hud-contract.show { display: block; }
-#hud-contract .title { font: 800 26px/1.05 ui-monospace, SFMono-Regular, Menlo, monospace;
+#hud-contract .title { font: 800 26px/1.05 "PublicPixel", "VT323", ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #ff5a5a; letter-spacing: 0.06em; text-shadow: 0 2px 0 rgba(0,0,0,0.7); }
 #hud-contract .body { margin-top: 3px;
-  font: 700 14px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 14px/1.25 "PublicPixel", "VT323", ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #ffd7d7; text-shadow: 0 2px 0 rgba(0,0,0,0.7); }
 #hud-contract .bar { margin: 6px auto 0; width: min(420px, 60vw); height: 7px;
   background: rgba(0,0,0,0.45); border: 1px solid rgba(255,90,90,0.5); }

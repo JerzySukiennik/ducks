@@ -136,6 +136,19 @@ export const config = {
     // own cone and the BRIGHTNESS is blowers.fieldAt() evaluated on the shell,
     // so nothing in here changes where the wind is -- only how legible it is.
     airflow: {
+      // THE WIND, ported from Jurek's fan_wind_shader.gdshader. Streaks rather
+      // than bands: a band says "something is moving this way", a streak also
+      // says how fast, because a streak has a length.
+      wind: {
+        speed: 1.5,
+        strength: 0.8,
+        trails: 8,
+        width: 0.012,
+        length: 0.2,
+        randomness: 0.7,
+        spawnRate: 2.0,
+      },
+
       color: 0x9ad8ff,
       // Two knobs, and they were set by looking at the frame, not by taste: at
       // 0.5 the cone was a solid tunnel of smoke you could not see the plate
@@ -2934,6 +2947,13 @@ export const config = {
       // Below this many hits the break sound is not played. A stinger after
       // two ducks is nagging.
       breakMinHits: 5,
+      // THE STREAK BONUS. A rising pitch says the run is going; it does not say
+      // the run was worth anything. Three milestones, each paying a multiple of
+      // what the run has already earned, so the reward scales with the ducks
+      // rather than being a flat tip -- twenty-five plain ones and twenty-five
+      // good ones are not the same achievement.
+      milestones: [25, 50, 100],
+      milestonePay: [0.25, 0.5, 1.0],
     },
 
     // The tipper truck. Synthesized rather than sampled because AN ENGINE IS NOT
@@ -3159,6 +3179,13 @@ export const REQUIRED_CONFIG_KEYS = [
   'render.fanSpin.forceExponent',
   'render.fanSpin.maxTurnsPerSecond',
   'render.airflow.color',
+  'render.airflow.wind.speed',
+  'render.airflow.wind.strength',
+  'render.airflow.wind.trails',
+  'render.airflow.wind.width',
+  'render.airflow.wind.length',
+  'render.airflow.wind.randomness',
+  'render.airflow.wind.spawnRate',
   'render.airflow.opacity',
   'render.airflow.brightness',
   'render.airflow.skinShell',

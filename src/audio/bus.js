@@ -41,6 +41,12 @@ export const CLIPS = [
   // The pit combo: one hit a duck, pitched up with the run, and a break when
   // the run ends. See config.audio.combo.
   'combo_hit', 'combo_break',
+  // The three streak fanfares, and the contract siren. bonus1/2/3 escalate
+  // with the milestone rather than being interchangeable.
+  'bonus1', 'bonus2', 'bonus3', 'contract_alarm',
+  // Two more footsteps. One recording repeated at every step is a metronome;
+  // three chosen at random is walking.
+  'footstep2', 'footstep3',
   'achievement', 'box_spill', 'broom', 'build_demolish', 'build_invalid',
   'build_place', 'build_rotate', 'buy_fail', 'buy_ok', 'cart_loop', 'cash',
   'conveyor_loop', 'crank_click', 'duck_impact', 'duck_rare',

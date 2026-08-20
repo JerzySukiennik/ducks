@@ -146,6 +146,9 @@ export function createGameAudio(deps) {
   const {
     config, world, producers, collectors, conveyors, blowers, containers,
     tools, shop, placed, props, byId, player, listener,
+    // Called when a pit combo reaches one of config.audio.combo.milestones.
+    // This layer knows a streak happened; only the caller knows what money is.
+    onComboMilestone,
   } = deps;
 
   const A = config.audio;
@@ -344,6 +347,16 @@ export function createGameAudio(deps) {
     // sounds, and this is the one case where twelve in a frame must be twelve
     // notes going up. That is what the pitch is FOR.
     sfx.play('combo_hit', { rate, force: true });
+    // MILESTONES. A rising pitch says the run is going; it does not say the run
+    // was WORTH anything. Three of them, escalating, and the caller turns each
+    // into money -- so the combo stops being decoration on scoring and becomes
+    // a reason to keep the belts fed rather than wander off mid-stream.
+    const marks = A2.milestones || [];
+    for (let i = 0; i < marks.length; i++) {
+      if (comboCount !== marks[i]) continue;
+      sfx.play(i === 0 ? 'bonus1' : (i === 1 ? 'bonus2' : 'bonus3'), { gain: 1, force: true });
+      if (typeof onComboMilestone === 'function') onComboMilestone(comboCount, i);
+    }
     return { count: comboCount, rate };
   }
 
@@ -685,7 +698,10 @@ export function createGameAudio(deps) {
     // speed and the two lever positions are known.
     // The contract siren and its two answers. They live on the truck's synth
     // because the thing making the noise is a lorry.
-    contractAlarm: () => truckSynth.alarm(),
+    // The real siren, not the synthesized one. It is a fixed length where the
+    // synth adapted, and that is the trade: a recording of an actual klaxon
+    // beats two square waves at being alarming.
+    contractAlarm: () => sfx.play('contract_alarm', { gain: 1, force: true }),
     contractLoad: (done, of) => truckSynth.load(done, of),
     contractEnd: (ok) => truckSynth.result(ok),
     truckEngineOn: () => truckSynth.engineOn(),

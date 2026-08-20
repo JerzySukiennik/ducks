@@ -597,6 +597,18 @@ async function boot() {
   // missing or the browser has not granted an AudioContext yet. The simulation
   // emits and this layer listens -- src/sim/** imports nothing from src/audio/.
   const audio = createGameAudio({
+    // A pit combo hit a milestone. The audio layer knows a streak happened;
+    // only this knows what money is. Paid as a fraction of what the run has
+    // ALREADY earned, so twenty-five plain ducks and twenty-five good ones are
+    // not the same achievement -- which is the whole reason the rarity ladder
+    // exists.
+    onComboMilestone: (count, index) => {
+      const pay = config.audio.combo.milestonePay[index] || 0;
+      const earned = comboEarned * pay;
+      if (earned > 0) world.economy.add(earned, 'combo');
+      hud.showCap(count + ' IN A ROW  +$' + Math.round(earned).toLocaleString('en-US'));
+      return earned;
+    },
     config, world, producers, collectors, conveyors, blowers, containers, tools,
     shop, placed, props, byId, player,
     listener: () => player.eyePosition(),
@@ -2362,6 +2374,9 @@ async function boot() {
   // how demanding the next contract should be. Seeded at the base value so the
   // first order is askable before anything has been scored.
   let duckSample = config.economy.duckBaseValue;
+  // The running total of the current combo, and when it last grew.
+  let comboEarned = 0;
+  let comboLastAt = -1e9;
   function contractSample() { return duckSample; }
 
   // What happens on screen when a contract starts, loads and ends.
@@ -3062,7 +3077,12 @@ async function boot() {
     // so an order is asked of the factory that exists rather than of a table.
     for (const e of pitEvents) {
       if (e && e.type === 'duck' && isFinite(e.value)) duckSample += (e.value - duckSample) * 0.08;
+      // What THIS run has paid so far, for the streak bonus. Reset by the same
+      // silence that resets the combo, so the two can never disagree about
+      // which ducks belonged to which run.
+      if (e && e.type === 'duck' && isFinite(e.value)) { comboEarned += e.value; comboLastAt = simTime; }
     }
+    if (simTime - comboLastAt > config.audio.combo.breakSeconds) comboEarned = 0;
     if (contracts.active()) hud.tickContract(contracts.info()); else hud.tickEvent();
     audio.notePitEvents(pitEvents);
 

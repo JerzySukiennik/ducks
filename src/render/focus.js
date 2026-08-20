@@ -53,7 +53,7 @@ const CSS = `
   display: none; transform: translate(-50%, -50%); white-space: nowrap;
   padding: 3px 9px; background: rgba(8,12,26,0.72);
   border: 1px solid rgba(255,225,74,0.5); color: #ffe9a8;
-  font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 12px/1.2 "PublicPixel", "VT323", ui-monospace, SFMono-Regular, Menlo, monospace;
   text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 #focus-label.show { display: block; }
 #focus-label em { font-style: normal; color: rgba(232,238,255,0.6); font-weight: 500; }

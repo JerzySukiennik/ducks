@@ -86,7 +86,11 @@ export const CRT = {
   // alone, which is exactly how a terminal works. Data stays in the system
   // mono, because aligned columns of numbers are the one thing a bitmap face
   // does badly.
-  display:  '"VT323", ui-monospace, SFMono-Regular, Menlo, monospace',
+  // PublicPixel first, VT323 behind it. Both are bitmap faces with one weight;
+  // PublicPixel is the chunkier of the two and this game's interface is mostly
+  // NUMBERS -- money, a duck's value, a countdown -- which want strokes thick
+  // enough to read in a glance rather than a thin terminal face.
+  display:  '"PublicPixel", "VT323", ui-monospace, SFMono-Regular, Menlo, monospace',
   data:     'ui-monospace, SFMono-Regular, Menlo, monospace',
 
   // Size ramp. Tracking is size-specific: large bitmap text needs air between
@@ -163,6 +167,16 @@ export function injectCRT(doc) {
    arrives and every heading silently falls back. Two subsets, 14 KB together --
    latin for the interface, latin-ext for the Polish diacritics in the menu copy.
    font-display: swap so a slow disk costs a repaint, never a blank screen. */
+/* PublicPixel, shipped like VT323 is: the game must boot and read with no
+   network at all, so no interface font is ever linked from a CDN. */
+@font-face {
+  font-family: "PublicPixel";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./assets/fonts/PublicPixel.ttf") format("truetype");
+}
+
 @font-face {
   font-family: "VT323";
   font-style: normal;
