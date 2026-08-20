@@ -188,6 +188,44 @@ export function floorTexture() {
 
   ctx.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`;
   ctx.fillRect(0, 0, S, S);
+  // A PHOTOGRAPH UNDER THE PAINTING, not instead of it.
+  //
+  // Everything below this line -- the blotches, the joints, the cracks, the
+  // grain, the scuffs -- is authored and tuned, and it is what makes this floor
+  // belong to this game rather than to a texture pack. What it cannot do is
+  // material: the fine, irregular tooth of real concrete, at a scale no
+  // reasonable number of canvas operations will draw.
+  //
+  // So the photograph goes down first, multiplied into the plate's own colour so
+  // it darkens and roughens rather than recolouring, and every authored pass
+  // then runs on top of it exactly as before. It arrives LATE -- an image
+  // decode is asynchronous and this function is not -- and that is fine: the
+  // canvas is already a valid floor, and the texture is simply told to upload
+  // itself again when the photograph lands.
+  const photo = new Image();
+  photo.onload = () => {
+    try {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = w.floorPhotoStrength;
+      for (let ty = 0; ty < S; ty += photo.height) {
+        for (let tx = 0; tx < S; tx += photo.width) ctx.drawImage(photo, tx, ty);
+      }
+      ctx.restore();
+      // The authored passes again, on top of the photograph this time. They are
+      // cheap and deterministic (one seeded generator), so running them twice
+      // costs a few milliseconds once and keeps the joints and cracks ON the
+      // concrete rather than under it.
+      const rnd2 = seeded(w.floorTextureSeed);
+      paintBlotches(ctx, S, rnd2, w.floorBlotches);
+      paintJoints(ctx, S);
+      paintCracks(ctx, S, rnd2, w.floorCracks);
+      paintGrain(ctx, S, rnd2, w.floorGrain);
+      paintScuffs(ctx, S, rnd2);
+      if (floorTex) floorTex.needsUpdate = true;
+    } catch (e) { /* the canvas is already a floor; keep it */ }
+  };
+  photo.src = w.floorPhoto;
   paintBlotches(ctx, S, rnd, w.floorBlotches);
   paintJoints(ctx, S);
   paintCracks(ctx, S, rnd, w.floorCracks);
@@ -220,6 +258,24 @@ export function concrete() {
     map: floorTexture(),
     flatShading: true,
   });
+  // The normal map is the half of a photographed material that a colour map
+  // cannot carry: the plate has ONE directional light on it, and relief is the
+  // only thing that makes that light land differently across a flat surface.
+  // Loaded separately and attached when it arrives, for the same reason the
+  // photograph is -- and if it never arrives the floor is exactly what it was.
+  const nm = new THREE.TextureLoader().load(config.world.floorNormal, (t) => {
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    const rep = config.world.plateSize / config.world.floorTileMeters;
+    t.repeat.set(rep, rep);
+    concreteMat.normalMap = t;
+    concreteMat.normalScale = new THREE.Vector2(
+      config.world.floorNormalStrength, config.world.floorNormalStrength
+    );
+    concreteMat.needsUpdate = true;
+  });
+  nm.wrapS = THREE.RepeatWrapping;
+  nm.wrapT = THREE.RepeatWrapping;
   return concreteMat;
 }
 

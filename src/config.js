@@ -616,6 +616,22 @@ export const config = {
     shadowNormalBias: 0.004,
     floorTextureSize: 1024,
     floorTileMeters: 30,
+    // The photograph under the painted floor, and how much of it shows through.
+    // Multiplied in, so it darkens and roughens the plate's own colour rather
+    // than replacing it -- at 1.0 the game's concrete becomes somebody else's.
+    //
+    // 0.35 AND NOT 0.55, and the difference is the yard's brightness. Measured
+    // on the plate's own texture canvas: 79.3 mean with no photograph, 60.4 at
+    // 0.55 -- a quarter of the light gone, immediately after the sun and the
+    // hemisphere were raised by half specifically to make the yard brighter.
+    // Taking the same measurement is the only way to notice that two changes
+    // pulled against each other.
+    floorPhoto: './assets/textures/concrete.png',
+    floorPhotoStrength: 0.35,
+    floorNormal: './assets/textures/concrete_normal.png',
+    // Relief is the half of a material a colour map cannot carry, and this plate
+    // has exactly one directional light on it to catch it.
+    floorNormalStrength: 0.65,
     floorTextureSeed: 20260813,
     floorBlotches: 160,
     floorCracks: 26,
@@ -2951,7 +2967,10 @@ export const config = {
       // A combo is a run without a gap. Nothing else ends it -- not a cheap
       // duck, not the wrong pit -- because what the pitch measures is whether
       // the ducks are still coming.
-      breakSeconds: 2.5,
+      // "After a moment" -- 1.6 s. Long enough that a belt feeding one duck a
+      // second keeps its run, short enough that walking away and coming back
+      // starts a new one.
+      breakSeconds: 1.6,
       // Below this many hits the break sound is not played. A stinger after
       // two ducks is nagging.
       breakMinHits: 5,
@@ -3121,6 +3140,8 @@ export const REQUIRED_CONFIG_KEYS = [
   'world.plateFriction',
   'world.floorTileMeters',
   'world.floorTextureSize',
+  'world.floorPhotoStrength',
+  'world.floorNormalStrength',
   'world.floorTextureSeed',
   'world.floorBlotches',
   'world.floorCracks',

@@ -333,7 +333,13 @@ export function createGameAudio(deps) {
   let comboAt = -1e9;
   function comboHit() {
     const A2 = config.audio.combo;
-    const now = bus.timeMs() / 1000;
+    // THE SIMULATION CLOCK, not the audio one. bus.timeMs() is driven by the
+    // audio context, and an audio context that has not been unlocked by a
+    // gesture has a FROZEN clock -- so `now - comboAt` was always 0 and the
+    // run never ended. Measured: eight ducks, a real three-second gap, and the
+    // ninth duck carried on from nine instead of starting again. Every other
+    // clock in this file is simClock for exactly this reason.
+    const now = simClock;
     if (now - comboAt > A2.breakSeconds) {
       // Long enough gone that the last run is over. Say so once, if it was a
       // run worth having -- a break sound after two ducks is nagging.
@@ -389,7 +395,12 @@ export function createGameAudio(deps) {
   }
 
   // The pit's digestion, checked after any batch of scoring from either path.
+  // The pit's digestion. OFF while the combo is running: the burp was written
+  // to punctuate the synthesized rising note, and with a sample climbing on
+  // every single duck it is a second, unrelated voice arriving on the same
+  // event. Jurek's words: there should only be the one that rises.
   function pumpBurp() {
+    if (config.audio.combo.enabled) { scoredSinceBurp = 0; return false; }
     if (scoredSinceBurp >= A.pit.burpEveryDucks && simClock - lastBurpAt >= A.pit.burpMinSeconds) {
       scoredSinceBurp = 0;
       lastBurpAt = simClock;
