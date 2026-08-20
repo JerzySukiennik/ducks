@@ -994,7 +994,13 @@ async function boot() {
     if (!world.setPit2Edge) return null;
     if (net.isClient && net.isClient()) return world.pit2Edge();
     const e = Math.floor(Math.random() * 4) % 4;
-    return world.setPit2Edge(e);
+    world.setPit2Edge(e);
+    // AND THE FLOOR YOU CAN SEE. The colliders and the mesh keep two copies of
+    // the same four sockets, and the run has to open the same one in both --
+    // a hole in one and concrete in the other is a player falling through a
+    // floor that looks solid, somewhere different every run.
+    if (view.setPit2Edge) view.setPit2Edge(e);
+    return e;
   }
 
   // A seized machine under the crosshair. Same focus target every other prompt
@@ -3014,6 +3020,11 @@ async function boot() {
   // instant it lands. ONE switch, so nothing can be left hidden by a skip.
   let cinematicOn = false;
   let lastFrameMs = 0;
+  // Where the frame's milliseconds go, above the simulation's own breakdown in
+  // src/sim/world.js. One reused object: this is written every frame and read
+  // every frame by the overlay, so allocating it per frame would be the exact
+  // fault the instrumentation exists to find.
+  const perfSplit = { preSimMs: 0, simMs: 0, viewMs: 0, drawMs: 0, _afterStepAt: 0 };
   function setCinematicChrome(on) {
     cinematicOn = !!on;
     // Nothing is hidden HERE. src/cutscene.js owns the one switch -- a single
@@ -3060,8 +3071,21 @@ async function boot() {
     // player joins or leaves a room and a missed event would leave a client
     // quietly minting money. See pit.setScoring().
     if (world.pit && world.pit.setScoring) world.pit.setScoring(!(net.isClient && net.isClient()));
+    // WHAT physMs HAS ALWAYS ACTUALLY BEEN. It is measured from the top of
+    // frame(), so it is not "the physics": it is every piece of game logic that
+    // runs BEFORE the step (input, the player, the collider filters, the
+    // container/gamble/tool syncs, applyStats) plus the step itself. That is the
+    // right number to hand the scaler -- none of it gets cheaper when the buffer
+    // shrinks -- but it is the wrong number to optimise against, because it
+    // hides which half is expensive. So the two halves are now measured apart
+    // and only their sum goes to perf.
+    const tStep = performance.now();
     world.step(dt);
-    const physMs = performance.now() - t0;
+    const tAfterStep = performance.now();
+    perfSplit.preSimMs = tStep - t0;
+    perfSplit.simMs = tAfterStep - tStep;
+    perfSplit._afterStepAt = tAfterStep;
+    const physMs = tAfterStep - t0;
     perf.setPhysMs(physMs);
     simTime += dt;
 
@@ -3319,7 +3343,16 @@ async function boot() {
     // highlight say what is happening far better than a second outline would.
     focus.update(view.camera, view.aim(),
       !cinematic && !shopUI.isOpen() && !demolishing && !isBuildable(hotbar.current()));
+    const tDraw = performance.now();
     renderer.render(view.scene, view.camera);
+    // The draw call itself, separated from everything the view layer did to get
+    // ready for it. The measured claim in config.render is that pixels are free
+    // here; this is the number that either keeps proving it or stops.
+    perfSplit.drawMs = performance.now() - tDraw;
+    // Everything between the step and the draw: the pit's events, the HUD, the
+    // avatars, the instance pools, the audio pass, focus. Rendering work that is
+    // not the render call.
+    perfSplit.viewMs = tDraw - perfSplit._afterStepAt;
     frameNo += 1;
 
     if (source === 'raf') {
@@ -3714,6 +3747,14 @@ async function boot() {
     }
   });
 
+  // Zero on a client and in single player: neither runs a host tick, so there is
+  // no such cost to report and reporting one would be a lie the overlay tells
+  // every frame.
+  function netTickMs() {
+    const c = net.hostCost ? net.hostCost() : null;
+    return c ? c.lastTotalMs : 0;
+  }
+
   function stats() {
     const pos = player.position();
     const ws = world.stats();
@@ -3721,8 +3762,27 @@ async function boot() {
       fps: perf.fps,
       frameMs: perf.frameMs,
       physMs: perf.physMs,
+      // The same physMs, split. preSim is the game logic ahead of the step; sim
+      // is world.step(dt) alone; view is everything between the step and the
+      // draw; draw is the render call. solver/hooks/ctrl/post come from inside
+      // world.step's substep loop and add up to sim.
+      preSimMs: perfSplit.preSimMs,
+      simMs: perfSplit.simMs,
+      viewMs: perfSplit.viewMs,
+      drawMs: perfSplit.drawMs,
+      substeps: ws.substeps || 0,
+      solverMs: ws.solverMs || 0,
+      hooksMs: ws.hooksMs || 0,
+      ctrlMs: ws.ctrlMs || 0,
+      postMs: ws.postMs || 0,
+      restMs: ws.restMs || 0,
+      // Off-frame, on the same thread: the host's reconcile-and-encode tick.
+      netTickMs: netTickMs(),
       drawCalls: renderer.info.calls,
       tris: renderer.info.triangles,
+      geometries: renderer.memory.geometries,
+      textures: renderer.memory.textures,
+      programs: renderer.memory.programs,
       frame: frameNo,
       simTime,
       bufferWidth: renderer.bufferWidth,
@@ -3860,6 +3920,46 @@ async function boot() {
       return stats();
     },
     debugStats: stats,
+    // THE MEASURING INSTRUMENT. Steps the real frame N times and averages the
+    // breakdown over all of them, plus the 95th percentile of the whole frame --
+    // because a mean hides exactly the single 150 ms frame a player notices.
+    // rAF is dead in a hidden tab, so this is the only way to profile head-down,
+    // and it drives the same frame() the player does rather than a second path
+    // that could disagree with it.
+    debugPerfSample(frames) {
+      const n = Math.max(1, Math.round(Number(frames) || 120));
+      const keys = ['frameMs', 'physMs', 'preSimMs', 'simMs', 'viewMs', 'drawMs',
+        'solverMs', 'hooksMs', 'ctrlMs', 'postMs', 'restMs', 'netTickMs', 'substeps'];
+      const sum = {};
+      for (const k of keys) sum[k] = 0;
+      const wall = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = performance.now();
+        loop.step(config.loop.fixedDt);
+        wall[i] = performance.now() - t;
+        const s = stats();
+        for (const k of keys) sum[k] += Number(s[k]) || 0;
+      }
+      const out = { frames: n };
+      // frameMs from perf is 0 head-down (it is fed only by rAF samples), so the
+      // wall clock around loop.step is the honest per-frame total here.
+      for (const k of keys) out[k] = sum[k] / n;
+      const sorted = wall.slice().sort((a, b) => a - b);
+      out.wallMeanMs = wall.reduce((a, b) => a + b, 0) / n;
+      out.wallP95Ms = sorted[Math.min(n - 1, Math.floor(n * 0.95))];
+      out.wallMaxMs = sorted[n - 1];
+      const s = stats();
+      out.bodies = s.bodies;
+      out.awake = s.awake;
+      out.ducksLive = s.ducksLive;
+      out.ducksSleeping = s.ducksSleeping;
+      out.drawCalls = s.drawCalls;
+      out.tris = s.tris;
+      out.programs = s.programs;
+      out.geometries = s.geometries;
+      out.textures = s.textures;
+      return out;
+    },
     lobby,
     avatars,
     summaryUI,

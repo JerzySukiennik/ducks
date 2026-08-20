@@ -103,6 +103,34 @@ function plateGeometry() {
   }
   shape.holes.push(hole);
 
+  // AND THE SECOND PIT'S FOUR SOCKETS, all of them, always.
+  //
+  // The colliders already cut all four and lid three (src/sim/world.js): the
+  // plate is built once at boot and which socket is open is rolled per run, so
+  // cutting the open one later would mean rebuilding the floor mid-session.
+  // The MESH did not get the same treatment, and the result is the worst
+  // possible pairing -- a hole you can fall through with concrete drawn over
+  // it. At a place that moves every run, which is exactly how it was reported:
+  // falling through the floor somewhere different each time.
+  //
+  // So the mesh cuts all four as well, and three of them get a lid drawn back
+  // in (createSocketLids below) to match the three colliders that are solid.
+  // One rule, one set of four, two representations that cannot disagree.
+  if (config.pit2 && config.pit2.enabled) {
+    const d = config.pit2.distance;
+    const hh = config.pit2.plateHoleHalf;
+    const centres = [[0, -d], [d, 0], [0, d], [-d, 0]];
+    for (const [cx2, cz2] of centres) {
+      const sq = new THREE.Path();
+      sq.moveTo(cx2 - hh, -(cz2 - hh));
+      sq.lineTo(cx2 + hh, -(cz2 - hh));
+      sq.lineTo(cx2 + hh, -(cz2 + hh));
+      sq.lineTo(cx2 - hh, -(cz2 + hh));
+      sq.closePath();
+      shape.holes.push(sq);
+    }
+  }
+
   const g = new THREE.ShapeGeometry(shape);
   g.rotateX(-Math.PI / 2);
 
@@ -259,6 +287,34 @@ export function createView(aspect) {
 
   const plate = new THREE.Mesh(plateGeometry(), concrete());
   plate.name = 'plate';
+  // The three lids that fill the sockets the run did not open. Same concrete,
+  // same height, one mesh each so a single visibility flag matches the collider
+  // flag the simulation sets on its own copy.
+  const socketLids = [];
+  if (config.pit2 && config.pit2.enabled) {
+    const d = config.pit2.distance;
+    const hh = config.pit2.plateHoleHalf;
+    const centres = [[0, -d], [d, 0], [0, d], [-d, 0]];
+    for (const [cx2, cz2] of centres) {
+      const g = new THREE.PlaneGeometry(hh * 2, hh * 2);
+      g.rotateX(-Math.PI / 2);
+      // The same UVs the plate uses, so a lid is indistinguishable from the
+      // floor around it rather than a square of differently-scaled concrete.
+      const pos = g.attributes.position;
+      const uv = new Float32Array(pos.count * 2);
+      for (let i = 0; i < pos.count; i++) {
+        uv[i * 2] = (pos.getX(i) + cx2) / config.world.plateSize + 0.5;
+        uv[i * 2 + 1] = (pos.getZ(i) + cz2) / config.world.plateSize + 0.5;
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      const lid = new THREE.Mesh(g, concrete());
+      lid.position.set(cx2, 0, cz2);
+      lid.name = 'socketLid';
+      lid.receiveShadow = true;
+      socketLids.push(lid);
+      scene.add(lid);
+    }
+  }
   // The plate is the shadow catcher. It never casts: it is a flat slab whose
   // only face points at the light, so a cast pass over it draws 180 m of
   // geometry that can shadow nothing.
@@ -420,6 +476,15 @@ export function createView(aspect) {
     scene, camera, setAspect, updateCamera, addBox, setPose, add, aim,
     plate, decals, sky, horizon, blackHole, dispose,
     sun, hemi,
+    // Which socket the run opened: that lid comes off and the other three stay.
+    // Called with the same number src/sim/world.js sets its colliders from, so
+    // the floor you can see and the floor you can stand on cannot disagree.
+    setPit2Edge(edge) {
+      const e = ((Math.round(Number(edge) || 0) % 4) + 4) % 4;
+      for (let i = 0; i < socketLids.length; i++) socketLids[i].visible = i !== e;
+      return e;
+    },
+    socketLidCount: () => socketLids.length,
     // THE SKY, SET FROM OUTSIDE. src/sim/worldclock.js decides what time it is
     // and what the weather is doing; this turns those numbers into a light
     // rig. It is deliberately dumb -- it does not know what a storm is, only

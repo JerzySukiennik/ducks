@@ -180,6 +180,18 @@ export function createRenderer(container) {
     get bufferWidth() { return bufferWidth; },
     get bufferHeight() { return height; },
     get info() { return renderer.info.render; },
+    // What is RESIDENT, as opposed to what was drawn. A geometry or texture
+    // count that only ever climbs is a leak, and a leak is invisible in the
+    // draw-call number that sits beside it. `programs` is the compiled shader
+    // count: a jump in it mid-session is a material that was never warmed.
+    get memory() {
+      const m = renderer.info.memory;
+      return {
+        geometries: m.geometries,
+        textures: m.textures,
+        programs: renderer.info.programs ? renderer.info.programs.length : 0,
+      };
+    },
     get grainCanvas() { return grain; },
     get grainOpacity() { return grainOpacity(); },
     setGrainAmount(a) {

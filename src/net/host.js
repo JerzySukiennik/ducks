@@ -612,10 +612,28 @@ export function createHost({ session, game, onEvent }) {
     // After the diffs, never before: within one tick a client must hear what
     // changed and only then be told what the whole set is, or the bitmap would
     // describe a world one message older than the messages beside it.
+    const tSend = now();
     sendLiveness(t);
     collectPlayers(t);
     sendFrames(t);
+    const tEnd = now();
+    // THE HOST'S SHARE OF THE MAIN THREAD, and it is invisible from inside
+    // frame(). This tick runs on the worker clock, not on rAF, so none of it is
+    // inside physMs -- but it is the same thread, so every millisecond spent
+    // here is a millisecond the next frame does not get. A host whose frames run
+    // long while its physics breakdown looks cheap is being eaten here, and
+    // before this counter existed there was no way to see it.
+    cost.lastTotalMs = tEnd - t;
+    cost.lastEncodeMs = tEnd - tSend;
+    cost.lastReconcileMs = tSend - t;
+    cost.totalMs += cost.lastTotalMs;
+    cost.encodeMs += cost.lastEncodeMs;
+    cost.ticks++;
   }
+
+  // Accumulated so a rate can be read over a window (ms of main thread per
+  // second of wall clock), not just the last tick's spike.
+  const cost = { lastTotalMs: 0, lastReconcileMs: 0, lastEncodeMs: 0, totalMs: 0, encodeMs: 0, ticks: 0 };
 
   const clock = createClock(N.hostTickMs, tick);
 
@@ -805,6 +823,19 @@ export function createHost({ session, game, onEvent }) {
     broadcast,
     sendTo,
     resendSnapshot: sendSnapshot,
+    // What the host tick costs the main thread. `avgTotalMs` is per tick;
+    // multiply by the tick rate for the share of a second it eats.
+    cost() {
+      return {
+        lastTotalMs: cost.lastTotalMs,
+        lastReconcileMs: cost.lastReconcileMs,
+        lastEncodeMs: cost.lastEncodeMs,
+        ticks: cost.ticks,
+        avgTotalMs: cost.ticks ? cost.totalMs / cost.ticks : 0,
+        avgEncodeMs: cost.ticks ? cost.encodeMs / cost.ticks : 0,
+      };
+    },
+    resetCost() { cost.totalMs = 0; cost.encodeMs = 0; cost.ticks = 0; },
     // Manual pump, for a test that wants a tick without waiting for the clock.
     tick,
     stats(t) {

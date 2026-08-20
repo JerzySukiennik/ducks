@@ -261,29 +261,20 @@ export function concrete() {
     map: floorTexture(),
     flatShading: true,
   });
-  // The normal map is the half of a photographed material that a colour map
-  // cannot carry: the plate has ONE directional light on it, and relief is the
-  // only thing that makes that light land differently across a flat surface.
-  // Loaded separately and attached when it arrives, for the same reason the
-  // photograph is -- and if it never arrives the floor is exactly what it was.
-  const nm = new THREE.TextureLoader().load(config.world.floorNormal, (t) => {
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    // The SAME grain size as the colour photograph, in metres. The colour map is
-    // a canvas that already contains the photo tiled at floorPhotoMeters, so the
-    // normal map -- which is the same photograph, applied directly -- has to
-    // repeat at that scale itself or the relief and the colour would be two
-    // different concretes lying on top of each other.
-    const rep = config.world.plateSize / config.world.floorPhotoMeters;
-    t.repeat.set(rep, rep);
-    concreteMat.normalMap = t;
-    concreteMat.normalScale = new THREE.Vector2(
-      config.world.floorNormalStrength, config.world.floorNormalStrength
-    );
-    concreteMat.needsUpdate = true;
-  });
-  nm.wrapS = THREE.RepeatWrapping;
-  nm.wrapT = THREE.RepeatWrapping;
+  // NO NORMAL MAP ON THE PLATE, and it was tried.
+  //
+  // The plate is a ShapeGeometry: one square with holes cut in it, triangulated
+  // into a handful of very large, very skinny triangles fanning around each
+  // hole. A normal map needs tangents, this geometry has none, and three.js
+  // then derives them from screen-space derivatives -- which on triangles that
+  // size is degenerate in places and flips the normal. A flipped normal under a
+  // single directional light is a black patch, and a black patch on a concrete
+  // floor reads exactly like a hole in it, appearing and disappearing as the
+  // camera moves. Reported as holes in the floor at random places.
+  //
+  // The relief is worth having and this is not the geometry to have it on. The
+  // photograph in the colour map stays; the file stays on disk for the day the
+  // plate is rebuilt out of tiles that have tangents.
   return concreteMat;
 }
 

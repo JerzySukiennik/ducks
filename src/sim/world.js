@@ -57,6 +57,12 @@ export const SIM_CONFIG_KEYS = [
   'economy.duckBaseValue',
 ];
 
+// One clock for every measurement in this file, resolved once rather than
+// re-tested per call inside the substep loop.
+const nowMs = (typeof performance !== 'undefined' && performance.now)
+  ? () => performance.now()
+  : () => Date.now();
+
 function num(root, path) {
   let node = root;
   const parts = path.split('.');
@@ -111,6 +117,7 @@ function resolveCfg(cfg) {
     jumpSpeed: num(c, 'player.jumpSpeed'),
     plateSize: num(c, 'world.plateSize'),
     plateFriction: num(c, 'world.plateFriction'),
+    plateSeamOverlap: num(c, 'world.plateSeamOverlap'),
     plateThickness: num(c, 'world.plateThickness'),
   };
 }
@@ -310,7 +317,31 @@ export async function createWorld(cfg, opts) {
         if (Math.abs(mx - hole.x) < hole.h && Math.abs(mz - hole.z) < hole.h) { inHole = true; break; }
       }
       if (inHole) continue;
-      if (plateSlab(xs[i], xs[i + 1], zs[j], zs[j + 1])) plateSlabCount++;
+      // OVERLAP THE NEIGHBOURS, never the holes.
+      //
+      // Two boxes that share an edge exactly are two boxes with a seam of zero
+      // width between them, and a swept capsule that lands on that seam can be
+      // depenetrated into it rather than out of it. It is the classic way a
+      // character controller falls through a floor made of tiles, and this
+      // floor went from four tiles to sixty-eight when the second pit's sockets
+      // were cut -- which multiplied the number of seams by seventeen.
+      //
+      // So each cell grows by a couple of centimetres towards any neighbour
+      // that exists, and not one micron towards a hole: overlapping static
+      // boxes cost nothing and change nothing, where a shrunken hole would be a
+      // pit that stops eating ducks.
+      const e = P.plateSeamOverlap;
+      const grow = (mx2, mz2) => {
+        for (const hole of plateHoles) {
+          if (Math.abs(mx2 - hole.x) < hole.h && Math.abs(mz2 - hole.z) < hole.h) return 0;
+        }
+        return e;
+      };
+      const x0 = xs[i] - grow(xs[i] - e, mz);
+      const x1 = xs[i + 1] + grow(xs[i + 1] + e, mz);
+      const z0 = zs[j] - grow(mx, zs[j] - e);
+      const z1 = zs[j + 1] + grow(mx, zs[j + 1] + e);
+      if (plateSlab(x0, x1, z0, z1)) plateSlabCount++;
     }
   }
 
@@ -372,6 +403,16 @@ export async function createWorld(cfg, opts) {
   let simTime = 0;
   let physMs = 0;
   let disposed = false;
+
+  // Where the simulation's milliseconds actually go. physMs on its own says the
+  // frame was expensive; it never says whether the money went to the solver, to
+  // the automation hooks, or to the post-step bookkeeping -- and those three
+  // have nothing in common as fixes. Filled in by run(), one object reused
+  // forever (this is read every frame; a fresh object per frame would be a
+  // per-frame allocation added by the tool meant to find per-frame allocations).
+  const breakdown = {
+    substeps: 0, ctrlMs: 0, hooksMs: 0, solverMs: 0, postMs: 0, restMs: 0, totalMs: 0,
+  };
 
   // Debug counter for the one rule that silently breaks physics: Rapier ignores
   // impulses on a sleeping body, and applying one does NOT wake it. Every
@@ -524,32 +565,61 @@ export async function createWorld(cfg, opts) {
     if (!(dt > 0) || !isFinite(dt)) return;
     accumulator += dt;
 
-    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const t0 = nowMs();
     let n = 0;
+    let ctrl = 0;
+    let hooks = 0;
+    let solver = 0;
+    let post = 0;
     for (let i = 0; i < players.length; i++) players[i]._beginFrame();
     while (accumulator >= P.fixedDt && n < limit) {
+      const tA = nowMs();
       for (let i = 0; i < players.length; i++) players[i]._fixedUpdate(P.fixedDt);
       // Slot 0 is holds[0] and is stepped first, so with one player this is the
       // same call in the same place in the substep it always was.
       for (let i = 0; i < holds.length; i++) holds[i]._fixedUpdate(P.fixedDt);
+      const tB = nowMs();
       // Automation (belts, fans, ...) pushes here, inside the substep loop and
       // before the solver runs: an impulse applied after world.step() would be
       // integrated a whole substep late and read as mushy.
       for (let i = 0; i < fixedHooks.length; i++) fixedHooks[i](P.fixedDt);
+      const tC = nowMs();
       world.step();
+      const tD = nowMs();
       for (let i = 0; i < holds.length; i++) holds[i]._postStep();
       ducks._postStep(P.fixedDt);
       pit._postStep(P.fixedDt);
       if (pit2) pit2._postStep(P.fixedDt);
       for (let i = 0; i < players.length; i++) players[i]._postStep();
+      const tE = nowMs();
+      ctrl += tB - tA;
+      hooks += tC - tB;
+      solver += tD - tC;
+      post += tE - tD;
       accumulator -= P.fixedDt;
       simTime += P.fixedDt;
       n++;
     }
     // Drop the backlog so a long stall cannot spiral into a substep avalanche.
     if (accumulator >= P.fixedDt) accumulator = 0;
-    const t1 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    if (n > 0) physMs = t1 - t0;
+    const t1 = nowMs();
+    if (n > 0) {
+      physMs = t1 - t0;
+      // The same total, split by who spent it. `rest` is what run() itself costs
+      // outside the four measured spans (the accumulator arithmetic and the
+      // _beginFrame pass), and it exists so the four numbers plus rest always
+      // add back up to physMs -- a breakdown that does not reconcile is a
+      // breakdown nobody can trust.
+      breakdown.substeps = n;
+      breakdown.ctrlMs = ctrl;
+      breakdown.hooksMs = hooks;
+      breakdown.solverMs = solver;
+      breakdown.postMs = post;
+      breakdown.totalMs = physMs;
+      breakdown.restMs = Math.max(0, physMs - ctrl - hooks - solver - post);
+    } else {
+      breakdown.substeps = 0;
+    }
   }
 
   function addPlayer(spawn) {
@@ -600,6 +670,12 @@ export async function createWorld(cfg, opts) {
       awake: bodies - sleeping,
       sleeping,
       physMs,
+      substeps: breakdown.substeps,
+      ctrlMs: breakdown.ctrlMs,
+      hooksMs: breakdown.hooksMs,
+      solverMs: breakdown.solverMs,
+      postMs: breakdown.postMs,
+      restMs: breakdown.restMs,
       simTime,
       bootBodies,
       ducksLive: d.live,
@@ -670,6 +746,10 @@ export async function createWorld(cfg, opts) {
     applyImpulse,
     onFixedUpdate,
     fixedHookCount: () => fixedHooks.length,
+    // A copy, not the live object: a caller that held the internal one would see
+    // it change under them mid-read, and one of those callers is a debug hook
+    // that prints it.
+    physBreakdown: () => ({ ...breakdown }),
     wakeDuck: ducks.wakeDuck,
     counters: () => ({ ...counters }),
     bootBodyCount: () => bootBodies,

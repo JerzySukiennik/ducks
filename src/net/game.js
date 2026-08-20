@@ -1312,6 +1312,11 @@ export function createNetGame(deps) {
       return true;
     },
     setPit2Edge(edge) {
+      // Both halves: the colliders in the simulation and the lid in the scene.
+      // A client that moved only one of them would be standing on a floor whose
+      // hole is somewhere else, which is the exact bug this pairing exists to
+      // stop.
+      if (view && typeof view.setPit2Edge === 'function') view.setPit2Edge(edge);
       return world && typeof world.setPit2Edge === 'function' ? world.setPit2Edge(edge) : null;
     },
     // Written by src/net/client.js off the host's WELCOME. The host never calls
@@ -1865,6 +1870,10 @@ export function createNetGame(deps) {
     },
     // Test surface: a host tick without waiting for the worker clock.
     tick() { return host ? host.tick() : null; },
+    // What the host tick costs this machine's main thread; null off-host,
+    // because a client and a single player do not run one.
+    hostCost() { return host && host.cost ? host.cost() : null; },
+    resetHostCost() { if (host && host.resetCost) host.resetCost(); },
     _host: () => host,
     _client: () => client,
   };

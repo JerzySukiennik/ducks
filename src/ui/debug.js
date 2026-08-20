@@ -29,12 +29,23 @@ export function createDebugOverlay(container) {
         `fps      ${fmt(s.fps, 0)}`,
         `frame    ${fmt(s.frameMs, 2)} ms`,
         `phys     ${fmt(s.physMs, 2)} ms`,
+        // The breakdown, and it reads top-down in the order the frame runs.
+        // `phys` above is preSim + sim, which is what the adaptive scaler
+        // subtracts; the four lines below are where those milliseconds went.
+        `  pre    ${fmt(s.preSimMs, 2)} ms   sim ${fmt(s.simMs, 2)} ms`,
+        `  solv   ${fmt(s.solverMs, 2)} ms  hook ${fmt(s.hooksMs, 2)} ms`,
+        `  ctrl   ${fmt(s.ctrlMs, 2)} ms  post ${fmt(s.postMs, 2)} ms`,
+        `  view   ${fmt(s.viewMs, 2)} ms  draw ${fmt(s.drawMs, 2)} ms`,
+        s.netTickMs > 0 ? `  net    ${fmt(s.netTickMs, 2)} ms (host tick)` : '',
+        `substep  ${s.substeps}`,
         `calls    ${s.drawCalls}`,
         `tris     ${s.tris}`,
+        `mem      geo ${s.geometries} tex ${s.textures} prog ${s.programs}`,
         `buffer   ${s.bufferWidth}x${s.bufferHeight}`,
         `pos      ${fmt(s.playerX, 2)} ${fmt(s.playerY, 2)} ${fmt(s.playerZ, 2)}`,
         `ground   ${s.grounded ? 'yes' : 'no'}`,
         `bodies   ${s.bodies} (awake ${s.awake})`,
+        `ducks    ${s.ducksLive} live, ${s.ducksSleeping} asleep`,
         `frame#   ${s.frame}  t ${fmt(s.simTime, 2)}s`,
         s.errors ? `errors   ${s.errors}` : '',
       ].filter(Boolean).join('\n');

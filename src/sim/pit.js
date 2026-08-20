@@ -151,6 +151,15 @@ export function createPit({ RAPIER, world, cfg, groups, ducks, economy, players,
 
     // Players: falling in is free. After a couple of seconds of fall the player
     // is put back near the tube instead of dropping forever.
+    //
+    // AND IT DOES NOT CARE HOW THEY GOT DOWN THERE. The test is a HEIGHT and
+    // nothing else -- half a metre below the pit's mouth, for two seconds --
+    // so a player who went through the floor somewhere the floor was not
+    // supposed to have a hole is caught by the same net as one who walked into
+    // the pit on purpose. That is worth writing down rather than leaving as an
+    // accident of how the check happens to be shaped: in a game with no save
+    // and no respawn button, a catch net that had to know the CAUSE would be a
+    // catch net with a list of causes somebody has to keep up to date.
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       const body = world.getRigidBody(p.handle);

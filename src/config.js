@@ -445,6 +445,11 @@ export const config = {
     // to 0.32 alone moved the pair only from 0.75 to 0.61 and a swept duck still
     // barely travelled (0.116 m -> 0.144 m on a 2 m/s sweep). Both halves have
     // to come down for the broom to feel like it is pushing something.
+    // How far each plate cell grows towards its neighbours. Two boxes sharing an
+    // edge exactly leave a zero-width seam, and a swept capsule that lands on
+    // one can be pushed INTO it -- the classic way a character falls through a
+    // tiled floor. Never grown towards a hole; see the loop in world.js.
+    plateSeamOverlap: 0.02,
     plateFriction: 0.45,
     // THE PLATE IS DARKER THAN IT WAS (0x5b5f63 -> 0x474a4d), AND IT IS THE
     // OTHER HALF OF THE OBJECT-VERSUS-GROUND FIX.
@@ -2939,7 +2944,22 @@ export const config = {
     },
 
     // Tier index at or above which a scored duck is worth its own fanfare.
-    rareTier: 4,
+    // 11, NOT 4, and the number moved because the LADDER moved under it.
+    //
+    // 4 was tuned against seven tiers, where the top three were 80 weights out
+    // of 8000 -- one duck in a hundred, which is what a sting is for. The rarity
+    // ladder is 25 rungs now and rung 4 is a duck worth SEVEN: measured against
+    // the shipped weights, 17.85% of everything that goes down the pit, or one
+    // duck in six. That is not a sting, it is a second sound playing constantly
+    // underneath the combo -- which is exactly what Jurek reported hearing.
+    //
+    //   rung  4  (7)      17.85%   1 in 6      what it was doing
+    //   rung  8  (46)      3.18%   1 in 31
+    //   rung 11  (196)     0.87%   1 in 115    shipped -- a little rarer than
+    //                                          the old 1 in 100, and a duck
+    //                                          worth 196 is worth a noise
+    //   rung 14  (825)     0.24%   1 in 420
+    rareTier: 11,
     // Broom sweeps are continuous; the sample is not.
     sweepIntervalSeconds: 0.42,
     // The scoop and the beam had no sound at all: the event reached the audio
@@ -3143,6 +3163,7 @@ export const REQUIRED_CONFIG_KEYS = [
   'gamble.seed',
   'world.plateSize',
   'world.plateThickness',
+  'world.plateSeamOverlap',
   'world.plateFriction',
   'world.floorTileMeters',
   'world.floorTextureSize',
