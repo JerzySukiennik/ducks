@@ -766,21 +766,27 @@ export const config = {
 
   ducks: {
     max: 300,
-    // MEASURED off assets/models/duck.glb at duckRender.scale 0.8, not guessed.
-    // The model's long axis is +Z and duckRender.yaw turns it onto the collider's
-    // X, so: X = length, Y = height, Z = width.
+    // RE-MEASURED off Jurek's duck.glb at duckRender.scale 0.8. The model's
+    // long axis is +Z and duckRender.yaw turns it onto the collider's X, so:
+    // X = length, Y = height, Z = width.
     //
-    // Vertical profile of the mesh, in bands of 5 cm (length x width):
-    //   0.00-0.10  narrow keel        0.06-0.08 x 0.06-0.11
-    //   0.10-0.25  the BODY, widest   0.15-0.18 x 0.14
-    //   0.25-0.39  head and neck      0.08-0.13 x 0.08-0.09
-    // Two boxes, because that is what the shape actually is.
-    halfExtentX: 0.089,
-    halfExtentY: 0.13,
-    halfExtentZ: 0.073,
-    // Second collider for the head. headHalfY 0 disables it entirely.
+    // The mesh is 0.1402 x 0.2199 x 0.2526 raw, so at 0.8 it is
+    // 0.112 x 0.176 x 0.202 in the world. It is a different animal from the
+    // one these numbers were written for: nearly the same LENGTH (0.202 against
+    // 0.195) and barely half the HEIGHT (0.176 against 0.314) -- a duck sitting
+    // rather than a duck standing. Every number below moved with it, because a
+    // collider measured off a mesh that is no longer there is a duck that
+    // hovers.
+    halfExtentX: 0.101,
+    halfExtentY: 0.088,
+    halfExtentZ: 0.056,
+    // Second collider for the head. headHalfY 0 disables it entirely, and it is
+    // OFF now: the old duck was a body with a neck and a head on top of it, and
+    // two boxes were what that shape actually was. This one is a single sitting
+    // blob with no neck at all, so a second box would be a box around nothing --
+    // and it is 300 fewer colliders in the world for free.
     headHalfX: 0.0625,
-    headHalfY: 0.063,
+    headHalfY: 0,
     headHalfZ: 0.046,
     // Offsets from the body collider's centre, which sits 0.13 above the duck's
     // underside. The head's centre is 0.323 up, hence +0.193.
@@ -1329,9 +1335,11 @@ export const config = {
   duckRender: {
     scale: 0.8,
     yaw: 1.5707963268,   // model long axis is +Z; the collider's is +X
-    // The body collider's centre is now 0.13 above the duck's underside (it was
-    // 0.09 before the head box went in), so the mesh drops by that instead.
-    yOffset: -0.13,      // model stands on y=0; drop it to the collider's base
+    // The body collider's centre is halfExtentY above the duck's underside, and
+    // the mesh stands on y=0 in the file, so it drops by exactly that. It moved
+    // from -0.13 to -0.088 with the new model's height; leaving it would have
+    // buried every duck four centimetres into the plate.
+    yOffset: -0.088,     // model stands on y=0; drop it to the collider's base
     tierScaleStep: 0.045,
     topTierScale: 1.5,
     topTierPulseHz: 1.6,
