@@ -83,7 +83,20 @@ export function createProcessors({ ducks, applyImpulse, list, byId, config, econ
         // middle of the ladder rather than at either end: at 0 a sorter sends
         // everything one way and looks broken, and at the top it does the same
         // in the other direction.
-        u = { key: rec.key, id: rec.id, threshold: Math.floor(rungs.length / 2), eaten: [], timer: 0, side: 1, holding: null, hold: 0 };
+        // WHERE THE LINE STARTS, and it is not the same answer for all three.
+        //
+        // A SORTER splits a stream, so the middle of the ladder is the only
+        // defensible default: at either end it sends everything one way and
+        // looks broken.
+        //
+        // A REFINER and an INCUBATOR CONSUME. Starting them halfway up means a
+        // machine that silently ignores every duck a player is likely to feed
+        // it on the day they buy it -- and you buy a refiner precisely to do
+        // something with the cheap ducks. They start at the bottom and the
+        // player raises the line when they have something worth protecting.
+        const mid = Math.floor(rungs.length / 2);
+        u = { key: rec.key, id: rec.id, threshold: row.kind === SORTER_KIND ? mid : 0,
+          eaten: [], timer: 0, side: 1, holding: null, hold: 0 };
         units.set(rec.key, u);
       }
       u.rec = rec;

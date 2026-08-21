@@ -1103,14 +1103,21 @@ async function boot() {
     if (!t || typeof t.key !== 'number') return null;
     const rec = placed.objects.find((o) => o.key === t.key);
     if (!rec) return null;
-    return rec.kind === 'sorter' || rec.kind === 'refiner' ? rec : null;
+    // ALL THREE, and the incubator was missing. It has the same line every
+    // other processor has and no way at all to move it: E did nothing when you
+    // pointed at one, so it sat at whatever it was born with -- rung 12, a duck
+    // worth 316 -- and silently refused everything a player was likely to feed
+    // it. A machine that cannot be set is a machine that does not work.
+    const KINDS = ['sorter', 'refiner', 'incubator'];
+    return KINDS.indexOf(rec.kind) >= 0 ? rec : null;
   }
 
   function stepProcessor(rec) {
     const next = processors.stepThreshold(rec.key, 1);
     if (next === null) return null;
     const value = config.rarity.multipliers[next];
-    hud.showCap((rec.kind === 'sorter' ? 'Sorting at ' : 'Refining from ')
+    const verb = { sorter: 'Sorting at ', refiner: 'Refining from ', incubator: 'Hatching from ' };
+    hud.showCap((verb[rec.kind] || 'Set to ')
       + value.toLocaleString('en-US') + ' and up');
     audio.rotated();
     return next;
@@ -3924,6 +3931,12 @@ async function boot() {
     },
     debugStats: stats,
     debugWarmup() { return lastWarmup; },
+    // A/B for the broad-phase epoch skip, flipped at runtime so before and after
+    // can be interleaved inside one page load. See setHashEpochSkip().
+    async debugSetHashEpochSkip(on) {
+      const m = await import('./sim/conveyors.js');
+      return m.setHashEpochSkip(on);
+    },
     // THE MEASURING INSTRUMENT. Steps the real frame N times and averages the
     // breakdown over all of them, plus the 95th percentile of the whole frame --
     // because a mean hides exactly the single 150 ms frame a player notices.
