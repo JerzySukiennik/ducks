@@ -1,7 +1,93 @@
+// SHARED RULES FOR THE WHOLE gzowos-games DATABASE, and every project that
+// writes to it deploys THIS FILE.
+//
+// The Google Cloud project quota on this account is used up, so Ducks, SatisFarm,
+// the wyspy walkers and Sentinel City all live in one Realtime Database. A
+// deploy replaces the ENTIRE rule set -- there is no per-branch deploy -- so a
+// project that ships only its own branch silently deletes every other game's
+// rules and breaks them all. That is exactly what happened on 21 August: the
+// SatisFarm file, which names only `rooms` and `wyspy`, went up and took the
+// `ducks` branch with it.
+//
+// So there is one file and it is identical in every project. If you add a
+// branch, add it here and copy this file to the other projects before you
+// deploy. tools/sync-rules.sh does the copying.
 {
   "rules": {
     ".read": false,
     ".write": false,
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        "meta": {
+          ".write": "auth != null",
+          "hostId": {
+            ".validate": "newData.isString() && newData.val().length <= 128"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "players": {
+          "$playerId": {
+            ".write": "auth != null && auth.uid === $playerId",
+            ".validate": "!newData.exists() || newData.hasChild('name')",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 32"
+            },
+            "id": {
+              ".validate": "newData.isString() && newData.val().length <= 128"
+            },
+            "joinedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "cosmetics": {
+              "hat": {
+                ".validate": "newData.isString() && newData.val().length <= 32"
+              },
+              "skin": {
+                ".validate": "newData.isString() && newData.val().length <= 32"
+              }
+            }
+          }
+        },
+        "signal": {
+          "$peerId": {
+            ".write": "auth != null"
+          }
+        },
+        "world": {
+          ".write": "auth != null && data.parent().child('meta/hostId').val() === auth.uid"
+        }
+      }
+    },
+    "wyspy": {
+      "$islandId": {
+        ".read": "auth != null",
+        "$playerId": {
+          ".write": "auth != null && $playerId.beginsWith(auth.uid + '-')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['x','z']) && newData.child('x').isNumber() && newData.child('z').isNumber())",
+          "x": {
+            ".validate": "newData.isNumber() && newData.val() >= -200 && newData.val() <= 200"
+          },
+          "z": {
+            ".validate": "newData.isNumber() && newData.val() >= -200 && newData.val() <= 200"
+          },
+          "r": {
+            ".validate": "newData.isNumber()"
+          },
+          "c": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16777215"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
     "ageBands": {
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
@@ -251,6 +337,10 @@
           }
         }
       }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
     }
   }
 }
