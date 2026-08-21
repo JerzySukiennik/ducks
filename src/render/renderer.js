@@ -192,6 +192,65 @@ export function createRenderer(container) {
         programs: renderer.info.programs ? renderer.info.programs.length : 0,
       };
     },
+    // SHADER WARM-UP, and it is worth a fifth of a second at exactly the wrong
+    // moment. A three.js material compiles its program the first time something
+    // tries to DRAW it, so the very first frame of a fresh boot pays for every
+    // material in the scene at once. Measured on this machine before this
+    // existed: frame 1 spent 140.10 ms inside renderer.render() against the
+    // 2.5-3.8 ms it costs once running, with all 13 boot programs appearing on
+    // that one frame.
+    //
+    // compileAsync walks the scene and builds every program up front, off the
+    // frame loop, while the menu is still up and nobody is looking. It uses
+    // scene.traverse rather than traverseVisible for materials, so an object
+    // parked invisible in the scene graph is warmed too -- which is most of what
+    // this game hides until it is needed.
+    //
+    // It cannot warm what is not in the scene yet. Anything built lazily on
+    // first use still compiles on first use; see warmMaterials() for that half.
+    async warmup(scene, camera) {
+      const t0 = performance.now();
+      const before = renderer.info.programs ? renderer.info.programs.length : 0;
+      try {
+        if (typeof renderer.compileAsync === 'function') await renderer.compileAsync(scene, camera);
+        else renderer.compile(scene, camera);
+      } catch (e) {
+        // A warm-up that throws must cost the picture nothing: the materials
+        // simply compile on first draw, exactly as they did before.
+        console.warn('[renderer] warmup failed, falling back to lazy compile:', e);
+      }
+      const after = renderer.info.programs ? renderer.info.programs.length : 0;
+      return { ms: performance.now() - t0, programsBefore: before, programsAfter: after };
+    },
+    // The other half: materials whose objects are NOT in the scene at boot
+    // because the thing that owns them has not been built yet. Each is compiled
+    // against a one-triangle mesh that is added, drawn and removed inside this
+    // call, which is the only way to make three build a program for a material
+    // nothing is drawing.
+    warmMaterials(scene, camera, materials) {
+      const list = (Array.isArray(materials) ? materials : [materials]).filter(Boolean);
+      if (!list.length) return { ms: 0, warmed: 0 };
+      const t0 = performance.now();
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(9), 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(6), 2));
+      let warmed = 0;
+      for (const m of list) {
+        const mesh = new THREE.Mesh(geo, m);
+        // Never let the warm-up itself be visible: a degenerate triangle at the
+        // origin draws nothing, but frustumCulled would also let three skip it
+        // and skip the compile with it.
+        mesh.frustumCulled = false;
+        scene.add(mesh);
+        try {
+          if (typeof renderer.compile === 'function') { renderer.compile(scene, camera); warmed++; }
+        } catch (e) { /* same rule as warmup(): never cost the picture */ }
+        scene.remove(mesh);
+      }
+      geo.dispose();
+      return { ms: performance.now() - t0, warmed };
+    },
     get grainCanvas() { return grain; },
     get grainOpacity() { return grainOpacity(); },
     setGrainAmount(a) {

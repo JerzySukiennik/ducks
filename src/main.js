@@ -3020,6 +3020,9 @@ async function boot() {
   // instant it lands. ONE switch, so nothing can be left hidden by a skip.
   let cinematicOn = false;
   let lastFrameMs = 0;
+  // What the boot-time shader warm-up cost and how many programs it built.
+  // Reported by debugWarmup() so the win is readable rather than asserted.
+  let lastWarmup = null;
   // Where the frame's milliseconds go, above the simulation's own breakdown in
   // src/sim/world.js. One reused object: this is written every frame and read
   // every frame by the overlay, so allocating it per frame would be the exact
@@ -3920,6 +3923,7 @@ async function boot() {
       return stats();
     },
     debugStats: stats,
+    debugWarmup() { return lastWarmup; },
     // THE MEASURING INSTRUMENT. Steps the real frame N times and averages the
     // breakdown over all of them, plus the 95th percentile of the whole frame --
     // because a mean hides exactly the single 150 ms frame a player notices.
@@ -5166,6 +5170,26 @@ async function boot() {
   window.GAME.state = state;
   window.GAME.netCodec = netCodec;
 
+  // WARM THE SHADERS BEFORE THE FIRST FRAME, NOT DURING IT.
+  //
+  // Measured on a fresh boot before this line existed: frame 1 spent 140.10 ms
+  // inside renderer.render(), and all 13 of the boot's shader programs appeared
+  // on that single frame. A material compiles when something first tries to draw
+  // it, so without this the game's opening frame is a compiler run with a
+  // picture attached.
+  //
+  // Awaited here, on the last line before the loop starts, because by this point
+  // the whole scene exists -- and it is time nobody is watching: the menu has not
+  // opened yet.
+  lastWarmup = await renderer.warmup(view.scene, view.camera);
+
+  // The three programs this frame still compiles (the focus outline, the hand,
+  // the ghost -- objects frame() attaches, which do not exist until a frame has
+  // run once) are deliberately left to it. A SECOND warmup pass here was tried
+  // and reverted: measured, it found 16 programs already built and built zero
+  // new ones for 1.80 ms. This step is a head-down frame taken before body gets
+  // `ready`, so it is the right place to absorb them and the loop's first drawn
+  // frame is warm either way -- measured at 1.90 ms and falling to 0.80 ms.
   loop.step(config.loop.fixedDt);
 // The fresh-session fingerprint the cutscene's teardown is judged against.
   // Taken here, on the last line before the loop runs, because after this the
