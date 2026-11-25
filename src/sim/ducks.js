@@ -61,6 +61,31 @@ export function creativeWeightSet(config) {
 }
 
 export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
+  // THE POSITION SET'S VERSION NUMBER, and it is what lets the automation stop
+  // re-reading a world that has not moved.
+  //
+  // The broad-phase hashes in conveyors.js and blowers.js each rebuilt
+  // themselves from scratch every substep: 300 ducks x (translation + rotation +
+  // isSleeping) through the WASM boundary, twice, whether or not a single duck
+  // had stirred. On a settled factory -- which is where a player spends hours --
+  // every one of those reads returned the same number it returned last substep,
+  // because a sleeping body cannot move.
+  //
+  // So the pool counts changes instead. This goes up whenever a duck's position
+  // COULD have changed: any duck awake through a step, or any explicit move
+  // (park, unpark, wake). A hash whose stored epoch still matches is holding a
+  // grid that still describes the world exactly, and may keep it.
+  //
+  // Conservative on purpose. wakeDuck() bumps it even though waking alone moves
+  // nothing, because the cost of a needless rebuild is a millisecond and the
+  // cost of a missed one is a duck the fans cannot see.
+  //
+  // DECLARED HERE, above the construction loop, and not beside park() where it
+  // is first written: the pool's constructor calls park() on every slot as it
+  // builds it, so a declaration further down puts the counter in its temporal
+  // dead zone during boot and takes the whole physics module with it.
+  let moveEpoch = 0;
+
   const N = cfg.max;
   const hx = cfg.hx, hy = cfg.hy, hz = cfg.hz;
   const random = typeof rng === 'function' ? rng : Math.random;
@@ -198,6 +223,7 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
   }
 
   function park(i) {
+    moveEpoch++;
     const b = bodies[i];
     b.setLinvel(ZERO, false);
     b.setAngvel(ZERO, false);
@@ -212,6 +238,7 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
   }
 
   function unpark(i, pos) {
+    moveEpoch++;
     const b = bodies[i];
     colliders[i].setCollisionGroups(propGroups);
     if (headColliders[i]) headColliders[i].setCollisionGroups(propGroups);
@@ -228,7 +255,7 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
   // impulse in the project routes through here first.
   function wakeDuck(idOrHandle) {
     const b = resolveBody(idOrHandle);
-    if (b) b.wakeUp();
+    if (b) { b.wakeUp(); moveEpoch++; }
     return b;
   }
 
@@ -300,10 +327,15 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
   function postStep(dt) {
     const lin2 = cfg.sleepLinearEps * cfg.sleepLinearEps;
     const ang2 = cfg.sleepAngularEps * cfg.sleepAngularEps;
+    // Did anything actually move through the step just taken? One awake duck is
+    // enough to invalidate every cached position; none at all means the broad
+    // phase can keep the grid it already has. See moveEpoch above.
+    let anyAwake = false;
     for (let id = 0; id < N; id++) {
       if (state[id] === DUCK_FREE) continue;
       const b = bodies[id];
       const asleep = b.isSleeping();
+      if (!asleep) anyAwake = true;
       if (asleep) {
         state[id] = DUCK_SLEEPING;
         idle[id] = cfg.sleepAfter;
@@ -331,6 +363,7 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
         state[id] = DUCK_ACTIVE;
       }
     }
+    if (anyAwake) moveEpoch++;
   }
 
   function count() {
@@ -384,6 +417,9 @@ export function createDucks({ RAPIER, world, cfg, groups, counters, rng }) {
     atCap: () => freeList.length === 0,
     pose,
     forEach,
+    // The position set's version. A broad phase that stored this and finds it
+    // unchanged is holding a grid that still describes the world exactly.
+    moveEpoch: () => moveEpoch,
     // The session's mode. `config` is the whole config object, so the pool
     // resolves the set by name itself and no caller has to know which set
     // creative uses. Set once, before play starts, by whoever owns the session.

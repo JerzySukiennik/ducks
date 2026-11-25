@@ -41,6 +41,21 @@ export function readNum(root, path) {
 // Positions are copied into flat arrays during the rebuild so the narrow phase
 // never touches a Rapier body until it has decided to push something.
 
+// A/B SWITCH FOR THE EPOCH SKIP, and it exists because of how this had to be
+// measured. This machine's speed drifts enough between page loads that a
+// before-run and an after-run taken minutes apart disagree by 2x on buckets the
+// change cannot touch (the solver, the draw call). The only sound protocol is to
+// flip the optimisation at runtime and interleave A and B inside ONE page, which
+// is what window.GAME.debugSetHashEpochSkip drives.
+//
+// Default on. Turning it off restores the unconditional rebuild exactly.
+let epochSkipEnabled = true;
+export function setHashEpochSkip(on) {
+  epochSkipEnabled = !!on;
+  return epochSkipEnabled;
+}
+export function hashEpochSkip() { return epochSkipEnabled; }
+
 export function createDuckHash(cellSize, capacity) {
   const inv = 1 / cellSize;
   const cells = new Map();
@@ -52,6 +67,11 @@ export function createDuckHash(cellSize, capacity) {
   const stamp = new Int32Array(capacity);
   let token = 0;
   let live = 0;
+  // The pool's moveEpoch as of the last rebuild. NaN until the first one, and
+  // NaN never equals itself, so the first call always builds.
+  let lastEpoch = NaN;
+  let skipped = 0;
+  let built = 0;
 
   function key(ix, iz) {
     return (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) | 0;
@@ -59,6 +79,22 @@ export function createDuckHash(cellSize, capacity) {
 
   return {
     rebuild(ducks) {
+      // NOTHING MOVED, SO THE GRID IS STILL RIGHT.
+      //
+      // This ran twice a substep -- once here and once for the fans -- and each
+      // run walked all 300 ducks through the WASM boundary for a translation, a
+      // rotation and an isSleeping. On a settled factory every one of those
+      // reads returned exactly what it returned last substep, because a sleeping
+      // body cannot move. The pool now counts changes (ducks.moveEpoch), so a
+      // grid built at the same epoch is a grid that still describes the world.
+      //
+      // A pool that does not offer an epoch reads NaN, which never equals
+      // itself, so it rebuilds every time exactly as before.
+      const ep = (epochSkipEnabled && ducks && typeof ducks.moveEpoch === 'function')
+        ? ducks.moveEpoch() : NaN;
+      if (ep === lastEpoch) { skipped++; return live; }
+      lastEpoch = ep;
+      built++;
       cells.clear();
       live = 0;
       ducks.forEach((id, x, y, z) => {
@@ -93,6 +129,9 @@ export function createDuckHash(cellSize, capacity) {
     cellCount: () => cells.size,
     liveCount: () => live,
     cellSize: () => cellSize,
+    // How often the epoch check paid off. Read by the perf harness; a ratio near
+    // zero on an idle world would mean something is bumping the epoch needlessly.
+    rebuildStats: () => ({ built, skipped }),
   };
 }
 

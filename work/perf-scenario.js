@@ -111,3 +111,86 @@ export function setupBusy(opts) {
   const o = opts || {};
   return setup({ ducks: o.ducks, settle: 0 });
 }
+
+// Put the busy case back without reloading the page. Every duck is released to
+// the pool and 300 fresh ones are dropped, which is the same starting condition
+// setupBusy() produces -- and it has to be done this way round because the pool
+// is at its cap once 300 are live and a spawn would simply be refused.
+export function resetDucks(n) {
+  const g = window.GAME;
+  const want = n === undefined ? 300 : n;
+  const ids = [];
+  g.world.ducks.forEach((id) => ids.push(id));
+  for (const id of ids) g.world.ducks.release(id);
+  g.debugSpawnDucks(want);
+  return g.debugStats().ducksLive;
+}
+
+// REPEAT, BECAUSE ONE RUN IS NOT A MEASUREMENT.
+//
+// Run-to-run spread on this harness is wide enough that a single pair of numbers
+// can invent a win that is not there or hide one that is. Every figure quoted in
+// perf-baseline.md comes through here: `reps` independent samples, reported with
+// their mean, min and max so the spread is visible beside the number.
+// INTERLEAVED A/B, which is the only protocol this machine supports honestly.
+// Page-to-page drift here reaches 2x on buckets the change cannot touch, so a
+// before-page and an after-page minutes apart cannot be compared. This flips the
+// optimisation at runtime and alternates A,B,A,B... inside one page, so both
+// arms see the same machine, the same thermal state and the same world.
+export async function ab(mode, rounds, frames) {
+  const g = window.GAME;
+  const n = rounds === undefined ? 4 : rounds;
+  const fr = frames === undefined ? (mode === 'busy' ? 120 : 240) : frames;
+  const on = [];
+  const off = [];
+  for (let i = 0; i < n; i++) {
+    for (const enabled of [false, true]) {
+      await g.debugSetHashEpochSkip(enabled);
+      // Only the busy arm needs the world rebuilt between rounds. An idle world
+      // is already settled and stays settled, so re-settling it each round would
+      // just be 600 wasted frames per round -- enough to blow the 30 s ceiling
+      // on a single evaluate call, which is exactly what it did.
+      if (mode === 'busy') resetDucks();
+      const r = measure(fr);
+      (enabled ? on : off).push(r);
+    }
+  }
+  const agg = (rows) => {
+    const keys = ['wallMeanMs', 'physMs', 'solverMs', 'hooksMs', 'ctrlMs', 'postMs', 'viewMs', 'drawMs'];
+    const o = {};
+    for (const k of keys) {
+      const v = rows.map((r) => r[k]).sort((a, b) => a - b);
+      // The MEDIAN, not the mean: one scheduler hiccup in eight rounds should
+      // not decide which arm won.
+      o[k] = +v[Math.floor(v.length / 2)].toFixed(3);
+    }
+    return o;
+  };
+  await g.debugSetHashEpochSkip(true);
+  return { mode, rounds: n, frames: fr, off: agg(off), on: agg(on) };
+}
+
+export function repeat(mode, reps, frames) {
+  const g = window.GAME;
+  const n = reps === undefined ? 5 : reps;
+  const fr = frames === undefined ? 240 : frames;
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    if (mode === 'busy') resetDucks();
+    else g.debugStep(10);
+    rows.push(measure(fr));
+  }
+  const keys = ['wallMeanMs', 'wallP95Ms', 'physMs', 'solverMs', 'hooksMs',
+    'ctrlMs', 'postMs', 'viewMs', 'drawMs'];
+  const out = { mode, reps: n, frames: fr };
+  for (const k of keys) {
+    const v = rows.map((r) => r[k]);
+    out[k] = {
+      mean: +(v.reduce((a, b) => a + b, 0) / n).toFixed(3),
+      min: +Math.min(...v).toFixed(3),
+      max: +Math.max(...v).toFixed(3),
+    };
+  }
+  out.awake = rows.map((r) => r.awake);
+  return out;
+}
